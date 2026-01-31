@@ -110,20 +110,35 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 function handleHiveScan(tagId) {
-  alert("Hive scanned: " + tagId);
+  // Load all hives
+  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+
+  // Create hive if it does not exist
+  if (!hives[tagId]) {
+    hives[tagId] = {
+      id: tagId,
+      name: "",
+      location: "",
+      inspections: []
+    };
+  }
+
+  // Save immediately (important)
+  localStorage.setItem("hives", JSON.stringify(hives));
+
+  // Show basic confirmation
+  alert(
+    "Hive loaded:\n" +
+    (hives[tagId].name || "(no name yet)")
+  );
 }
-  handleHiveScan(tagId);
-};
-    } catch (err) {
-      alert("NFC error: " + err.message);
-    }
-  });
 });
 </script>
 
 </body>
 
 </html>
+
 
 
 
