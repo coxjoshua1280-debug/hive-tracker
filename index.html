@@ -15,13 +15,7 @@
   h1 {
     font-size: 1.6rem;
   }
-<button id="scanNfc">Scan Hive (NFC)</button>
-  input, textarea {
-    width: 100%;
-    margin-bottom: 1rem;
-    padding: 0.75rem;
-    font-size: 1.1rem;
-  }
+
 
   textarea {
     min-height: 120px;
@@ -58,7 +52,9 @@
 <body>
 
   <h1>🐝 Hive Tracker</h1>
-
+<button id="scanNfc" style="font-size: 1.2rem; padding: 0.75rem; width: 100%;">
+  Scan Hive (NFC)
+</button>
   <label for="rfid">Scan Hive RFID</label>
   <input id="rfid" type="text" placeholder="Scan tag here" autofocus />
 
@@ -267,3 +263,4 @@ function focusHiveNameIfNew(hive) {
 </body>
 
 </html>
+
