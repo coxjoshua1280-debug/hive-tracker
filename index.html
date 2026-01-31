@@ -247,7 +247,13 @@ function focusHiveNameIfNew(hive) {
     setTimeout(() => hiveNameInput.focus(), 150);
   }
 }
- 
+ document.addEventListener("DOMContentLoaded", () => {
+  const scanButton = document.getElementById("scanNfc");
+
+  scanButton.addEventListener("click", async () => {
+    alert("Button works");
+  });
+});
   document
     .querySelectorAll("#hiveForm input, #hiveForm textarea")
     .forEach(el => el.addEventListener("input", saveCurrentHive));
@@ -258,6 +264,7 @@ function focusHiveNameIfNew(hive) {
 </body>
 
 </html>
+
 
 
 
