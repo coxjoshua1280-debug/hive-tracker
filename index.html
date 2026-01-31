@@ -103,11 +103,17 @@ document.addEventListener("DOMContentLoaded", () => {
       await reader.scan();
       alert("Now tap an NFC tag");
 
-      reader.onreading = event => {
-        alert("Tag read!");
-        alert("Serial number: " + event.serialNumber);
-      };
-
+     reader.onreading = event => {
+  const tagId = event.serialNumber;
+  if (!tagId) {
+    alert("Tag read, but no serial number");
+    return;
+  }
+function handleHiveScan(tagId) {
+  alert("Hive scanned: " + tagId);
+}
+  handleHiveScan(tagId);
+};
     } catch (err) {
       alert("NFC error: " + err.message);
     }
@@ -118,6 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </body>
 
 </html>
+
 
 
 
