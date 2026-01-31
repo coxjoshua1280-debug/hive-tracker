@@ -96,18 +96,21 @@ const scanButton = document.getElementById("scanNfc");
 
 scanButton.addEventListener("click", async () => {
   if (!("NDEFReader" in window)) {
-    alert("NFC not supported on this device or browser.");
+    alert("NFC is not supported on this device or browser.");
     return;
   }
 
   try {
     const reader = new NDEFReader();
+
+    scanButton.textContent = "Scanning… tap hive tag";
     await reader.scan();
-    alert("Tap NFC tag on hive");
 
     reader.onreading = event => {
-      const tagId = event.serialNumber;
+      reader.abort(); // 🛑 stop scanning after one read
+      scanButton.textContent = "Scan Hive (NFC)";
 
+      const tagId = event.serialNumber;
       if (!tagId) {
         alert("Could not read tag ID");
         return;
@@ -116,6 +119,7 @@ scanButton.addEventListener("click", async () => {
       handleHiveScan(tagId);
     };
   } catch (err) {
+    scanButton.textContent = "Scan Hive (NFC)";
     alert("NFC scan failed: " + err.message);
   }
 });
@@ -263,4 +267,5 @@ function focusHiveNameIfNew(hive) {
 </body>
 
 </html>
+
 
