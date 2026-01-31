@@ -81,8 +81,7 @@
 
  <script>
 document.addEventListener("DOMContentLoaded", () => {
-  alert("Script loaded");
-
+  
   const scanButton = document.getElementById("scanNfc");
   if (!scanButton) {
     alert("Scan button NOT found");
@@ -90,8 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   scanButton.addEventListener("click", async () => {
-    alert("Scan button clicked");
-
+    
     if (!("NDEFReader" in window)) {
       alert("Web NFC not supported");
       return;
@@ -99,10 +97,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const reader = new NDEFReader();
-      alert("Starting NFC scan…");
+      
       await reader.scan();
-      alert("Now tap NFC tag");
-
+     
       reader.onreading = event => {
         const tagId = event.serialNumber;
         if (!tagId) {
@@ -142,6 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </body>
 
 </html>
+
 
 
 
