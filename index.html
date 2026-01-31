@@ -79,194 +79,46 @@
     <div id="history"></div>
   
 
-  <script>
-  const rfidInput = document.getElementById("rfid");
-  const hiveForm = document.getElementById("hiveForm");
-  const hiveIdDisplay = document.getElementById("hiveIdDisplay");
-  const historyDiv = document.getElementById("history");
-  const hiveNameInput = document.getElementById("hiveName");
-if (!hiveNameInput) {
-  alert("Hive name input NOT FOUND");
-}
-  const locationInput = document.getElementById("location");
-  const lastInspectionInput = document.getElementById("lastInspection");
-  const queenPresentInput = document.getElementById("queenPresent");
-  const notesInput = document.getElementById("notes");
+ <script>
+document.addEventListener("DOMContentLoaded", () => {
+  alert("Script loaded");
 
-    const scanButton = document.getElementById("scanNfc");
-alert("scanButton = " + scanButton);
-const scanButton = document.getElementById("scanNfc");
-
-scanButton.addEventListener("click", async () => {
-  if (!("NDEFReader" in window)) {
-    alert("Web NFC not supported");
-    return;
-  }
-
-  try {
-    const reader = new NDEFReader();
-    alert("Starting scan…");
-    await reader.scan();
-    alert("Now tap tag");
-
-    reader.onreading = event => {
-      alert("Tag read!");
-      alert("Serial: " + event.serialNumber);
-    };
-  } catch (err) {
-    alert("Error: " + err.message);
-  }
-});
-  let currentHiveId = null;
-  let currentInspectionIndex = null;
-
-  function today() {
-    return new Date().toISOString().split("T")[0];
-  }
-function focusHiveNameIfNew(hive) {
-  if (!hive.name) {
-    setTimeout(() => hiveNameInput.focus(), 150);
-  }
-}
-  function loadHives() {
-    return JSON.parse(localStorage.getItem("hives") || "{}");
-  }
-
-  function saveHives(hives) {
-    localStorage.setItem("hives", JSON.stringify(hives));
-  }
-
-
-  function loadHive(id) {
-    const hives = loadHives();
-
-    if (!hives[id]) {
-      hives[id] = {
-  id,
-  name: "",
-  location: "",
-  inspections: []
-};
-      saveHives(hives);
-    }
-
-    return hives[id];
-  }
-
-  function startInspectionIfNeeded(hive) {
-  const todayDate = today();
-
-  if (
-    hive.inspections.length === 0 ||
-    hive.inspections[0].date !== todayDate
-  ) {
-    hive.inspections.unshift({
-      date: todayDate,
-      queenPresent: false,
-      notes: ""
-    });
-  }
-
-  currentInspectionIndex = 0;
-}
-
-  function saveCurrentHive() {
-  if (!currentHiveId) return;
-
-  const hives = loadHives();
-  const hive = hives[currentHiveId];
-
-  // 🔒 Ensure inspection exists
-  if (
-    currentInspectionIndex === null ||
-    !hive.inspections[currentInspectionIndex]
-  ) {
-    return;
-  }
-
-  const inspection = hive.inspections[currentInspectionIndex];
-
-  hive.name = hiveNameInput.value;
-  hive.location = locationInput.value;
-
-  inspection.date = lastInspectionInput.value;
-  inspection.queenPresent = queenPresentInput.checked;
-  inspection.notes = notesInput.value;
-
-  saveHives(hives);
-  renderHistory(hive);
-}
-
-  function renderHistory(hive) {
-    historyDiv.innerHTML = "";
-
-    hive.inspections.forEach((insp, index) => {
-      const div = document.createElement("div");
-      div.style.borderBottom = "1px solid #ccc";
-      div.style.padding = "0.5rem 0";
-
-      div.innerHTML = `
-       <strong>${hive.name || hive.id}</strong><br>
-<em>${insp.date}</em><br>
-        Queen present: ${insp.queenPresent ? "Yes" : "No"}<br>
-        ${insp.notes || ""}
-      `;
-
-      div.onclick = () => loadInspection(hive, index);
-      historyDiv.appendChild(div);
-    });
-  }
-
-  function loadInspection(hive, index) {
-    const insp = hive.inspections[index];
-    currentInspectionIndex = index;
-
-    lastInspectionInput.value = insp.date;
-    queenPresentInput.checked = insp.queenPresent;
-    notesInput.value = insp.notes;
-  }
-
- function handleHiveScan(tagId) {
-  saveCurrentHive();
-
-  currentHiveId = tagId;
-
-  const hives = loadHives();
-  const hive = loadHive(currentHiveId);
-
-  hiveIdDisplay.textContent = currentHiveId;
-  hiveNameInput.value = hive.name || "";
-  locationInput.value = hive.location || "";
-
-  startInspectionIfNeeded(hive);
-  saveHives(hives);
-
-  loadInspection(hive, 0);
-  renderHistory(hive);
-
-  hiveForm.classList.remove("hidden");
-
-  if (!hive.name) {
-    setTimeout(() => hiveNameInput.focus(), 150);
-  }
-}
- document.addEventListener("DOMContentLoaded", () => {
   const scanButton = document.getElementById("scanNfc");
+  if (!scanButton) {
+    alert("Scan button NOT found");
+    return;
+  }
 
   scanButton.addEventListener("click", async () => {
-    alert("Button works");
+    alert("Scan button clicked");
+
+    if (!("NDEFReader" in window)) {
+      alert("Web NFC not supported on this device/browser");
+      return;
+    }
+
+    try {
+      const reader = new NDEFReader();
+      alert("Starting NFC scan...");
+      await reader.scan();
+      alert("Now tap an NFC tag");
+
+      reader.onreading = event => {
+        alert("Tag read!");
+        alert("Serial number: " + event.serialNumber);
+      };
+
+    } catch (err) {
+      alert("NFC error: " + err.message);
+    }
   });
 });
-  document
-    .querySelectorAll("#hiveForm input, #hiveForm textarea")
-    .forEach(el => el.addEventListener("input", saveCurrentHive));
-
-
 </script>
 
 </body>
 
 </html>
+
 
 
 
