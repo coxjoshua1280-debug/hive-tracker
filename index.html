@@ -92,6 +92,9 @@ if (!hiveNameInput) {
   const lastInspectionInput = document.getElementById("lastInspection");
   const queenPresentInput = document.getElementById("queenPresent");
   const notesInput = document.getElementById("notes");
+
+    const scanButton = document.getElementById("scanNfc");
+alert("scanButton = " + scanButton);
 const scanButton = document.getElementById("scanNfc");
 
 scanButton.addEventListener("click", async () => {
@@ -264,6 +267,7 @@ function focusHiveNameIfNew(hive) {
 </body>
 
 </html>
+
 
 
 
