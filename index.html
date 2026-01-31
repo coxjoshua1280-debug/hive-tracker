@@ -106,9 +106,10 @@ scanButton.addEventListener("click", async () => {
     scanButton.textContent = "Scanning… tap hive tag";
     await reader.scan();
 
-    reader.onreading = event => {
-      reader.abort(); // 🛑 stop scanning after one read
-      scanButton.textContent = "Scan Hive (NFC)";
+   reader.onreading = event => {
+  alert("NFC tag read!");
+  alert("Serial: " + event.serialNumber);
+};
 
       const tagId = event.serialNumber;
       if (!tagId) {
@@ -267,5 +268,6 @@ function focusHiveNameIfNew(hive) {
 </body>
 
 </html>
+
 
 
