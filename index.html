@@ -93,51 +93,56 @@ document.addEventListener("DOMContentLoaded", () => {
     alert("Scan button clicked");
 
     if (!("NDEFReader" in window)) {
-      alert("Web NFC not supported on this device/browser");
+      alert("Web NFC not supported");
       return;
     }
 
     try {
       const reader = new NDEFReader();
-      alert("Starting NFC scan...");
+      alert("Starting NFC scan…");
       await reader.scan();
-      alert("Now tap an NFC tag");
+      alert("Now tap NFC tag");
 
-     reader.onreading = event => {
-  const tagId = event.serialNumber;
-  if (!tagId) {
-    alert("Tag read, but no serial number");
-    return;
+      reader.onreading = event => {
+        const tagId = event.serialNumber;
+        if (!tagId) {
+          alert("Tag read but no serial number");
+          return;
+        }
+
+        handleHiveScan(tagId);
+      };
+
+    } catch (err) {
+      alert("NFC error: " + err.message);
+    }
+  });
+
+  function handleHiveScan(tagId) {
+    const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+
+    if (!hives[tagId]) {
+      hives[tagId] = {
+        id: tagId,
+        name: "",
+        location: "",
+        inspections: []
+      };
+    }
+
+    localStorage.setItem("hives", JSON.stringify(hives));
+
+    alert(
+      "Hive loaded:\n" +
+      (hives[tagId].name || "(no name yet)")
+    );
   }
-function handleHiveScan(tagId) {
-  // Load all hives
-  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-
-  // Create hive if it does not exist
-  if (!hives[tagId]) {
-    hives[tagId] = {
-      id: tagId,
-      name: "",
-      location: "",
-      inspections: []
-    };
-  }
-
-  // Save immediately (important)
-  localStorage.setItem("hives", JSON.stringify(hives));
-
-  // Show basic confirmation
-  alert(
-    "Hive loaded:\n" +
-    (hives[tagId].name || "(no name yet)")
-  );
-}
-
+});
 </script>
-
 </body>
 
 </html>
+
 
 
 
