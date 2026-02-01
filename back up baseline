@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hive Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 1rem;
+      background: #f8f8f8;
+      font-size: 18px;
+    }
+
+    h1 { font-size: 1.6rem; }
+
+    textarea { min-height: 120px; }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    #rfid {
+      font-size: 1.2rem;
+      border: 3px solid #222;
+    }
+
+    .hidden { display: none; }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.1rem;
+    }
+
+    input[type="checkbox"] {
+      width: 28px;
+      height: 28px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🐝 Hive Tracker</h1>
+
+
+  <button id="scanNfc" style="font-size: 1.2rem; padding: 0.75rem; width: 100%; margin-bottom: 1rem;">
+    Scan Hive (NFC)
+  </button>
+
+  <div id="status" style="margin-bottom: 1rem;"></div>
+
+  <div id="hiveForm" class="hidden">
+    <p><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
+
+    <label>Hive Name</label>
+    <input id="hiveName" type="text" placeholder="e.g. Yard A – Hive 12" />
+
+    <label>Location / Yard</label>
+    <input id="location" type="text" />
+
+    <label>Inspection Date</label>
+    <input id="lastInspection" type="date" />
+
+    <label class="checkbox-label">
+      <input id="queenPresent" type="checkbox" />
+      Queen Present
+    </label>
+
+    <label>Notes</label>
+    <textarea id="notes" rows="4"></textarea>
+
+    <h2>Inspection History</h2>
+    <div id="history"></div>
+  </div> <!-- ✅ CLOSE hiveForm -->
+
+  <script>
+document.addEventListener("DOMContentLoaded", () => {
+  let currentHiveId = null;
+  let scanning = false;
+  let activeReader = null;
+  let scanSession = 0;
+
+
+  const btn = document.getElementById("scanNfc");
+  const status = document.getElementById("status");
+  const hiveForm = document.getElementById("hiveForm");
+
+  const hiveIdDisplay = document.getElementById("hiveIdDisplay");
+  const hiveNameInput = document.getElementById("hiveName");
+  const locationInput = document.getElementById("location");
+  const dateInput = document.getElementById("lastInspection");
+  const queenInput = document.getElementById("queenPresent");
+  const notesInput = document.getElementById("notes");
+
+  if (!btn) {
+    alert("Scan button missing");
+    return;
+  }
+
+  function renderStatus(text) {
+    if (status) status.textContent = text;
+  }
+
+  function stopScan() {
+  scanning = false;
+  scanSession++; // invalidate any in-flight events
+
+  if (activeReader) {
+    try { activeReader.onreading = null; } catch (_) {}
+    try { activeReader.onreadingerror = null; } catch (_) {}
+    try { activeReader.abort(); } catch (_) {}
+  }
+
+  activeReader = null;
+  
+}
+
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopScan();
+  });
+
+
+ 
+
+  function today() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function loadHives() {
+    return JSON.parse(localStorage.getItem("hives") || "{}");
+  }
+
+  function saveHives(hives) {
+    localStorage.setItem("hives", JSON.stringify(hives));
+  }
+
+  function getOrCreateTodayInspection(hive) {
+    const t = today();
+    let insp = hive.inspections.find(i => i.date === t);
+    if (insp) return insp;
+
+    insp = { date: t, queenPresent: false, notes: "" };
+    hive.inspections.unshift(insp);
+    return insp;
+  }
+
+
+  function handleHiveScan(tagId) {
+    const hives = loadHives();
+    currentHiveId = tagId;
+
+    if (!hives[tagId]) {
+      hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
+    }
+
+    const hive = hives[tagId];
+    const inspection = getOrCreateTodayInspection(hive);
+    saveHives(hives);
+
+    hiveIdDisplay.textContent = tagId;
+    hiveNameInput.value = hive.name || "";
+    locationInput.value = hive.location || "";
+
+    dateInput.value = inspection.date;
+    queenInput.checked = inspection.queenPresent;
+    notesInput.value = inspection.notes;
+
+    hiveForm.classList.remove("hidden");
+    renderStatus("Hive loaded: " + (hive.name || tagId));
+
+   if (!hive.name) {
+  setTimeout(() => hiveNameInput.focus(), 150);
+}
+
+  }
+
+  function saveCurrentHiveAndInspection() {
+    if (!currentHiveId) return;
+
+    const hives = loadHives();
+    const hive = hives[currentHiveId];
+    if (!hive) return;
+
+    hive.name = hiveNameInput.value;
+    hive.location = locationInput.value;
+
+    const d = dateInput.value || today();
+    let insp = hive.inspections.find(i => i.date === d);
+    if (!insp) {
+      insp = { date: d, queenPresent: false, notes: "" };
+      hive.inspections.unshift(insp);
+    }
+
+    insp.date = d;
+    insp.queenPresent = queenInput.checked;
+    insp.notes = notesInput.value;
+
+    saveHives(hives);
+    renderStatus("Saved: " + (hive.name || hive.id));
+  }
+
+  // Save on edits
+  hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
+  locationInput.addEventListener("input", saveCurrentHiveAndInspection);
+  dateInput.addEventListener("change", saveCurrentHiveAndInspection);
+  queenInput.addEventListener("change", saveCurrentHiveAndInspection);
+  notesInput.addEventListener("input", saveCurrentHiveAndInspection);
+
+    // NFC scan
+ btn.addEventListener("click", async () => {
+  if (scanning) return;
+
+  stopScan();        // resets any prior session
+  scanning = true;
+
+  const mySession = scanSession; // snapshot
+
+
+  if (!("NDEFReader" in window)) {
+    alert("Web NFC not supported");
+    scanning = false;
+    return;
+  }
+
+  try {
+    const reader = new NDEFReader();
+    activeReader = reader;
+
+    renderStatus("Scanning… tap hive tag");
+    await reader.scan();
+
+    // If anything goes wrong, stop scanning
+    reader.onreadingerror = () => {
+      renderStatus("Read error — try again");
+      stopScan();
+    };
+
+    reader.onreading = (event) => {
+  if (mySession !== scanSession) return; // ignore stale events
+
+  const tagId = event.serialNumber;
+  if (!tagId) {
+    renderStatus("No tag ID read");
+    stopScan();
+    return;
+  }
+
+  handleHiveScan(tagId);
+  stopScan();
+};
+
+
+  } catch (err) {
+    renderStatus("Scan failed: " + err.message);
+    stopScan();
+  }
+});
+}); // ✅ THIS LINE WAS MISSING
+</script>
+
+
+</body>
+</html>
+
+
+
