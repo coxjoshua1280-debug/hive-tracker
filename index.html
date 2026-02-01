@@ -182,10 +182,26 @@ document.addEventListener("DOMContentLoaded", () => {
       const reader = new NDEFReader();
       await reader.scan();
 
-      reader.onreading = event => {
-        reader.abort();
-        handleHiveScan(event.serialNumber);
-      };
+     reader.onreading = event => {
+  let tagId = event.serialNumber || ("tag-" + Date.now());
+
+  handleHiveScan(tagId);
+
+  // stop scanning AFTER handling the tag
+  reader.abort();
+};
+
+  let tagId = event.serialNumber;
+
+  // 🔑 Fallback if serialNumber is unavailable
+  if (!tagId) {
+    const record = event.message.records[0];
+    tagId = JSON.stringify(record.data);
+  }
+
+  alert("Tag ID read"); // TEMPORARY confirmation
+  handleHiveScan(tagId);
+};
 
     } catch (err) {
       alert("NFC error: " + err.message);
@@ -199,6 +215,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </body>
 
 </html>
+
 
 
 
