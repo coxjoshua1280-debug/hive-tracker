@@ -74,6 +74,13 @@
   <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
   <datalist id="yardList"></datalist>
 
+  <button id="captureYardGps" type="button" class="btn">
+  📍 Capture Yard Location
+</button>
+
+<div id="yardGps" class="small"></div>
+
+
   <div id="yardHives" class="card"></div>
 
   <div id="status" class="small"></div>
@@ -132,6 +139,9 @@
     const yardList = document.getElementById("yardList");
     const yardHivesDiv = document.getElementById("yardHives");
     const newInspectionBtn = document.getElementById("newInspectionBtn");
+    const captureYardGpsBtn = document.getElementById("captureYardGps");
+const yardGpsDiv = document.getElementById("yardGps");
+
 
     if (!btn || !statusEl || !hiveForm || !hiveIdDisplay || !hiveNameInput || !locationInput ||
         !dateInput || !queenInput || !notesInput || !historyDiv || !currentYardInput || !yardList ||
@@ -141,6 +151,27 @@
     }
 
     // -------- Helpers --------
+
+    function loadYards() {
+  return JSON.parse(localStorage.getItem("yards") || "{}");
+}
+
+function saveYards(yards) {
+  localStorage.setItem("yards", JSON.stringify(yards));
+}
+
+function renderYardGps(yardName) {
+  const yards = loadYards();
+  const y = yards[yardName];
+  if (!y) {
+    yardGpsDiv.textContent = "";
+    return;
+  }
+
+  yardGpsDiv.textContent =
+    `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)`;
+}
+
     function renderStatus(text) {
       statusEl.textContent = text || "";
     }
@@ -269,6 +300,47 @@
     }
 
     // -------- Yard UI --------
+
+
+    captureYardGpsBtn.addEventListener("click", () => {
+  const yardName = (currentYardInput.value || "").trim();
+  if (!yardName) {
+    alert("Enter a yard name first.");
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    alert("GPS not supported on this device.");
+    return;
+  }
+
+  yardGpsDiv.textContent = "Getting GPS location…";
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const yards = loadYards();
+      yards[yardName] = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        timestamp: Date.now()
+      };
+
+      saveYards(yards);
+      renderYardGps(yardName);
+    },
+    (err) => {
+      alert("GPS error: " + err.message);
+      yardGpsDiv.textContent = "";
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000
+    }
+  );
+});
+
     function refreshYardUI() {
       const hives = loadHives();
 
@@ -315,7 +387,11 @@
       });
     }
 
-    currentYardInput.addEventListener("input", refreshYardUI);
+    currentYardInput.addEventListener("input", () => {
+  refreshYardUI();
+  renderYardGps(currentYardInput.value.trim());
+});
+
 
     // -------- Hive load/save --------
     function handleHiveScan(tagId) {
@@ -470,3 +546,4 @@
   </script>
 </body>
 </html>
+
