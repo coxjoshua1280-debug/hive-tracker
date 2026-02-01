@@ -245,10 +245,42 @@ document.getElementById("lastInspection").value = inspection.date;
 document.getElementById("queenPresent").checked = inspection.queenPresent;
 document.getElementById("notes").value = inspection.notes;
 });
+   // 🔒 Inspection wiring lock — prevents script crash
+(function () {
+  const dateInput = document.getElementById("lastInspection");
+  const queenInput = document.getElementById("queenPresent");
+  const notesInput = document.getElementById("notes");
+
+  if (!dateInput || !queenInput || !notesInput) return;
+
+  function saveCurrentInspection() {
+    if (!window.currentHiveId) return;
+
+    const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+    const hive = hives[window.currentHiveId];
+    if (!hive || !hive.inspections) return;
+
+    const inspection = hive.inspections.find(
+      insp => insp.date === dateInput.value
+    );
+    if (!inspection) return;
+
+    inspection.date = dateInput.value;
+    inspection.queenPresent = queenInput.checked;
+    inspection.notes = notesInput.value;
+
+    localStorage.setItem("hives", JSON.stringify(hives));
+  }
+
+  dateInput.addEventListener("change", saveCurrentInspection);
+  queenInput.addEventListener("change", saveCurrentInspection);
+  notesInput.addEventListener("input", saveCurrentInspection);
+})();
 </script>
 </body>
 
 </html>
+
 
 
 
