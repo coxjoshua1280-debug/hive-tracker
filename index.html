@@ -116,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   activeReader = null;
-  renderStatus("Ready");
+  
 }
 
 
@@ -240,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
       stopScan();
     };
 
-    rreader.onreading = (event) => {
+    reader.onreading = (event) => {
   if (mySession !== scanSession) return; // ignore stale events
 
   const tagId = event.serialNumber;
@@ -266,6 +266,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 </body>
 </html>
+
 
 
 
