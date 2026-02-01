@@ -134,6 +134,7 @@ currentHiveId = tagId;
   );
 
       function saveCurrentHive(tagId) {
+        alert("Saving hive: " + tagId);
   if (!tagId) return;
 
   const hives = JSON.parse(localStorage.getItem("hives") || "{}");
@@ -168,6 +169,7 @@ if (!hives[tagId].name) {
 </body>
 
 </html>
+
 
 
 
