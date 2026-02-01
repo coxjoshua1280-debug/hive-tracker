@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hive Tracker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 1rem;
+      background: #f8f8f8;
+      font-size: 18px;
+    }
+    h1 { font-size: 1.6rem; margin-top: 0; }
+    label { font-weight: bold; display: block; margin: 0.75rem 0 0.25rem; }
+    input, textarea, button { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
+    textarea { min-height: 120px; }
+    .hidden { display: none; }
+    .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-top: 0.75rem; }
+    input[type="checkbox"] { width: 28px; height: 28px; }
+    #status { margin: 0.75rem 0 1rem; }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+    }
+    .row {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .row > .grow { flex: 1; }
+    .small { font-size: 0.9rem; opacity: 0.85; }
+    .btn {
+      font-size: 1.1rem;
+      padding: 0.75rem;
+      border: 1px solid #222;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .btn-primary {
+      background: #111;
+      color: #fff;
+      border-color: #111;
+    }
+    .btn-danger {
+      background: #fff;
+      border-color: #b00;
+      color: #b00;
+    }
+    .history-item {
+      padding: 0.6rem;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      gap: 0.75rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-left { flex: 1; cursor: pointer; }
+    .selected { background: #eef; border-radius: 8px; }
+    a { color: #0645AD; }
+  </style>
+</head>
+
+<body>
+  <h1>🐝 Hive Tracker</h1>
+
+  <button id="scanNfc" class="btn btn-primary">Scan Hive (NFC)</button>
+
+  <label for="currentYard">Current Yard</label>
+  <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
+  <datalist id="yardList"></datalist>
+
+  <div class="row" style="margin-top:0.5rem;">
+    <button id="captureYardGps" type="button" class="btn">📍 Capture Yard GPS</button>
+    <button id="detectNearestYard" type="button" class="btn">🧭 Detect Nearest Yard</button>
+  </div>
+
+  <div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
+
+  <button id="exportCsv" type="button" class="btn" style="margin-top:0.75rem;">
+    ⬇️ Export CSV
+  </button>
+
+  <div id="yardHives" class="card"></div>
+  <div id="status" class="small"></div>
+
+  <div id="hiveForm" class="hidden card">
+    <p style="margin-top:0;"><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
+
+    <label for="hiveName">Hive Name</label>
+    <input id="hiveName" type="text" placeholder="e.g. Yard A – Hive 12" />
+
+    <label for="location">Location / Yard</label>
+    <input id="location" type="text" placeholder="e.g. Yard A" />
+    <div id="hiveYardGps" class="small" style="margin-top:0.4rem;"></div>
+
+    <button id="newInspectionBtn" type="button" class="btn">New Inspection</button>
+
+    <label for="lastInspection">Inspection Date</label>
+    <input id="lastInspection" type="date" />
+
+    <label class="checkbox-label">
+      <input id="queenPresent" type="checkbox" />
+      Queen Present
+    </label>
+
+    <label for="notes">Notes</label>
+    <textarea id="notes" rows="4" placeholder="What did you see?"></textarea>
+
+    <h2 style="margin: 1rem 0 0.5rem;">Inspection History</h2>
+    <div id="history" class="card" style="margin:0;"></div>
+  </div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // -------- State --------
+    let currentHiveId = null;
+    let currentInspectionId = null;
+
+    // Web NFC scan lifecycle
+    let scanning = false;
+    let activeReader = null;
+    let scanSession = 0;
+
+    // GPS
+    let lastPosition = null;
+
+    // -------- Elements --------
+    const btn = document.getElementById("scanNfc");
+    const statusEl = document.getElementById("status");
+    const hiveForm = document.getElementById("hiveForm");
+
+    const hiveIdDisplay = document.getElementById("hiveIdDisplay");
+    const hiveNameInput = document.getElementById("hiveName");
+    const locationInput = document.getElementById("location");
+    const dateInput = document.getElementById("lastInspection");
+    const queenInput = document.getElementById("queenPresent");
+    const notesInput = document.getElementById("notes");
+    const historyDiv = document.getElementById("history");
+
+    const currentYardInput = document.getElementById("currentYard");
+    const yardList = document.getElementById("yardList");
+    const yardHivesDiv = document.getElementById("yardHives");
+
+    const newInspectionBtn = document.getElementById("newInspectionBtn");
+    const captureYardGpsBtn = document.getElementById("captureYardGps");
+    const detectNearestYardBtn = document.getElementById("detectNearestYard");
+    const yardGpsDiv = document.getElementById("yardGps");
+    const exportCsvBtn = document.getElementById("exportCsv");
+    const hiveYardGpsDiv = document.getElementById("hiveYardGps");
+
+    if (!btn || !statusEl || !hiveForm || !hiveIdDisplay || !hiveNameInput || !locationInput ||
+        !dateInput || !queenInput || !notesInput || !historyDiv || !currentYardInput || !yardList ||
+        !yardHivesDiv || !newInspectionBtn || !captureYardGpsBtn || !detectNearestYardBtn ||
+        !yardGpsDiv || !exportCsvBtn || !hiveYardGpsDiv) {
+      alert("Missing required HTML elements. Check element IDs.");
+      return;
+    }
+
+    // -------- Helpers --------
+    function renderStatus(text) {
+      statusEl.textContent = text || "";
+    }
+
+    function today() {
+      return new Date().toISOString().split("T")[0];
+    }
+
+    function loadHives() {
+      return JSON.parse(localStorage.getItem("hives") || "{}");
+    }
+
+    function saveHives(hives) {
+      localStorage.setItem("hives", JSON.stringify(hives));
+    }
+
+    // yards: { "Yard A": { lat, lon, accuracy, timestamp } }
+    function loadYards() {
+      return JSON.parse(localStorage.getItem("yards") || "{}");
+    }
+    function saveYards(yards) {
+      localStorage.setItem("yards", JSON.stringify(yards));
+    }
+
+    function toRad(deg) { return deg * Math.PI / 180; }
+
+    function distanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    function mapsLink(lat, lon) {
+      const q = `${lat},${lon}`;
+      return `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
+    }
+
+    function getCurrentPositionOnce() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      });
+    }
+
+    function renderHiveYardGps() {
+      const yardName = (locationInput.value || "").trim();
+      if (!yardName) { hiveYardGpsDiv.textContent = ""; return; }
+
+      const y = loadYards()[yardName];
+      if (!y) {
+        hiveYardGpsDiv.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+        return;
+      }
+
+      let distText = "";
+      if (lastPosition) {
+        const d = distanceMeters(
+          lastPosition.coords.latitude,
+          lastPosition.coords.longitude,
+          y.lat, y.lon
+        );
+        distText = ` • Distance: ${Math.round(d)} m`;
+      }
+
+      hiveYardGpsDiv.innerHTML =
+        `📍 ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+        `${distText} • <a href="${mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+    }
+
+    function renderYardGps(yardName) {
+      if (!yardName) { yardGpsDiv.textContent = ""; return; }
+
+      const y = loadYards()[yardName];
+      if (!y) {
+        yardGpsDiv.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+        return;
+      }
+
+      let distText = "";
+      if (lastPosition) {
+        const d = distanceMeters(
+          lastPosition.coords.latitude,
+          lastPosition.coords.longitude,
+          y.lat, y.lon
+        );
+        distText = ` • Distance: ${Math.round(d)} m`;
+      }
+
+      yardGpsDiv.innerHTML =
+        `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+        `${distText} • <a href="${mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+    }
+
+    function findNearestYard(radiusMeters = 100) {
+      if (!lastPosition) return null;
+
+      const yards = loadYards();
+      const lat = lastPosition.coords.latitude;
+      const lon = lastPosition.coords.longitude;
+
+      let best = null;
+      for (const [name, y] of Object.entries(yards)) {
+        if (!y || typeof y.lat !== "number" || typeof y.lon !== "number") continue;
+        const d = distanceMeters(lat, lon, y.lat, y.lon);
+        if (d <= radiusMeters && (!best || d < best.meters)) best = { name, meters: d };
+      }
+      return best;
+    }
+
+    function stopScan() {
+      scanning = false;
+      scanSession++;
+      if (activeReader) {
+        try { activeReader.onreading = null; } catch (_) {}
+        try { activeReader.onreadingerror = null; } catch (_) {}
+        try { activeReader.abort(); } catch (_) {}
+      }
+      activeReader = null;
+      renderStatus("Ready");
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopScan();
+    });
+
+    // -------- GPS buttons --------
+    captureYardGpsBtn.addEventListener("click", async () => {
+      const yardName = (currentYardInput.value || "").trim();
+      if (!yardName) { alert("Enter a yard name first."); return; }
+
+      try {
+        renderStatus("Getting GPS…");
+        const pos = await getCurrentPositionOnce();
+        lastPosition = pos;
+
+        const yards = loadYards();
+        yards[yardName] = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          timestamp: Date.now()
+        };
+        saveYards(yards);
+
+        renderStatus(`Saved GPS for ${yardName}`);
+        renderYardGps(yardName);
+        refreshYardUI();
+        renderHiveYardGps();
+      } catch (err) {
+        alert("GPS error: " + (err.message || err));
+        renderStatus("Ready");
+      }
+    });
+
+    detectNearestYardBtn.addEventListener("click", async () => {
+      try {
+        renderStatus("Detecting nearest yard…");
+        const pos = await getCurrentPositionOnce();
+        lastPosition = pos;
+
+        const nearest = findNearestYard(100);
+        if (!nearest) {
+          renderStatus("No yard nearby (within 100m).");
+          renderYardGps((currentYardInput.value || "").trim());
+          renderHiveYardGps();
+          return;
+        }
+
+        currentYardInput.value = nearest.name;
+        refreshYardUI();
+        renderYardGps(nearest.name);
+        renderHiveYardGps();
+        renderStatus(`Nearest yard: ${nearest.name} (${Math.round(nearest.meters)}m)`);
+      } catch (err) {
+        alert("GPS error: " + (err.message || err));
+        renderStatus("Ready");
+      }
+    });
+
+    // -------- Inspections --------
+    function createInspection(hive, date = today()) {
+      const insp = {
+        id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2)),
+        date,
+        queenPresent: false,
+        notes: ""
+      };
+      hive.inspections.unshift(insp);
+      return insp;
+    }
+
+    function getOrCreateTodayInspection(hive) {
+      const t = today();
+      return hive.inspections.find(i => i.date === t) || createInspection(hive, t);
+    }
+
+    function loadInspection(hive, inspectionId) {
+      const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
+      if (!insp) return;
+
+      currentInspectionId = insp.id;
+      dateInput.value = insp.date || today();
+      queenInput.checked = !!insp.queenPresent;
+      notesInput.value = insp.notes || "";
+      renderStatus(`Loaded inspection: ${insp.date || "(no date)"}`);
+    }
+
+    function renderHistory(hive) {
+      historyDiv.innerHTML = "";
+
+      if (!hive.inspections || hive.inspections.length === 0) {
+        historyDiv.innerHTML = "<em>No inspections yet.</em>";
+        return;
+      }
+
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      hive.inspections.forEach((insp) => {
+        const row = document.createElement("div");
+        row.className = "history-item" + (insp.id === currentInspectionId ? " selected" : "");
+
+        const left = document.createElement("div");
+        left.className = "history-left";
+
+        const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
+        const notesPreview = (insp.notes || "").trim().slice(0, 60);
+
+        left.innerHTML = `
+          <div><strong>${insp.date || "(no date)"}</strong></div>
+          <div class="small">${queenText}${notesPreview ? " • " + notesPreview : ""}</div>
+        `;
+
+        left.addEventListener("click", () => {
+          loadInspection(hive, insp.id);
+          renderHistory(hive);
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn btn-danger";
+        delBtn.style.width = "auto";
+        delBtn.style.padding = "0.4rem 0.6rem";
+        delBtn.textContent = "Delete";
+
+        delBtn.addEventListener("click", () => {
+          if (!confirm("Delete this inspection?")) return;
+
+          hive.inspections = hive.inspections.filter(i => i.id !== insp.id);
+
+          if (currentInspectionId === insp.id) {
+            currentInspectionId = hive.inspections[0]?.id || null;
+            if (currentInspectionId) loadInspection(hive, currentInspectionId);
+          }
+
+          const hives = loadHives();
+          hives[hive.id] = hive;
+          saveHives(hives);
+
+          renderHistory(hive);
+          renderStatus("Inspection deleted");
+        });
+
+        row.appendChild(left);
+        row.appendChild(delBtn);
+        historyDiv.appendChild(row);
+      });
+    }
+
+    // -------- Yard UI --------
+    function refreshYardUI() {
+      const hives = loadHives();
+
+      const yardsSet = new Set();
+      Object.values(hives).forEach(h => { if (h.location) yardsSet.add(h.location); });
+
+      yardList.innerHTML = "";
+      [...yardsSet].sort().forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        yardList.appendChild(opt);
+      });
+
+      const selected = (currentYardInput.value || "").trim();
+      if (!selected) {
+        yardHivesDiv.innerHTML = "<em>Enter a yard name to list its hives.</em>";
+        return;
+      }
+
+      const yardHives = Object.values(hives)
+        .filter(h => (h.location || "").trim() === selected)
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+
+      if (yardHives.length === 0) {
+        yardHivesDiv.innerHTML = `<em>No hives saved in "${selected}".</em>`;
+        return;
+      }
+
+      yardHivesDiv.innerHTML = `<strong>Hives in ${selected}:</strong><div id="yardHiveButtons" style="margin-top:0.5rem;"></div>`;
+      const container = document.getElementById("yardHiveButtons");
+
+      yardHives.forEach(h => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn";
+        b.style.margin = "0.25rem 0";
+        b.textContent = h.name ? `${h.name}` : h.id;
+        b.addEventListener("click", () => handleHiveScan(h.id));
+        container.appendChild(b);
+      });
+    }
+
+    currentYardInput.addEventListener("input", () => {
+      refreshYardUI();
+      renderYardGps((currentYardInput.value || "").trim());
+      renderHiveYardGps();
+    });
+
+    // -------- Hive load/save --------
+    function handleHiveScan(tagId) {
+      const hives = loadHives();
+      currentHiveId = tagId;
+
+      if (!hives[tagId]) {
+        hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
+      }
+
+      const hive = hives[tagId];
+
+      const selectedYard = (currentYardInput.value || "").trim();
+      if (!hive.location && selectedYard) hive.location = selectedYard;
+
+      const insp = getOrCreateTodayInspection(hive);
+      currentInspectionId = insp.id;
+
+      saveHives(hives);
+
+      hiveIdDisplay.textContent = tagId;
+      hiveNameInput.value = hive.name || "";
+      locationInput.value = hive.location || "";
+      renderHiveYardGps();
+
+      hiveForm.classList.remove("hidden");
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      refreshYardUI();
+
+      renderStatus("Hive loaded: " + (hive.name || tagId));
+      if (!hive.name) setTimeout(() => hiveNameInput.focus(), 150);
+    }
+
+    function saveCurrentHiveAndInspection() {
+      if (!currentHiveId) return;
+
+      const hives = loadHives();
+      const hive = hives[currentHiveId];
+      if (!hive) return;
+
+      hive.name = hiveNameInput.value;
+      hive.location = locationInput.value;
+
+      const insp = hive.inspections.find(i => i.id === currentInspectionId) || hive.inspections[0];
+      if (!insp) return;
+
+      insp.date = dateInput.value || today();
+      insp.queenPresent = queenInput.checked;
+      insp.notes = notesInput.value;
+      currentInspectionId = insp.id;
+
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      saveHives(hives);
+
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      refreshYardUI();
+      renderHiveYardGps();
+
+      renderStatus("Saved: " + (hive.name || hive.id));
+    }
+
+    hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
+    locationInput.addEventListener("input", () => {
+      saveCurrentHiveAndInspection();
+      renderHiveYardGps();
+    });
+    dateInput.addEventListener("change", saveCurrentHiveAndInspection);
+    queenInput.addEventListener("change", saveCurrentHiveAndInspection);
+    notesInput.addEventListener("input", saveCurrentHiveAndInspection);
+
+    newInspectionBtn.addEventListener("click", () => {
+      if (!currentHiveId) return;
+
+      const hives = loadHives();
+      const hive = hives[currentHiveId];
+      if (!hive) return;
+
+      const insp = createInspection(hive, today());
+      currentInspectionId = insp.id;
+
+      saveHives(hives);
+
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      renderStatus("New inspection created");
+    });
+
+    // -------- CSV Export --------
+    function csvEscape(v) {
+      const s = (v ?? "").toString();
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    exportCsvBtn.addEventListener("click", () => {
+      const hives = loadHives();
+      const yards = loadYards();
+
+      const rows = [];
+      rows.push([
+        "yard_name","yard_lat","yard_lon","yard_accuracy_m",
+        "hive_id","hive_name","hive_location",
+        "inspection_id","inspection_date","queen_present","notes"
+      ]);
+
+      for (const hive of Object.values(hives)) {
+        const yardName = (hive.location || "").trim();
+        const y = yards[yardName] || null;
+
+        const base = [
+          yardName,
+          y ? y.lat : "",
+          y ? y.lon : "",
+          y ? Math.round(y.accuracy) : "",
+          hive.id || "",
+          hive.name || "",
+          hive.location || ""
+        ];
+
+        const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
+        if (insps.length === 0) {
+          rows.push([...base, "", "", "", ""]);
+        } else {
+          for (const insp of insps) {
+            rows.push([
+              ...base,
+              insp.id || "",
+              insp.date || "",
+              insp.queenPresent ? "yes" : "no",
+              insp.notes || ""
+            ]);
+          }
+        }
+      }
+
+      const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `hive-tracker-export-${today()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+    });
+
+    // -------- NFC Scan --------
+    btn.addEventListener("click", async () => {
+      if (scanning) return;
+
+      stopScan();
+      scanning = true;
+      const mySession = scanSession;
+
+      if (!("NDEFReader" in window)) {
+        alert("Web NFC not supported on this device/browser.");
+        scanning = false;
+        return;
+      }
+
+      // Optional: detect nearest yard quietly if blank
+      if (!(currentYardInput.value || "").trim()) {
+        try {
+          const pos = await getCurrentPositionOnce();
+          lastPosition = pos;
+          const nearest = findNearestYard(100);
+          if (nearest) {
+            currentYardInput.value = nearest.name;
+            refreshYardUI();
+            renderYardGps(nearest.name);
+          }
+        } catch (_) {}
+      }
+
+      try {
+        const reader = new NDEFReader();
+        activeReader = reader;
+
+        renderStatus("Scanning… tap hive tag");
+        await reader.scan();
+
+        reader.onreadingerror = () => {
+          if (mySession !== scanSession) return;
+          renderStatus("Read error — press Scan again");
+          stopScan();
+        };
+
+        reader.onreading = (event) => {
+          if (mySession !== scanSession) return;
+
+          const tagId = event.serialNumber;
+          if (!tagId) {
+            renderStatus("No tag ID read — press Scan again");
+            stopScan();
+            return;
+          }
+
+          handleHiveScan(tagId);
+          stopScan();
+        };
+
+      } catch (err) {
+        renderStatus("Scan failed: " + err.message);
+        stopScan();
+      }
+    });
+
+    // Initial UI
+    renderStatus("Ready");
+    refreshYardUI();
+    renderYardGps((currentYardInput.value || "").trim());
+    renderHiveYardGps();
+  });
+  </script>
+</body>
+</html>
