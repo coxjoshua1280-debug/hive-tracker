@@ -82,6 +82,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentHiveId = null;
   let scanning = false;
   let activeReader = null;
+  let scanSession = 0;
+
 
   const btn = document.getElementById("scanNfc");
   const status = document.getElementById("status");
@@ -104,11 +106,19 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function stopScan() {
-    scanning = false;
-    try { activeReader?.abort(); } catch (_) {}
-    activeReader = null;
-    renderStatus("Ready");
+  scanning = false;
+  scanSession++; // invalidate any in-flight events
+
+  if (activeReader) {
+    try { activeReader.onreading = null; } catch (_) {}
+    try { activeReader.onreadingerror = null; } catch (_) {}
+    try { activeReader.abort(); } catch (_) {}
   }
+
+  activeReader = null;
+  renderStatus("Ready");
+}
+
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stopScan();
@@ -202,10 +212,13 @@ document.addEventListener("DOMContentLoaded", () => {
   notesInput.addEventListener("input", saveCurrentHiveAndInspection);
 
     // NFC scan
-  btn.addEventListener("click", async () => {
- if (scanning) return;
-if (activeReader) stopScan();
-scanning = true;
+ btn.addEventListener("click", async () => {
+  if (scanning) return;
+
+  stopScan();        // resets any prior session
+  scanning = true;
+
+  const mySession = scanSession; // snapshot
 
 
   if (!("NDEFReader" in window)) {
@@ -227,19 +240,20 @@ scanning = true;
       stopScan();
     };
 
-    reader.onreading = (event) => {
-      const tagId = event.serialNumber;
+    rreader.onreading = (event) => {
+  if (mySession !== scanSession) return; // ignore stale events
 
-      // IMPORTANT: even if tagId is missing, stop scanning
-      if (!tagId) {
-        renderStatus("No tag ID read");
-        stopScan();
-        return;
-      }
+  const tagId = event.serialNumber;
+  if (!tagId) {
+    renderStatus("No tag ID read");
+    stopScan();
+    return;
+  }
 
-      handleHiveScan(tagId);
-      stopScan(); // ✅ this is what prevents “auto scanning forever”
-    };
+  handleHiveScan(tagId);
+  stopScan();
+};
+
 
   } catch (err) {
     renderStatus("Scan failed: " + err.message);
@@ -252,6 +266,7 @@ scanning = true;
 
 </body>
 </html>
+
 
 
 
