@@ -83,6 +83,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let scanning = false;
   let activeReader = null;
   let scanSession = 0;
+  let currentInspectionIndex = 0;
+
 
 
   const btn = document.getElementById("scanNfc");
@@ -100,6 +102,55 @@ document.addEventListener("DOMContentLoaded", () => {
     alert("Scan button missing");
     return;
   }
+
+  function loadInspection(hive, index) {
+  const insp = hive.inspections[index];
+  if (!insp) return;
+
+  currentInspectionIndex = index;
+
+  dateInput.value = insp.date || today();
+  queenInput.checked = !!insp.queenPresent;
+  notesInput.value = insp.notes || "";
+
+  renderStatus(`Loaded inspection: ${insp.date}`);
+}
+
+function renderHistory(hive) {
+  const historyDiv = document.getElementById("history");
+  if (!historyDiv) return;
+
+  historyDiv.innerHTML = "";
+
+  if (!hive.inspections || hive.inspections.length === 0) {
+    historyDiv.innerHTML = "<em>No inspections yet.</em>";
+    return;
+  }
+
+  hive.inspections.forEach((insp, index) => {
+    const row = document.createElement("div");
+    row.style.padding = "0.5rem";
+    row.style.borderBottom = "1px solid #ddd";
+    row.style.cursor = "pointer";
+    row.style.background = index === currentInspectionIndex ? "#eef" : "transparent";
+
+    const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
+    const notesPreview = (insp.notes || "").trim().slice(0, 60);
+
+    row.innerHTML = `
+      <strong>${insp.date || "(no date)"}</strong><br>
+      <small>${queenText}${notesPreview ? " • " + notesPreview : ""}</small>
+    `;
+
+    row.addEventListener("click", () => {
+      loadInspection(hive, index);
+      renderHistory(hive); // refresh highlight
+    });
+
+    historyDiv.appendChild(row);
+  });
+}
+
 
   function renderStatus(text) {
     if (status) status.textContent = text;
@@ -160,16 +211,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const hive = hives[tagId];
     const inspection = getOrCreateTodayInspection(hive);
+    currentInspectionIndex = hive.inspections.findIndex(i => i === inspection);
+loadInspection(hive, currentInspectionIndex);
+renderHistory(hive);
+
     saveHives(hives);
 
     hiveIdDisplay.textContent = tagId;
     hiveNameInput.value = hive.name || "";
     locationInput.value = hive.location || "";
 
-    dateInput.value = inspection.date;
-    queenInput.checked = inspection.queenPresent;
-    notesInput.value = inspection.notes;
-
+    
     hiveForm.classList.remove("hidden");
     renderStatus("Hive loaded: " + (hive.name || tagId));
 
@@ -180,29 +232,33 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function saveCurrentHiveAndInspection() {
-    if (!currentHiveId) return;
+  if (!currentHiveId) return;
 
-    const hives = loadHives();
-    const hive = hives[currentHiveId];
-    if (!hive) return;
+  const hives = loadHives();
+  const hive = hives[currentHiveId];
+  if (!hive) return;
 
-    hive.name = hiveNameInput.value;
-    hive.location = locationInput.value;
+  hive.name = hiveNameInput.value;
+  hive.location = locationInput.value;
 
-    const d = dateInput.value || today();
-    let insp = hive.inspections.find(i => i.date === d);
-    if (!insp) {
-      insp = { date: d, queenPresent: false, notes: "" };
-      hive.inspections.unshift(insp);
-    }
+  const insp = hive.inspections[currentInspectionIndex];
+  if (!insp) return;
 
-    insp.date = d;
-    insp.queenPresent = queenInput.checked;
-    insp.notes = notesInput.value;
+  insp.date = dateInput.value || today();
+  insp.queenPresent = queenInput.checked;
+  insp.notes = notesInput.value;
 
-    saveHives(hives);
-    renderStatus("Saved: " + (hive.name || hive.id));
-  }
+  // 🔽 STEP FIVE GOES HERE 🔽
+  hive.inspections.sort((a, b) =>
+    (b.date || "").localeCompare(a.date || "")
+  );
+  currentInspectionIndex = 0;
+  loadInspection(hive, 0);
+
+  saveHives(hives);
+  renderHistory(hive);
+}
+
 
   // Save on edits
   hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
@@ -266,6 +322,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 </body>
 </html>
+
 
 
 
