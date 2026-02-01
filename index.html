@@ -219,6 +219,21 @@
       display:inline-block; width:14px; height:14px; border-radius:4px; border:1px solid #bbb; margin-right:0.3rem;
       vertical-align: -2px;
     }
+
+    /* Mini fill meter under the frame number */
+.frame-meter {
+  height: 6px;
+  margin: 6px 10px 8px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+.frame-meter > div {
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.45);
+}
+
   </style>
 </head>
 
@@ -628,20 +643,39 @@
     return;
   }
 
-  let pollen = 0, honey = 0, brood = 0;
+  let pollen = 0, honey = 0, brood = 0, empty = 0;
 
   for (const frame of insp.frameMap) {
     for (const seg of (frame || [])) {
       if (seg === "pollen") pollen++;
       else if (seg === "honey") honey++;
       else if (seg === "brood") brood++;
+      else empty++;
     }
   }
 
+  const frames = Math.max(0, Number(insp.framesCount || insp.frameMap.length || 0));
+  const totalSections = frames * 4;
+
+  const pct = (n) => {
+    if (!totalSections) return "0%";
+    return `${Math.round((n / totalSections) * 100)}%`;
+  };
+
+  // Optional “quick read” cue (based on how full brood is)
+  const broodPct = totalSections ? brood / totalSections : 0;
+  const cue =
+    broodPct >= 0.60 ? "🔥 Strong brood" :
+    broodPct >= 0.35 ? "✅ Good brood" :
+    broodPct > 0    ? "⚠️ Light brood" :
+                      "—";
+
   el.frameSummary.innerHTML =
-    `🟨 Pollen: <strong>${pollen}</strong> &nbsp; ` +
-    `🍯 Honey: <strong>${honey}</strong> &nbsp; ` +
-    `🟪 Brood: <strong>${brood}</strong>`;
+    `🟨 Pollen: <strong>${pollen}</strong> (${pct(pollen)}) &nbsp; ` +
+    `🍯 Honey: <strong>${honey}</strong> (${pct(honey)}) &nbsp; ` +
+    `🟪 Brood: <strong>${brood}</strong> (${pct(brood)})` +
+    `<br>` +
+    `🧮 Total sections: <strong>${totalSections}</strong> (${frames} frames) &nbsp; • &nbsp; ${cue}`;
 },
 
 
@@ -714,6 +748,15 @@ col.style.setProperty("--intensity", String(intensity));
           title.className = "frame-col-title";
           title.textContent = `${f + 1}`;
           col.appendChild(title);
+          // Mini meter (0..4 filled)
+const filled = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : []).filter(v => v && v !== "none").length;
+const meter = document.createElement("div");
+meter.className = "frame-meter";
+const meterFill = document.createElement("div");
+meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
+meter.appendChild(meterFill);
+col.appendChild(meter);
+
 
           for (let s = 0; s < 4; s++) {
             const seg = document.createElement("div");
@@ -759,6 +802,13 @@ col.style.setProperty("--intensity", String(intensity));
     const intensity = UI.frameIntensity(insp2.frameMap[f]);
     col.style.setProperty("--intensity", String(intensity));
   }
+
+              // Update mini meter for this column
+const filled2 = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
+  .filter(v => v && v !== "none").length;
+
+meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
+
 });
 
 
@@ -1746,6 +1796,7 @@ col.style.setProperty("--intensity", String(intensity));
   </script>
 </body>
 </html>
+
 
 
 
