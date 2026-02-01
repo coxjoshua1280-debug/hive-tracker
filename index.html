@@ -434,19 +434,26 @@
       },
 
       createInspection(hive, date) {
-        const insp = {
-          id: Utils.uuid(),
-          date: date || Utils.today(),
-          queenPresent: false,
-          notes: "",
-          flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-          photos: [],
-          framesCount: 10,
-          frameMap: []
-        };
-        hive.inspections.unshift(insp);
-        return insp;
-      },
+  const prev = Array.isArray(hive.inspections) ? hive.inspections[0] : null;
+
+  const insp = {
+    id: Utils.uuid(),
+    date: date || Utils.today(),
+    queenPresent: false,
+    notes: "",
+    flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
+    photos: [],
+
+    framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
+    frameMap: Array.isArray(prev?.frameMap)
+      ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
+      : []
+  };
+
+  hive.inspections.unshift(insp);
+  return insp;
+}
+
 
       getOrCreateTodayInspection(hive) {
         const t = Utils.today();
@@ -715,10 +722,45 @@ col.style.setProperty("--intensity", String(intensity));
             seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
 
             seg.addEventListener("click", () => {
-              insp.frameMap[f][s] = this.nextSegValue(insp.frameMap[f][s] || "none");
-              App.saveCurrentHiveAndInspection();
-              seg.className = `frame-seg seg-${insp.frameMap[f][s]}`;
-            });
+  if (!State.currentHiveId || !State.currentInspectionId) return;
+
+  // Load the real stored hive/inspection so the change persists
+  const hives = Storage.loadHives();
+  const hive2 = hives[State.currentHiveId];
+  if (!hive2 || !Array.isArray(hive2.inspections)) return;
+
+  const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
+  if (!insp2) return;
+
+  UI.ensureInspectionDefaults(insp2);
+  UI.normalizeFrameMap(insp2);
+
+  // Apply change to stored inspection
+  insp2.frameMap[f][s] = UI.nextSegValue(insp2.frameMap[f][s] || "none");
+
+  // Save
+  const res = Storage.saveHives(hives);
+  if (!res.ok) {
+    UI.status("Save failed (storage full?) — export ZIP backup!");
+    return;
+  }
+
+  // Keep the currently-rendered 'insp' in sync too (so UI feels instant)
+  insp.frameMap[f][s] = insp2.frameMap[f][s];
+
+  // Update just this segment visually
+  seg.className = `frame-seg seg-${insp.frameMap[f][s]}`;
+
+  // Update summary + intensity for this column
+  UI.renderFrameSummary(insp2);
+
+  const col = seg.closest(".frame-col");
+  if (col) {
+    const intensity = UI.frameIntensity(insp2.frameMap[f]);
+    col.style.setProperty("--intensity", String(intensity));
+  }
+});
+
 
             col.appendChild(seg);
           }
@@ -1704,5 +1746,6 @@ col.style.setProperty("--intensity", String(intensity));
   </script>
 </body>
 </html>
+
 
 
