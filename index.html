@@ -87,7 +87,26 @@ document.addEventListener("DOMContentLoaded", () => {
     alert("Scan button NOT found");
     return;
   }
+  function saveCurrentHive() {
+  if (!currentHiveId) return;
 
+  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+  if (!hives[currentHiveId]) return;
+
+  hives[currentHiveId].name =
+    document.getElementById("hiveName").value;
+
+  hives[currentHiveId].location =
+    document.getElementById("location").value;
+
+  localStorage.setItem("hives", JSON.stringify(hives));
+}
+
+  const hiveNameInput = document.getElementById("hiveName");
+const locationInput = document.getElementById("location");
+
+hiveNameInput.addEventListener("input", saveCurrentHive);
+locationInput.addEventListener("input", saveCurrentHive);
   scanButton.addEventListener("click", async () => {
     
     if (!("NDEFReader" in window)) {
@@ -169,6 +188,7 @@ if (!hives[tagId].name) {
 </body>
 
 </html>
+
 
 
 
