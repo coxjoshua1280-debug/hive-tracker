@@ -57,7 +57,7 @@
 </button>
   <label for="rfid">Scan Hive RFID</label>
   <input id="rfid" type="text" placeholder="Scan tag here" autofocus />
-
+<div id="status"></div>
   <div id="hiveForm" class="hidden">
     <p><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
     <label>Hive Name</label>
@@ -104,7 +104,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const hiveNameInput = document.getElementById("hiveName");
 const locationInput = document.getElementById("location");
-
+document.getElementById("status").textContent =
+  "Hive loaded: " + (hives[tagId].name || tagId);
 hiveNameInput.addEventListener("input", saveCurrentHive);
 locationInput.addEventListener("input", saveCurrentHive);
   scanButton.addEventListener("click", async () => {
@@ -135,7 +136,7 @@ locationInput.addEventListener("input", saveCurrentHive);
   });
 
   function handleHiveScan(tagId) {
-alert("Active hive set to: " + tagId);
+
     const hives = JSON.parse(localStorage.getItem("hives") || "{}");
 currentHiveId = tagId;
     if (!hives[tagId]) {
@@ -188,6 +189,7 @@ if (!hives[tagId].name) {
 </body>
 
 </html>
+
 
 
 
