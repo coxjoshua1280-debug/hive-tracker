@@ -183,43 +183,45 @@ document.addEventListener("DOMContentLoaded", () => {
   queenInput.addEventListener("change", saveCurrentHiveAndInspection);
   notesInput.addEventListener("input", saveCurrentHiveAndInspection);
 
-  // NFC scan (diagnostic version)
- btn.addEventListener("click", async () => {
-  if (!("NDEFReader" in window)) {
-    alert("Web NFC not supported");
-    return;
-  }
+    // NFC scan
+  btn.addEventListener("click", async () => {
+    if (!("NDEFReader" in window)) {
+      alert("Web NFC not supported");
+      return;
+    }
 
-  try {
-    const reader = new NDEFReader();
-    renderStatus("Scanning… tap hive tag");
-    await reader.scan();
+    try {
+      const reader = new NDEFReader();
+      renderStatus("Scanning… tap hive tag");
+      await reader.scan();
 
-    reader.onreadingerror = () => {
-      renderStatus("Read error — try again");
-    };
+      reader.onreadingerror = () => {
+        renderStatus("Read error — try again");
+      };
 
-    reader.onreading = (event) => {
-      const tagId = event.serialNumber;
-      if (!tagId) {
-        renderStatus("No tag ID read");
-        return;
-      }
+      reader.onreading = (event) => {
+        const tagId = event.serialNumber;
+        if (!tagId) {
+          renderStatus("No tag ID read");
+          return;
+        }
 
-      handleHiveScan(tagId);
-      reader.abort();
-      renderStatus("Ready");
+        handleHiveScan(tagId);
+        reader.abort();
+        renderStatus("Ready");
+      };
+    } catch (err) {
+      renderStatus("Scan failed: " + err.message);
+    }
+  });
 
-    };
-  } catch (err) {
-    renderStatus("Scan failed: " + err.message);
-  }
-});
-
+}); // ✅ THIS LINE WAS MISSING
 </script>
+
 
 </body>
 </html>
+
 
 
 
