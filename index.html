@@ -79,115 +79,71 @@
     <div id="history"></div>
   
 
- <script>
+<script>
 document.addEventListener("DOMContentLoaded", () => {
+
   let currentHiveId = null;
+
   const scanButton = document.getElementById("scanNfc");
+  const hiveForm = document.getElementById("hiveForm");
+  const hiveNameInput = document.getElementById("hiveName");
+  const locationInput = document.getElementById("location");
+  const hiveIdDisplay = document.getElementById("hiveIdDisplay");
+
+  const dateInput = document.getElementById("lastInspection");
+  const queenInput = document.getElementById("queenPresent");
+  const notesInput = document.getElementById("notes");
+
   if (!scanButton) {
-    alert("Scan button NOT found");
+    alert("Scan button not found");
     return;
   }
+
+  function today() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function loadHives() {
+    return JSON.parse(localStorage.getItem("hives") || "{}");
+  }
+
+  function saveHives(hives) {
+    localStorage.setItem("hives", JSON.stringify(hives));
+  }
+
+  function getOrCreateTodayInspection(hive) {
+    const t = today();
+    let insp = hive.inspections.find(i => i.date === t);
+    if (insp) return insp;
+
+    insp = { date: t, queenPresent: false, notes: "" };
+    hive.inspections.unshift(insp);
+    return insp;
+  }
+
   function saveCurrentHive() {
-  if (!currentHiveId) return;
+    if (!currentHiveId) return;
 
-  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-  if (!hives[currentHiveId]) return;
+    const hives = loadHives();
+    const hive = hives[currentHiveId];
+    if (!hive) return;
 
-  hives[currentHiveId].name =
-    document.getElementById("hiveName").value;
+    hive.name = hiveNameInput.value;
+    hive.location = locationInput.value;
 
-  hives[currentHiveId].location =
-    document.getElementById("location").value;
-
-  localStorage.setItem("hives", JSON.stringify(hives));
-}
-
-  const hiveNameInput = document.getElementById("hiveName");
-const locationInput = document.getElementById("location");
-document.getElementById("status").textContent =
-  "Hive loaded: " + (hives[tagId].name || tagId);
-hiveNameInput.addEventListener("input", saveCurrentHive);
-locationInput.addEventListener("input", saveCurrentHive);
-  scanButton.addEventListener("click", async () => {
-    alert("Scan button clicked");
-    
-    if (!("NDEFReader" in window)) {
-      alert("Web NFC not supported");
-      return;
+    const inspection = hive.inspections.find(i => i.date === dateInput.value);
+    if (inspection) {
+      inspection.queenPresent = queenInput.checked;
+      inspection.notes = notesInput.value;
     }
 
-    try {
-      const reader = new NDEFReader();
-      
-      await reader.scan();
-     
-      reader.onreading = event => {
-        const tagId = event.serialNumber;
-        if (!tagId) {
-          alert("Tag read but no serial number");
-          return;
-        }
-
-        handleHiveScan(tagId);
-      };
-
-    } catch (err) {
-      alert("NFC error: " + err.message);
-    }
-    function today() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function getOrCreateTodayInspection(hive) {
-  const todayDate = today();
-
-  const existing = hive.inspections.find(
-    insp => insp.date === todayDate
-  );
-
-  if (existing) return existing;
-
-  const inspection = {
-    date: todayDate,
-    queenPresent: false,
-    notes: ""
-  };
-
-  hive.inspections.unshift(inspection);
-  return inspection;
-}
-    const dateInput = document.getElementById("lastInspection");
-const queenInput = document.getElementById("queenPresent");
-const notesInput = document.getElementById("notes");
-
-function saveCurrentInspection() {
-  if (!currentHiveId) return;
-
-  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-  const hive = hives[currentHiveId];
-  if (!hive) return;
-
-  const inspection = hive.inspections.find(
-    insp => insp.date === dateInput.value
-  );
-  if (!inspection) return;
-
-  inspection.date = dateInput.value;
-  inspection.queenPresent = queenInput.checked;
-  inspection.notes = notesInput.value;
-
-  localStorage.setItem("hives", JSON.stringify(hives));
-}
-
-dateInput.addEventListener("change", saveCurrentInspection);
-queenInput.addEventListener("change", saveCurrentInspection);
-notesInput.addEventListener("input", saveCurrentInspection);
-  });
+    saveHives(hives);
+  }
 
   function handleHiveScan(tagId) {
+    const hives = loadHives();
+    currentHiveId = tagId;
 
-    const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-currentHiveId = tagId;
     if (!hives[tagId]) {
       hives[tagId] = {
         id: tagId,
@@ -195,92 +151,55 @@ currentHiveId = tagId;
         location: "",
         inspections: []
       };
-
-      document
-  .querySelectorAll("#hiveForm input")
-  .forEach(el =>
-    el.addEventListener("input", () => saveCurrentHive(currentHiveId))
-  );
-
-      function saveCurrentHive(tagId) {
-        alert("Saving hive: " + tagId);
-  if (!tagId) return;
-
-  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-  if (!hives[tagId]) return;
-
-  hives[tagId].name = document.getElementById("hiveName").value;
-  hives[tagId].location = document.getElementById("location").value;
-
-  localStorage.setItem("hives", JSON.stringify(hives));
-}
     }
 
-    localStorage.setItem("hives", JSON.stringify(hives));
+    const hive = hives[tagId];
+    const inspection = getOrCreateTodayInspection(hive);
+    saveHives(hives);
 
-    // Show hive in UI
-document.getElementById("hiveIdDisplay").textContent = tagId;
-document.getElementById("hiveName").value = hives[tagId].name || "";
-document.getElementById("location").value = hives[tagId].location || "";
+    hiveIdDisplay.textContent = tagId;
+    hiveNameInput.value = hive.name;
+    locationInput.value = hive.location;
 
-// Reveal form
-document.getElementById("hiveForm").classList.remove("hidden");
+    dateInput.value = inspection.date;
+    queenInput.checked = inspection.queenPresent;
+    notesInput.value = inspection.notes;
 
-// Auto-focus name ONLY if new hive
-if (!hives[tagId].name) {
-  setTimeout(() => {
-    document.getElementById("hiveName").focus();
-  }, 150);
-}
+    hiveForm.classList.remove("hidden");
+
+    if (!hive.name) {
+      setTimeout(() => hiveNameInput.focus(), 150);
+    }
   }
-  const hive = hives[tagId];
 
-// 🔍 Get today’s inspection
-const inspection = getOrCreateTodayInspection(hive);
+  scanButton.addEventListener("click", async () => {
+    if (!("NDEFReader" in window)) {
+      alert("Web NFC not supported");
+      return;
+    }
 
-// Save immediately
-localStorage.setItem("hives", JSON.stringify(hives));
+    try {
+      const reader = new NDEFReader();
+      await reader.scan();
 
-// Populate inspection form
-document.getElementById("lastInspection").value = inspection.date;
-document.getElementById("queenPresent").checked = inspection.queenPresent;
-document.getElementById("notes").value = inspection.notes;
+      reader.onreading = event => {
+        reader.abort();
+        handleHiveScan(event.serialNumber);
+      };
+
+    } catch (err) {
+      alert("NFC error: " + err.message);
+    }
+  });
+
+  [hiveNameInput, locationInput, dateInput, queenInput, notesInput]
+    .forEach(el => el && el.addEventListener("input", saveCurrentHive));
 });
-   // 🔒 Inspection wiring lock — prevents script crash
-(function () {
-  const dateInput = document.getElementById("lastInspection");
-  const queenInput = document.getElementById("queenPresent");
-  const notesInput = document.getElementById("notes");
-
-  if (!dateInput || !queenInput || !notesInput) return;
-
-  function saveCurrentInspection() {
-    if (!window.currentHiveId) return;
-
-    const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-    const hive = hives[window.currentHiveId];
-    if (!hive || !hive.inspections) return;
-
-    const inspection = hive.inspections.find(
-      insp => insp.date === dateInput.value
-    );
-    if (!inspection) return;
-
-    inspection.date = dateInput.value;
-    inspection.queenPresent = queenInput.checked;
-    inspection.notes = notesInput.value;
-
-    localStorage.setItem("hives", JSON.stringify(hives));
-  }
-
-  dateInput.addEventListener("change", saveCurrentInspection);
-  queenInput.addEventListener("change", saveCurrentInspection);
-  notesInput.addEventListener("input", saveCurrentInspection);
-})();
 </script>
 </body>
 
 </html>
+
 
 
 
