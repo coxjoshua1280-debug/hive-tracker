@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // NFC scan
   btn.addEventListener("click", async () => {
  if (scanning) return;
-stopScan();     // abort any previous reader
+if (activeReader) stopScan();
 scanning = true;
 
 
@@ -252,6 +252,7 @@ scanning = true;
 
 </body>
 </html>
+
 
 
 
