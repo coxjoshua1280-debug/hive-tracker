@@ -133,6 +133,54 @@ locationInput.addEventListener("input", saveCurrentHive);
     } catch (err) {
       alert("NFC error: " + err.message);
     }
+    function today() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getOrCreateTodayInspection(hive) {
+  const todayDate = today();
+
+  const existing = hive.inspections.find(
+    insp => insp.date === todayDate
+  );
+
+  if (existing) return existing;
+
+  const inspection = {
+    date: todayDate,
+    queenPresent: false,
+    notes: ""
+  };
+
+  hive.inspections.unshift(inspection);
+  return inspection;
+}
+    const dateInput = document.getElementById("lastInspection");
+const queenInput = document.getElementById("queenPresent");
+const notesInput = document.getElementById("notes");
+
+function saveCurrentInspection() {
+  if (!currentHiveId) return;
+
+  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+  const hive = hives[currentHiveId];
+  if (!hive) return;
+
+  const inspection = hive.inspections.find(
+    insp => insp.date === dateInput.value
+  );
+  if (!inspection) return;
+
+  inspection.date = dateInput.value;
+  inspection.queenPresent = queenInput.checked;
+  inspection.notes = notesInput.value;
+
+  localStorage.setItem("hives", JSON.stringify(hives));
+}
+
+dateInput.addEventListener("change", saveCurrentInspection);
+queenInput.addEventListener("change", saveCurrentInspection);
+notesInput.addEventListener("input", saveCurrentInspection);
   });
 
   function handleHiveScan(tagId) {
@@ -184,11 +232,24 @@ if (!hives[tagId].name) {
   }, 150);
 }
   }
+  const hive = hives[tagId];
+
+// 🔍 Get today’s inspection
+const inspection = getOrCreateTodayInspection(hive);
+
+// Save immediately
+localStorage.setItem("hives", JSON.stringify(hives));
+
+// Populate inspection form
+document.getElementById("lastInspection").value = inspection.date;
+document.getElementById("queenPresent").checked = inspection.queenPresent;
+document.getElementById("notes").value = inspection.notes;
 });
 </script>
 </body>
 
 </html>
+
 
 
 
