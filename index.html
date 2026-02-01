@@ -184,41 +184,43 @@ document.addEventListener("DOMContentLoaded", () => {
   notesInput.addEventListener("input", saveCurrentHiveAndInspection);
 
   // NFC scan (diagnostic version)
-  btn.addEventListener("click", async () => {
-    alert("Clicked Scan Hive");
+ btn.addEventListener("click", async () => {
+  if (!("NDEFReader" in window)) {
+    alert("Web NFC not supported");
+    return;
+  }
 
-    if (!("NDEFReader" in window)) {
-      alert("Web NFC not supported");
-      return;
-    }
+  try {
+    const reader = new NDEFReader();
+    renderStatus("Scanning… tap hive tag");
+    await reader.scan();
 
-    try {
-      const reader = new NDEFReader();
-      renderStatus("Starting scan…");
-      await reader.scan();
-      alert("Scan is active now");
-      renderStatus("Scan active ✅ Tap tag");
+    reader.onreadingerror = () => {
+      renderStatus("Read error — try again");
+    };
 
-      reader.onreadingerror = () => {
-        alert("onreadingerror fired");
-      };
+    reader.onreading = (event) => {
+      const tagId = event.serialNumber;
+      if (!tagId) {
+        renderStatus("No tag ID read");
+        return;
+      }
 
-      reader.onreading = (event) => {
-        alert("Tag detected!");
-        renderStatus("Tag detected ✅");
-        alert("serialNumber = " + event.serialNumber);
-        reader.abort();
-      };
-    } catch (err) {
-      alert("scan() error: " + err.message);
-      renderStatus("Scan failed ❌");
-    }
-  });
+      handleHiveScan(tagId);
+      reader.abort();
+      renderStatus("Ready");
+
+    };
+  } catch (err) {
+    renderStatus("Scan failed: " + err.message);
+  }
 });
+
 </script>
 
 </body>
 </html>
+
 
 
 
