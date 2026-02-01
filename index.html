@@ -73,6 +73,18 @@
   <label for="currentYard">Current Yard</label>
   <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
   <datalist id="yardList"></datalist>
+ <div class="row" style="margin-top:0.5rem;">
+  <button id="captureYardGps" type="button" class="btn">📍 Capture Yard GPS</button>
+  <button id="detectNearestYard" type="button" class="btn">🧭 Detect Nearest Yard</button>
+</div>
+
+<div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
+
+<button id="exportCsv" type="button" class="btn" style="margin-top:0.75rem;">
+  ⬇️ Export CSV
+</button>
+
+
 
   <button id="captureYardGps" type="button" class="btn">
   📍 Capture Yard Location
@@ -93,6 +105,8 @@
 
     <label for="location">Location / Yard</label>
     <input id="location" type="text" placeholder="e.g. Yard A" />
+    <div id="hiveYardGps" class="small" style="margin-top:0.4rem;"></div>
+
 
     <button id="newInspectionBtn" type="button" class="btn">New Inspection</button>
 
@@ -141,6 +155,13 @@
     const newInspectionBtn = document.getElementById("newInspectionBtn");
     const captureYardGpsBtn = document.getElementById("captureYardGps");
 const yardGpsDiv = document.getElementById("yardGps");
+    const captureYardGpsBtn = document.getElementById("captureYardGps");
+const detectNearestYardBtn = document.getElementById("detectNearestYard");
+const yardGpsDiv = document.getElementById("yardGps");
+const exportCsvBtn = document.getElementById("exportCsv");
+    const hiveYardGpsDiv = document.getElementById("hiveYardGps");
+
+
 
 
     if (!btn || !statusEl || !hiveForm || !hiveIdDisplay || !hiveNameInput || !locationInput ||
@@ -151,6 +172,132 @@ const yardGpsDiv = document.getElementById("yardGps");
     }
 
     // -------- Helpers --------
+
+    let lastPosition = null;
+
+// yards: { "Yard A": { lat, lon, accuracy, timestamp } }
+function loadYards() {
+  return JSON.parse(localStorage.getItem("yards") || "{}");
+}
+function saveYards(yards) {
+  localStorage.setItem("yards", JSON.stringify(yards));
+}
+
+function toRad(deg) { return deg * Math.PI / 180; }
+
+// Haversine distance in meters
+function distanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function mapsLink(lat, lon) {
+  // Works on Android/iPhone: opens maps app or browser maps
+  const q = `${lat},${lon}`;
+  return `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
+}
+
+// Promisified GPS (one-shot, no background tracking)
+function getCurrentPositionOnce() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+    function renderHiveYardGps() {
+  if (!hiveYardGpsDiv) return;
+
+  const yardName = (locationInput.value || "").trim();
+  if (!yardName) {
+    hiveYardGpsDiv.textContent = "";
+    return;
+  }
+
+  const yards = loadYards();
+  const y = yards[yardName];
+
+  if (!y) {
+    hiveYardGpsDiv.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+    return;
+  }
+
+  let distText = "";
+  if (lastPosition) {
+    const d = distanceMeters(
+      lastPosition.coords.latitude,
+      lastPosition.coords.longitude,
+      y.lat, y.lon
+    );
+    distText = ` • Distance: ${Math.round(d)} m`;
+  }
+
+  hiveYardGpsDiv.innerHTML =
+    `📍 ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+    `${distText} • <a href="${mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+}
+
+
+function renderYardGps(yardName) {
+  if (!yardGpsDiv) return;
+
+  const yards = loadYards();
+  const y = yards[yardName];
+  if (!yardName) {
+    yardGpsDiv.textContent = "";
+    return;
+  }
+  if (!y) {
+    yardGpsDiv.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+    return;
+  }
+
+  let distText = "";
+  if (lastPosition) {
+    const d = distanceMeters(
+      lastPosition.coords.latitude,
+      lastPosition.coords.longitude,
+      y.lat, y.lon
+    );
+    distText = ` • Distance: ${Math.round(d)} m`;
+  }
+
+  yardGpsDiv.innerHTML =
+    `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+    `${distText} • <a href="${mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+}
+
+// Finds nearest yard within radiusMeters. Returns { name, meters } or null.
+function findNearestYard(radiusMeters = 75) {
+  if (!lastPosition) return null;
+
+  const yards = loadYards();
+  const lat = lastPosition.coords.latitude;
+  const lon = lastPosition.coords.longitude;
+
+  let best = null;
+
+  for (const [name, y] of Object.entries(yards)) {
+    if (!y || typeof y.lat !== "number" || typeof y.lon !== "number") continue;
+    const d = distanceMeters(lat, lon, y.lat, y.lon);
+    if (d <= radiusMeters && (!best || d < best.meters)) {
+      best = { name, meters: d };
+    }
+  }
+  return best;
+}
+
 
     function loadYards() {
   return JSON.parse(localStorage.getItem("yards") || "{}");
@@ -204,6 +351,59 @@ function renderYardGps(yardName) {
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) stopScan();
     });
+    captureYardGpsBtn.addEventListener("click", async () => {
+  const yardName = (currentYardInput.value || "").trim();
+  if (!yardName) {
+    alert("Enter a yard name first.");
+    return;
+  }
+
+  try {
+    renderStatus("Getting GPS…");
+    const pos = await getCurrentPositionOnce();
+    lastPosition = pos;
+
+    const yards = loadYards();
+    yards[yardName] = {
+      lat: pos.coords.latitude,
+      lon: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      timestamp: Date.now()
+    };
+    saveYards(yards);
+
+    renderStatus(`Saved GPS for ${yardName}`);
+    renderYardGps(yardName);
+    refreshYardUI(); // updates yard list
+  } catch (err) {
+    alert("GPS error: " + (err.message || err));
+    renderStatus("Ready");
+  }
+});
+    detectNearestYardBtn.addEventListener("click", async () => {
+  try {
+    renderStatus("Detecting nearest yard…");
+    const pos = await getCurrentPositionOnce();
+    lastPosition = pos;
+
+    const nearest = findNearestYard(100); // <-- radius in meters (adjust)
+    if (!nearest) {
+      renderStatus("No yard nearby (within 100m).");
+      renderYardGps((currentYardInput.value || "").trim());
+      return;
+    }
+
+    currentYardInput.value = nearest.name;
+    refreshYardUI();
+    renderYardGps(nearest.name);
+    renderStatus(`Nearest yard: ${nearest.name} (${Math.round(nearest.meters)}m)`);
+  } catch (err) {
+    alert("GPS error: " + (err.message || err));
+    renderStatus("Ready");
+  }
+});
+
+
 
     // -------- Inspections (ID-based) --------
     function createInspection(hive, date = today()) {
@@ -389,7 +589,9 @@ function renderYardGps(yardName) {
 
     currentYardInput.addEventListener("input", () => {
   refreshYardUI();
-  renderYardGps(currentYardInput.value.trim());
+  renderYardGps((currentYardInput.value || "").trim());
+      renderHiveYardGps();
+
 });
 
 
@@ -419,6 +621,8 @@ function renderYardGps(yardName) {
       hiveIdDisplay.textContent = tagId;
       hiveNameInput.value = hive.name || "";
       locationInput.value = hive.location || "";
+      renderHiveYardGps();
+
 
       // Show form + load selected inspection + history
       hiveForm.classList.remove("hidden");
@@ -467,7 +671,11 @@ function renderYardGps(yardName) {
 
     // Save on edits
     hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
-    locationInput.addEventListener("input", saveCurrentHiveAndInspection);
+    locationInput.addEventListener("input", () => {
+  saveCurrentHiveAndInspection();
+  renderHiveYardGps();
+});
+
     dateInput.addEventListener("change", saveCurrentHiveAndInspection);
     queenInput.addEventListener("change", saveCurrentHiveAndInspection);
     notesInput.addEventListener("input", saveCurrentHiveAndInspection);
@@ -505,6 +713,22 @@ function renderYardGps(yardName) {
         scanning = false;
         return;
       }
+      // Optional: If Current Yard is blank, try to detect nearest yard silently
+if (!(currentYardInput.value || "").trim()) {
+  try {
+    const pos = await getCurrentPositionOnce();
+    lastPosition = pos;
+    const nearest = findNearestYard(100);
+    if (nearest) {
+      currentYardInput.value = nearest.name;
+      refreshYardUI();
+      renderYardGps(nearest.name);
+    }
+  } catch (_) {
+    // ignore GPS errors during scan
+  }
+}
+
 
       try {
         const reader = new NDEFReader();
@@ -538,6 +762,71 @@ function renderYardGps(yardName) {
         stopScan();
       }
     });
+    renderYardGps((currentYardInput.value || "").trim());
+
+    function csvEscape(v) {
+  const s = (v ?? "").toString();
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+exportCsvBtn.addEventListener("click", () => {
+  const hives = loadHives();
+  const yards = loadYards();
+
+  const rows = [];
+  // Header
+  rows.push([
+    "yard_name","yard_lat","yard_lon","yard_accuracy_m",
+    "hive_id","hive_name","hive_location",
+    "inspection_id","inspection_date","queen_present","notes"
+  ]);
+
+  for (const hive of Object.values(hives)) {
+    const yardName = (hive.location || "").trim();
+    const y = yards[yardName] || null;
+
+    const base = [
+      yardName,
+      y ? y.lat : "",
+      y ? y.lon : "",
+      y ? Math.round(y.accuracy) : "",
+      hive.id || "",
+      hive.name || "",
+      hive.location || ""
+    ];
+
+    const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
+    if (insps.length === 0) {
+      rows.push([...base, "", "", "", ""]);
+    } else {
+      for (const insp of insps) {
+        rows.push([
+          ...base,
+          insp.id || "",
+          insp.date || "",
+          insp.queenPresent ? "yes" : "no",
+          insp.notes || ""
+        ]);
+      }
+    }
+  }
+
+  const csv = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `hive-tracker-export-${today()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
+});
+
+
 
     // Initial UI
     renderStatus("Ready");
@@ -546,4 +835,5 @@ function renderYardGps(yardName) {
   </script>
 </body>
 </html>
+
 
