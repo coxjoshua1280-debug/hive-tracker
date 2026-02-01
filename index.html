@@ -129,16 +129,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     localStorage.setItem("hives", JSON.stringify(hives));
 
-    alert(
-      "Hive loaded:\n" +
-      (hives[tagId].name || "(no name yet)")
-    );
+    // Show hive in UI
+document.getElementById("hiveIdDisplay").textContent = tagId;
+document.getElementById("hiveName").value = hives[tagId].name || "";
+document.getElementById("location").value = hives[tagId].location || "";
+
+// Reveal form
+document.getElementById("hiveForm").classList.remove("hidden");
+
+// Auto-focus name ONLY if new hive
+if (!hives[tagId].name) {
+  setTimeout(() => {
+    document.getElementById("hiveName").focus();
+  }, 150);
+}
   }
 });
 </script>
 </body>
 
 </html>
+
 
 
 
