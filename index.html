@@ -178,33 +178,77 @@
     queenInput.addEventListener("change", saveCurrentHiveAndInspection);
     notesInput.addEventListener("input", saveCurrentHiveAndInspection);
 
-    // NFC scan
-    btn.addEventListener("click", async () => {
-      if (!("NDEFReader" in window)) {
-        alert("Web NFC not supported on this device/browser.");
-        return;
+// NFC scan
+function readHiveIdFromNdef(event) {
+  try {
+    const records = event.message?.records || [];
+    for (const r of records) {
+      if (r.recordType === "text") {
+        const text = typeof r.data === "string" ? r.data : "";
+        if (text.startsWith("HIVE:")) {
+          return text.slice(5).trim();
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+btn.addEventListener("click", async () => {
+  if (!("NDEFReader" in window)) {
+    alert("Web NFC not supported on this device/browser.");
+    return;
+  }
+
+  try {
+    const reader = new NDEFReader();
+    renderStatus("Scanning… tap hive tag");
+    await reader.scan();
+
+    // ✅ set this OUTSIDE onreading
+    reader.onreadingerror = () => {
+      alert("NFC read error (try again)");
+    };
+
+    reader.onreading = async (event) => {
+      let tagId = event.serialNumber || null;
+
+      if (!tagId) {
+        tagId = readHiveIdFromNdef(event);
       }
 
-      try {
-        const reader = new NDEFReader();
-        renderStatus("Scanning… tap hive tag");
-        await reader.scan();
+      // If blank/uninitialized tag, write once then stop
+      if (!tagId) {
+        tagId = "hive-" + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
 
-        reader.onreading = event => {
-          let tagId = event.serialNumber;
-          if (!tagId) tagId = "tag-" + Date.now(); // fallback (works, but not stable)
-          handleHiveScan(tagId);
+        try {
+          await reader.write({
+            records: [{ recordType: "text", data: "HIVE:" + tagId }]
+          });
+          renderStatus("Tag initialized ✅ Tap again to load");
           reader.abort();
-        };
-      } catch (err) {
-        alert("NFC error: " + err.message);
-        renderStatus("");
+          return; // ✅ IMPORTANT
+        } catch (err) {
+          alert("Could not write to tag: " + err.message);
+          return;
+        }
       }
-    });
-  });
+
+      // Normal case: loaded ID
+      handleHiveScan(tagId);
+      reader.abort();
+    };
+
+  } catch (err) {
+    alert("NFC error: " + err.message);
+    renderStatus("");
+  }
+});
+
   </script>
 </body>
 </html>
+
 
 
 
