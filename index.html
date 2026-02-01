@@ -675,11 +675,11 @@
         insp.frameMap = insp.frameMap.slice(0, frames);
       },
 
-      nextSegValue(v) {
-        const order = ["none", "pollen", "honey", "brood"];
-        const idx = Math.max(0, order.indexOf(v));
-        return order[(idx + 1) % order.length];
-      },
+    nextSegValue(v) {
+  const order = ["none", "honey", "brood", "pollen"]; // ✅ new cycle
+  const idx = Math.max(0, order.indexOf(v));
+  return order[(idx + 1) % order.length];
+},
 
       frameIntensity(frameSegments) {
   // frameSegments length is 4. Count how many are not "none".
@@ -1746,6 +1746,7 @@ col.style.setProperty("--intensity", String(intensity));
   </script>
 </body>
 </html>
+
 
 
 
