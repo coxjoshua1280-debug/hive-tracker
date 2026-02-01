@@ -81,7 +81,7 @@
 
  <script>
 document.addEventListener("DOMContentLoaded", () => {
-  
+  let currentHiveId = null;
   const scanButton = document.getElementById("scanNfc");
   if (!scanButton) {
     alert("Scan button NOT found");
@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function handleHiveScan(tagId) {
     const hives = JSON.parse(localStorage.getItem("hives") || "{}");
-
+currentHiveId = tagId;
     if (!hives[tagId]) {
       hives[tagId] = {
         id: tagId,
@@ -125,6 +125,24 @@ document.addEventListener("DOMContentLoaded", () => {
         location: "",
         inspections: []
       };
+
+      document
+  .querySelectorAll("#hiveForm input")
+  .forEach(el =>
+    el.addEventListener("input", () => saveCurrentHive(currentHiveId))
+  );
+
+      function saveCurrentHive(tagId) {
+  if (!tagId) return;
+
+  const hives = JSON.parse(localStorage.getItem("hives") || "{}");
+  if (!hives[tagId]) return;
+
+  hives[tagId].name = document.getElementById("hiveName").value;
+  hives[tagId].location = document.getElementById("location").value;
+
+  localStorage.setItem("hives", JSON.stringify(hives));
+}
     }
 
     localStorage.setItem("hives", JSON.stringify(hives));
@@ -149,6 +167,7 @@ if (!hives[tagId].name) {
 </body>
 
 </html>
+
 
 
 
