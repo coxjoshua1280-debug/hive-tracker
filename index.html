@@ -233,6 +233,19 @@
   width: 0%;
   background: rgba(0,0,0,0.45);
 }
+    /* Mini "fill meter" under each frame number */
+.frame-meter {
+  height: 8px;
+  background: #e9e9e9;
+  border-top: 1px solid #ddd;
+}
+
+.frame-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: rgba(0,0,0,0.35);
+}
+
 
   </style>
 </head>
@@ -744,18 +757,27 @@
 col.style.setProperty("--intensity", String(intensity));
 
 
-          const title = document.createElement("div");
-          title.className = "frame-col-title";
-          title.textContent = `${f + 1}`;
-          col.appendChild(title);
-          // Mini meter (0..4 filled)
-const filled = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : []).filter(v => v && v !== "none").length;
+          cconst title = document.createElement("div");
+title.className = "frame-col-title";
+title.textContent = `${f + 1}`;
+col.appendChild(title);
+
+/* 👇 Add meter (A) */
 const meter = document.createElement("div");
 meter.className = "frame-meter";
+
 const meterFill = document.createElement("div");
-meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
+meterFill.className = "frame-meter-fill";
 meter.appendChild(meterFill);
+
 col.appendChild(meter);
+
+// Set initial meter width based on current saved values
+const filled0 = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : [])
+  .filter(v => v && v !== "none").length;
+
+meterFill.style.width = `${Math.round((filled0 / 4) * 100)}%`;
+
 
 
           for (let s = 0; s < 4; s++) {
@@ -803,7 +825,7 @@ col.appendChild(meter);
     col.style.setProperty("--intensity", String(intensity));
   }
 
-              // Update mini meter for this column
+            // Update mini meter for this column
 const filled2 = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
   .filter(v => v && v !== "none").length;
 
@@ -1446,10 +1468,12 @@ meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
 
       const rows = [];
       rows.push([
-        "yard_name","yard_lat","yard_lon","yard_accuracy_m",
-        "hive_id","hive_name","hive_location",
-        "inspection_id","inspection_date","queen_present","flags","photo_count","notes"
-      ]);
+  "yard_name","yard_lat","yard_lon","yard_accuracy_m",
+  "hive_id","hive_name","hive_location",
+  "inspection_id","inspection_date","queen_present","flags","photo_count","notes",
+  "frames_count","frame_map"
+]);
+
 
       for (const hive of Object.values(hives)) {
         const yardName = (hive.location || "").trim();
@@ -1467,21 +1491,28 @@ meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
 
         const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
         if (insps.length === 0) {
-          rows.push([...base, "", "", "", "", "", ""]);
+        rows.push([...base, "", "", "", "", "", "", "", ""]);
+
         } else {
           for (const insp of insps) {
             const flags = insp.flags ? Object.entries(insp.flags).filter(([_, v]) => v).map(([k]) => k).join("|") : "";
             const photoCount = (insp.photos && insp.photos.length) ? insp.photos.length : 0;
 
-            rows.push([
-              ...base,
-              insp.id || "",
-              insp.date || "",
-              insp.queenPresent ? "yes" : "no",
-              flags,
-              photoCount,
-              insp.notes || ""
-            ]);
+            const framesCount = typeof insp.framesCount === "number" ? insp.framesCount : "";
+const frameMapStr = Array.isArray(insp.frameMap) ? JSON.stringify(insp.frameMap) : "";
+
+rows.push([
+  ...base,
+  insp.id || "",
+  insp.date || "",
+  insp.queenPresent ? "yes" : "no",
+  flags,
+  photoCount,
+  insp.notes || "",
+  framesCount,
+  frameMapStr
+]);
+
           }
         }
       }
@@ -1796,6 +1827,7 @@ meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
   </script>
 </body>
 </html>
+
 
 
 
