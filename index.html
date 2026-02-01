@@ -100,9 +100,21 @@ document.addEventListener("DOMContentLoaded", () => {
       await reader.scan();
       alert("Scan started — tap tag");
 
-      reader.onreading = () => {
-        alert("Tag detected");
-      };
+      reader.onreading = event => {
+  let tagId = event.serialNumber;
+
+  // Fallback for tags without exposed serial numbers
+  if (!tagId) {
+    tagId = "tag-" + Date.now();
+  }
+
+  handleHiveScan(tagId);
+        alert("Hive scan handled: " + tagId);
+
+
+  reader.abort();
+};
+
     } catch (err) {
       alert("Error: " + err.message);
     }
@@ -115,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
 </body>
 
 </html>
+
 
 
 
