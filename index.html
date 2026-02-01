@@ -77,6 +77,8 @@
   </div> <!-- ✅ CLOSE hiveForm -->
 
   <script>
+    alert("SCRIPT LOADED");
+
   document.addEventListener("DOMContentLoaded", () => {
     let currentHiveId = null;
 
@@ -90,6 +92,9 @@
     const dateInput = document.getElementById("lastInspection");
     const queenInput = document.getElementById("queenPresent");
     const notesInput = document.getElementById("notes");
+    const btn = document.getElementById("scanNfc");
+alert("btn is " + (btn ? "FOUND" : "MISSING"));
+
 
     function today() {
       return new Date().toISOString().split("T")[0];
@@ -222,6 +227,7 @@ btn.addEventListener("click", async () => {
   </script>
 </body>
 </html>
+
 
 
 
