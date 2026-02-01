@@ -116,6 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function handleHiveScan(tagId) {
+alert("Active hive set to: " + tagId);
     const hives = JSON.parse(localStorage.getItem("hives") || "{}");
 currentHiveId = tagId;
     if (!hives[tagId]) {
@@ -167,6 +168,7 @@ if (!hives[tagId].name) {
 </body>
 
 </html>
+
 
 
 
