@@ -11,58 +11,85 @@
       background: #f8f8f8;
       font-size: 18px;
     }
-
-    h1 { font-size: 1.6rem; }
-
+    h1 { font-size: 1.6rem; margin-top: 0; }
+    label { font-weight: bold; display: block; margin: 0.75rem 0 0.25rem; }
+    input, textarea, button { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
     textarea { min-height: 120px; }
-
-    label {
-      font-weight: bold;
-      display: block;
-      margin-bottom: 0.25rem;
-    }
-
-    #rfid {
-      font-size: 1.2rem;
-      border: 3px solid #222;
-    }
-
     .hidden { display: none; }
-
-    .checkbox-label {
+    .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-top: 0.75rem; }
+    input[type="checkbox"] { width: 28px; height: 28px; }
+    #status { margin: 0.75rem 0 1rem; }
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 0.75rem;
+      margin: 0.5rem 0;
+    }
+    .row {
       display: flex;
-      align-items: center;
       gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .row > .grow { flex: 1; }
+    .small { font-size: 0.9rem; opacity: 0.85; }
+    .btn {
       font-size: 1.1rem;
+      padding: 0.75rem;
+      border: 1px solid #222;
+      border-radius: 10px;
+      background: #fff;
     }
-
-    input[type="checkbox"] {
-      width: 28px;
-      height: 28px;
+    .btn-primary {
+      background: #111;
+      color: #fff;
+      border-color: #111;
     }
+    .btn-danger {
+      background: #fff;
+      border-color: #b00;
+      color: #b00;
+    }
+    .history-item {
+      padding: 0.6rem;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      gap: 0.75rem;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-item:last-child { border-bottom: none; }
+    .history-left { flex: 1; cursor: pointer; }
+    .selected { background: #eef; border-radius: 8px; }
   </style>
 </head>
 
 <body>
   <h1>🐝 Hive Tracker</h1>
 
+  <button id="scanNfc" class="btn btn-primary">Scan Hive (NFC)</button>
 
-  <button id="scanNfc" style="font-size: 1.2rem; padding: 0.75rem; width: 100%; margin-bottom: 1rem;">
-    Scan Hive (NFC)
-  </button>
+  <label for="currentYard">Current Yard</label>
+  <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
+  <datalist id="yardList"></datalist>
 
-  <div id="status" style="margin-bottom: 1rem;"></div>
+  <div id="yardHives" class="card"></div>
 
-  <div id="hiveForm" class="hidden">
-    <p><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
+  <div id="status" class="small"></div>
 
-    <label>Hive Name</label>
+  <div id="hiveForm" class="hidden card">
+    <p style="margin-top:0;"><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
+
+    <label for="hiveName">Hive Name</label>
     <input id="hiveName" type="text" placeholder="e.g. Yard A – Hive 12" />
 
-    <label>Location / Yard</label>
-    <input id="location" type="text" />
+    <label for="location">Location / Yard</label>
+    <input id="location" type="text" placeholder="e.g. Yard A" />
 
-    <label>Inspection Date</label>
+    <button id="newInspectionBtn" type="button" class="btn">New Inspection</button>
+
+    <label for="lastInspection">Inspection Date</label>
     <input id="lastInspection" type="date" />
 
     <label class="checkbox-label">
@@ -70,296 +97,376 @@
       Queen Present
     </label>
 
-    <label>Notes</label>
-    <textarea id="notes" rows="4"></textarea>
+    <label for="notes">Notes</label>
+    <textarea id="notes" rows="4" placeholder="What did you see?"></textarea>
 
-    <h2>Inspection History</h2>
-    <div id="history"></div>
-  </div> <!-- ✅ CLOSE hiveForm -->
+    <h2 style="margin: 1rem 0 0.5rem;">Inspection History</h2>
+    <div id="history" class="card" style="margin:0;"></div>
+  </div>
 
   <script>
-document.addEventListener("DOMContentLoaded", () => {
-  let currentHiveId = null;
-  let scanning = false;
-  let activeReader = null;
-  let scanSession = 0;
-  let currentInspectionIndex = 0;
+  document.addEventListener("DOMContentLoaded", () => {
+    // -------- State --------
+    let currentHiveId = null;
+    let currentInspectionId = null;
 
+    // Web NFC scan lifecycle
+    let scanning = false;
+    let activeReader = null;
+    let scanSession = 0; // used to ignore stale events
 
+    // -------- Elements --------
+    const btn = document.getElementById("scanNfc");
+    const statusEl = document.getElementById("status");
+    const hiveForm = document.getElementById("hiveForm");
 
-  const btn = document.getElementById("scanNfc");
-  const status = document.getElementById("status");
-  const hiveForm = document.getElementById("hiveForm");
+    const hiveIdDisplay = document.getElementById("hiveIdDisplay");
+    const hiveNameInput = document.getElementById("hiveName");
+    const locationInput = document.getElementById("location");
+    const dateInput = document.getElementById("lastInspection");
+    const queenInput = document.getElementById("queenPresent");
+    const notesInput = document.getElementById("notes");
+    const historyDiv = document.getElementById("history");
 
-  const hiveIdDisplay = document.getElementById("hiveIdDisplay");
-  const hiveNameInput = document.getElementById("hiveName");
-  const locationInput = document.getElementById("location");
-  const dateInput = document.getElementById("lastInspection");
-  const queenInput = document.getElementById("queenPresent");
-  const notesInput = document.getElementById("notes");
+    const currentYardInput = document.getElementById("currentYard");
+    const yardList = document.getElementById("yardList");
+    const yardHivesDiv = document.getElementById("yardHives");
+    const newInspectionBtn = document.getElementById("newInspectionBtn");
 
-  if (!btn) {
-    alert("Scan button missing");
-    return;
-  }
-
-  function loadInspection(hive, index) {
-  const insp = hive.inspections[index];
-  if (!insp) return;
-
-  currentInspectionIndex = index;
-
-  dateInput.value = insp.date || today();
-  queenInput.checked = !!insp.queenPresent;
-  notesInput.value = insp.notes || "";
-
-  renderStatus(`Loaded inspection: ${insp.date}`);
-}
-
-function renderHistory(hive) {
-  const historyDiv = document.getElementById("history");
-  if (!historyDiv) return;
-
-  historyDiv.innerHTML = "";
-
-  if (!hive.inspections || hive.inspections.length === 0) {
-    historyDiv.innerHTML = "<em>No inspections yet.</em>";
-    return;
-  }
-
-  hive.inspections.forEach((insp, index) => {
-    const row = document.createElement("div");
-    row.style.padding = "0.5rem";
-    row.style.borderBottom = "1px solid #ddd";
-    row.style.cursor = "pointer";
-    row.style.background = index === currentInspectionIndex ? "#eef" : "transparent";
-
-    const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
-    const notesPreview = (insp.notes || "").trim().slice(0, 60);
-
-    row.innerHTML = `
-      <strong>${insp.date || "(no date)"}</strong><br>
-      <small>${queenText}${notesPreview ? " • " + notesPreview : ""}</small>
-    `;
-
-    row.addEventListener("click", () => {
-      loadInspection(hive, index);
-      renderHistory(hive); // refresh highlight
-    });
-
-    historyDiv.appendChild(row);
-  });
-}
-
-
-  function renderStatus(text) {
-    if (status) status.textContent = text;
-  }
-
-  function stopScan() {
-  scanning = false;
-  scanSession++; // invalidate any in-flight events
-
-  if (activeReader) {
-    try { activeReader.onreading = null; } catch (_) {}
-    try { activeReader.onreadingerror = null; } catch (_) {}
-    try { activeReader.abort(); } catch (_) {}
-  }
-
-  activeReader = null;
-  
-}
-
-
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopScan();
-  });
-
-
- 
-
-  function today() {
-    return new Date().toISOString().split("T")[0];
-  }
-
-  function loadHives() {
-    return JSON.parse(localStorage.getItem("hives") || "{}");
-  }
-
-  function saveHives(hives) {
-    localStorage.setItem("hives", JSON.stringify(hives));
-  }
-
-  function getOrCreateTodayInspection(hive) {
-    const t = today();
-    let insp = hive.inspections.find(i => i.date === t);
-    if (insp) return insp;
-
-    insp = { date: t, queenPresent: false, notes: "" };
-    hive.inspections.unshift(insp);
-    return insp;
-  }
-
-
-  function handleHiveScan(tagId) {
-    const hives = loadHives();
-    currentHiveId = tagId;
-
-    if (!hives[tagId]) {
-      hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
+    if (!btn || !statusEl || !hiveForm || !hiveIdDisplay || !hiveNameInput || !locationInput ||
+        !dateInput || !queenInput || !notesInput || !historyDiv || !currentYardInput || !yardList ||
+        !yardHivesDiv || !newInspectionBtn) {
+      alert("Missing required HTML elements. Check element IDs.");
+      return;
     }
 
-    const hive = hives[tagId];
-    const inspection = getOrCreateTodayInspection(hive);
-    currentInspectionIndex = hive.inspections.findIndex(i => i === inspection);
-loadInspection(hive, currentInspectionIndex);
-renderHistory(hive);
+    // -------- Helpers --------
+    function renderStatus(text) {
+      statusEl.textContent = text || "";
+    }
 
-    saveHives(hives);
+    function today() {
+      return new Date().toISOString().split("T")[0];
+    }
 
-    hiveIdDisplay.textContent = tagId;
-    hiveNameInput.value = hive.name || "";
-    locationInput.value = hive.location || "";
+    function loadHives() {
+      return JSON.parse(localStorage.getItem("hives") || "{}");
+    }
 
-    
-    hiveForm.classList.remove("hidden");
-    renderStatus("Hive loaded: " + (hive.name || tagId));
+    function saveHives(hives) {
+      localStorage.setItem("hives", JSON.stringify(hives));
+    }
 
-   if (!hive.name) {
-  setTimeout(() => hiveNameInput.focus(), 150);
-}
+    function stopScan() {
+      scanning = false;
+      scanSession++; // invalidate in-flight events
 
-  }
+      if (activeReader) {
+        try { activeReader.onreading = null; } catch (_) {}
+        try { activeReader.onreadingerror = null; } catch (_) {}
+        try { activeReader.abort(); } catch (_) {}
+      }
+      activeReader = null;
+      renderStatus("Ready");
+    }
 
-  function saveCurrentHiveAndInspection() {
-  if (!currentHiveId) return;
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) stopScan();
+    });
 
-  const hives = loadHives();
-  const hive = hives[currentHiveId];
-  if (!hive) return;
+    // -------- Inspections (ID-based) --------
+    function createInspection(hive, date = today()) {
+      const insp = {
+        id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2)),
+        date,
+        queenPresent: false,
+        notes: ""
+      };
+      hive.inspections.unshift(insp);
+      return insp;
+    }
 
-  hive.name = hiveNameInput.value;
-  hive.location = locationInput.value;
+    function getOrCreateTodayInspection(hive) {
+      const t = today();
+      const existing = hive.inspections.find(i => i.date === t);
+      return existing || createInspection(hive, t);
+    }
 
-  const insp = hive.inspections[currentInspectionIndex];
-  if (!insp) return;
+    function loadInspection(hive, inspectionId) {
+      const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
+      if (!insp) return;
 
-  insp.date = dateInput.value || today();
-  insp.queenPresent = queenInput.checked;
-  insp.notes = notesInput.value;
+      currentInspectionId = insp.id;
 
-  // 🔽 STEP FIVE GOES HERE 🔽
-  hive.inspections.sort((a, b) =>
-    (b.date || "").localeCompare(a.date || "")
-  );
-  currentInspectionIndex = 0;
-  loadInspection(hive, 0);
+      dateInput.value = insp.date || today();
+      queenInput.checked = !!insp.queenPresent;
+      notesInput.value = insp.notes || "";
 
-  saveHives(hives);
-  renderHistory(hive);
-}
+      renderStatus(`Loaded inspection: ${insp.date || "(no date)"}`);
+    }
 
+    function renderHistory(hive) {
+      historyDiv.innerHTML = "";
 
-  // Save on edits
-  hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
-  locationInput.addEventListener("input", saveCurrentHiveAndInspection);
-  dateInput.addEventListener("change", saveCurrentHiveAndInspection);
-  queenInput.addEventListener("change", saveCurrentHiveAndInspection);
-  notesInput.addEventListener("input", saveCurrentHiveAndInspection);
+      if (!hive.inspections || hive.inspections.length === 0) {
+        historyDiv.innerHTML = "<em>No inspections yet.</em>";
+        return;
+      }
 
-    // NFC scan
- btn.addEventListener("click", async () => {
-  if (scanning) return;
+      // Keep newest-first by date (descending)
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-  stopScan();        // resets any prior session
-  scanning = true;
+      hive.inspections.forEach((insp) => {
+        const row = document.createElement("div");
+        row.className = "history-item" + (insp.id === currentInspectionId ? " selected" : "");
 
-  const mySession = scanSession; // snapshot
+        const left = document.createElement("div");
+        left.className = "history-left";
 
+        const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
+        const notesPreview = (insp.notes || "").trim().slice(0, 60);
 
-  if (!("NDEFReader" in window)) {
-    alert("Web NFC not supported");
-    scanning = false;
-    return;
-  }
+        left.innerHTML = `
+          <div><strong>${insp.date || "(no date)"}</strong></div>
+          <div class="small">${queenText}${notesPreview ? " • " + notesPreview : ""}</div>
+        `;
 
-  try {
-    const reader = new NDEFReader();
-    activeReader = reader;
+        left.addEventListener("click", () => {
+          loadInspection(hive, insp.id);
+          renderHistory(hive);
+        });
 
-    renderStatus("Scanning… tap hive tag");
-    await reader.scan();
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn btn-danger";
+        delBtn.style.width = "auto";
+        delBtn.style.padding = "0.4rem 0.6rem";
+        delBtn.textContent = "Delete";
 
-    // If anything goes wrong, stop scanning
-    reader.onreadingerror = () => {
-      renderStatus("Read error — try again");
+        delBtn.addEventListener("click", () => {
+          if (!confirm("Delete this inspection?")) return;
+
+          hive.inspections = hive.inspections.filter(i => i.id !== insp.id);
+
+          // If we deleted the selected one, load the newest remaining
+          if (currentInspectionId === insp.id) {
+            currentInspectionId = hive.inspections[0]?.id || null;
+            if (currentInspectionId) loadInspection(hive, currentInspectionId);
+          }
+
+          const hives = loadHives();
+          hives[hive.id] = hive;
+          saveHives(hives);
+
+          renderHistory(hive);
+          renderStatus("Inspection deleted");
+        });
+
+        row.appendChild(left);
+        row.appendChild(delBtn);
+        historyDiv.appendChild(row);
+      });
+    }
+
+    // -------- Yard UI --------
+    function refreshYardUI() {
+      const hives = loadHives();
+
+      // Datalist of yards
+      const yards = new Set();
+      Object.values(hives).forEach(h => {
+        if (h.location) yards.add(h.location);
+      });
+
+      yardList.innerHTML = "";
+      [...yards].sort().forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        yardList.appendChild(opt);
+      });
+
+      const selected = (currentYardInput.value || "").trim();
+      if (!selected) {
+        yardHivesDiv.innerHTML = "<em>Enter a yard name to list its hives.</em>";
+        return;
+      }
+
+      const yardHives = Object.values(hives)
+        .filter(h => (h.location || "").trim() === selected)
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+
+      if (yardHives.length === 0) {
+        yardHivesDiv.innerHTML = `<em>No hives saved in "${selected}".</em>`;
+        return;
+      }
+
+      yardHivesDiv.innerHTML = `<strong>Hives in ${selected}:</strong><div id="yardHiveButtons" style="margin-top:0.5rem;"></div>`;
+      const container = document.getElementById("yardHiveButtons");
+
+      yardHives.forEach(h => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn";
+        b.style.margin = "0.25rem 0";
+        b.textContent = h.name ? `${h.name}` : h.id;
+
+        b.addEventListener("click", () => handleHiveScan(h.id));
+        container.appendChild(b);
+      });
+    }
+
+    currentYardInput.addEventListener("input", refreshYardUI);
+
+    // -------- Hive load/save --------
+    function handleHiveScan(tagId) {
+      const hives = loadHives();
+      currentHiveId = tagId;
+
+      if (!hives[tagId]) {
+        hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
+      }
+
+      const hive = hives[tagId];
+
+      // Auto-fill yard for new hives if user set "Current Yard"
+      const selectedYard = (currentYardInput.value || "").trim();
+      if (!hive.location && selectedYard) hive.location = selectedYard;
+
+      // Ensure today's inspection exists and is selected
+      const insp = getOrCreateTodayInspection(hive);
+      currentInspectionId = insp.id;
+
+      // Save hive (in case it was created / yard autofilled / inspection created)
+      saveHives(hives);
+
+      // Populate hive-level fields
+      hiveIdDisplay.textContent = tagId;
+      hiveNameInput.value = hive.name || "";
+      locationInput.value = hive.location || "";
+
+      // Show form + load selected inspection + history
+      hiveForm.classList.remove("hidden");
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      refreshYardUI();
+
+      renderStatus("Hive loaded: " + (hive.name || tagId));
+
+      // Focus name only if new hive
+      if (!hive.name) setTimeout(() => hiveNameInput.focus(), 150);
+    }
+
+    function saveCurrentHiveAndInspection() {
+      if (!currentHiveId) return;
+
+      const hives = loadHives();
+      const hive = hives[currentHiveId];
+      if (!hive) return;
+
+      // Hive fields
+      hive.name = hiveNameInput.value;
+      hive.location = locationInput.value;
+
+      // Inspection fields (save to selected inspection)
+      const insp = hive.inspections.find(i => i.id === currentInspectionId) || hive.inspections[0];
+      if (!insp) return;
+
+      insp.date = dateInput.value || today();
+      insp.queenPresent = queenInput.checked;
+      insp.notes = notesInput.value;
+      currentInspectionId = insp.id;
+
+      // Sort newest-first after any date change
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      saveHives(hives);
+
+      // Re-load to keep UI consistent with sorting/selection
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      refreshYardUI();
+
+      renderStatus("Saved: " + (hive.name || hive.id));
+    }
+
+    // Save on edits
+    hiveNameInput.addEventListener("input", saveCurrentHiveAndInspection);
+    locationInput.addEventListener("input", saveCurrentHiveAndInspection);
+    dateInput.addEventListener("change", saveCurrentHiveAndInspection);
+    queenInput.addEventListener("change", saveCurrentHiveAndInspection);
+    notesInput.addEventListener("input", saveCurrentHiveAndInspection);
+
+    // New inspection button
+    newInspectionBtn.addEventListener("click", () => {
+      if (!currentHiveId) return;
+
+      const hives = loadHives();
+      const hive = hives[currentHiveId];
+      if (!hive) return;
+
+      const insp = createInspection(hive, today());
+      currentInspectionId = insp.id;
+
+      saveHives(hives);
+
+      loadInspection(hive, currentInspectionId);
+      renderHistory(hive);
+      renderStatus("New inspection created");
+    });
+
+    // -------- NFC Scan (one tag per press) --------
+    btn.addEventListener("click", async () => {
+      if (scanning) return;
+
+      // Cancel any previous scan session
       stopScan();
-    };
+      scanning = true;
 
-    reader.onreading = (event) => {
-  if (mySession !== scanSession) return; // ignore stale events
+      const mySession = scanSession; // snapshot for stale-event filtering
 
-  const tagId = event.serialNumber;
-  if (!tagId) {
-    renderStatus("No tag ID read");
-    stopScan();
-    return;
-  }
+      if (!("NDEFReader" in window)) {
+        alert("Web NFC not supported on this device/browser.");
+        scanning = false;
+        return;
+      }
 
-  handleHiveScan(tagId);
-  stopScan();
-};
+      try {
+        const reader = new NDEFReader();
+        activeReader = reader;
 
+        renderStatus("Scanning… tap hive tag");
+        await reader.scan();
 
-  } catch (err) {
-    renderStatus("Scan failed: " + err.message);
-    stopScan();
-  }
-});
-}); // ✅ THIS LINE WAS MISSING
-</script>
+        reader.onreadingerror = () => {
+          if (mySession !== scanSession) return;
+          renderStatus("Read error — press Scan again");
+          stopScan();
+        };
 
+        reader.onreading = (event) => {
+          if (mySession !== scanSession) return; // ignore stale events
 
+          const tagId = event.serialNumber;
+          if (!tagId) {
+            renderStatus("No tag ID read — press Scan again");
+            stopScan();
+            return;
+          }
+
+          handleHiveScan(tagId);
+          stopScan();
+        };
+
+      } catch (err) {
+        renderStatus("Scan failed: " + err.message);
+        stopScan();
+      }
+    });
+
+    // Initial UI
+    renderStatus("Ready");
+    refreshYardUI();
+  });
+  </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
