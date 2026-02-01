@@ -77,102 +77,18 @@
     <textarea id="notes" rows="4"></textarea>
     <h2>Inspection History</h2>
     <div id="history"></div>
-  
-
-<script>
+  <script>
 document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("scanNfc");
 
-  let currentHiveId = null;
-
-  const scanButton = document.getElementById("scanNfc");
-  const hiveForm = document.getElementById("hiveForm");
-  const hiveNameInput = document.getElementById("hiveName");
-  const locationInput = document.getElementById("location");
-  const hiveIdDisplay = document.getElementById("hiveIdDisplay");
-
-  const dateInput = document.getElementById("lastInspection");
-  const queenInput = document.getElementById("queenPresent");
-  const notesInput = document.getElementById("notes");
-
-  if (!scanButton) {
-    alert("Scan button not found");
+  if (!btn) {
+    alert("Button not found");
     return;
   }
 
-  function today() {
-    return new Date().toISOString().split("T")[0];
-  }
+  btn.addEventListener("click", async () => {
+    alert("Button clicked");
 
-  function loadHives() {
-    return JSON.parse(localStorage.getItem("hives") || "{}");
-  }
-
-  function saveHives(hives) {
-    localStorage.setItem("hives", JSON.stringify(hives));
-  }
-
-  function getOrCreateTodayInspection(hive) {
-    const t = today();
-    let insp = hive.inspections.find(i => i.date === t);
-    if (insp) return insp;
-
-    insp = { date: t, queenPresent: false, notes: "" };
-    hive.inspections.unshift(insp);
-    return insp;
-  }
-
-  function saveCurrentHive() {
-    if (!currentHiveId) return;
-
-    const hives = loadHives();
-    const hive = hives[currentHiveId];
-    if (!hive) return;
-
-    hive.name = hiveNameInput.value;
-    hive.location = locationInput.value;
-
-    const inspection = hive.inspections.find(i => i.date === dateInput.value);
-    if (inspection) {
-      inspection.queenPresent = queenInput.checked;
-      inspection.notes = notesInput.value;
-    }
-
-    saveHives(hives);
-  }
-
-  function handleHiveScan(tagId) {
-    const hives = loadHives();
-    currentHiveId = tagId;
-
-    if (!hives[tagId]) {
-      hives[tagId] = {
-        id: tagId,
-        name: "",
-        location: "",
-        inspections: []
-      };
-    }
-
-    const hive = hives[tagId];
-    const inspection = getOrCreateTodayInspection(hive);
-    saveHives(hives);
-
-    hiveIdDisplay.textContent = tagId;
-    hiveNameInput.value = hive.name;
-    locationInput.value = hive.location;
-
-    dateInput.value = inspection.date;
-    queenInput.checked = inspection.queenPresent;
-    notesInput.value = inspection.notes;
-
-    hiveForm.classList.remove("hidden");
-
-    if (!hive.name) {
-      setTimeout(() => hiveNameInput.focus(), 150);
-    }
-  }
-
-  scanButton.addEventListener("click", async () => {
     if (!("NDEFReader" in window)) {
       alert("Web NFC not supported");
       return;
@@ -180,41 +96,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const reader = new NDEFReader();
+      alert("About to start scan");
       await reader.scan();
+      alert("Scan started — tap tag");
 
-     reader.onreading = event => {
-  let tagId = event.serialNumber || ("tag-" + Date.now());
-
-  handleHiveScan(tagId);
-
-  // stop scanning AFTER handling the tag
-  reader.abort();
-};
-
-  let tagId = event.serialNumber;
-
-  // 🔑 Fallback if serialNumber is unavailable
-  if (!tagId) {
-    const record = event.message.records[0];
-    tagId = JSON.stringify(record.data);
-  }
-
-  alert("Tag ID read"); // TEMPORARY confirmation
-  handleHiveScan(tagId);
-};
-
+      reader.onreading = () => {
+        alert("Tag detected");
+      };
     } catch (err) {
-      alert("NFC error: " + err.message);
+      alert("Error: " + err.message);
     }
   });
-
-  [hiveNameInput, locationInput, dateInput, queenInput, notesInput]
-    .forEach(el => el && el.addEventListener("input", saveCurrentHive));
 });
 </script>
+
+
+
 </body>
 
 </html>
+
 
 
 
