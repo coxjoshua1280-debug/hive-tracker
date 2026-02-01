@@ -45,7 +45,7 @@
 
 <body>
   <h1>🐝 Hive Tracker</h1>
-<div style="padding:8px;background:yellow;">BUILD TEST 123</div>
+
 
   <button id="scanNfc" style="font-size: 1.2rem; padding: 0.75rem; width: 100%; margin-bottom: 1rem;">
     Scan Hive (NFC)
@@ -80,6 +80,8 @@
   <script>
 document.addEventListener("DOMContentLoaded", () => {
   let currentHiveId = null;
+  let scanning = false;
+
 
   const btn = document.getElementById("scanNfc");
   const status = document.getElementById("status");
@@ -92,10 +94,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const queenInput = document.getElementById("queenPresent");
   const notesInput = document.getElementById("notes");
 
-  if (!btn) {
-    alert("Scan button missing");
-    return;
-  }
+ 
 
   function today() {
     return new Date().toISOString().split("T")[0];
@@ -146,9 +145,10 @@ document.addEventListener("DOMContentLoaded", () => {
     hiveForm.classList.remove("hidden");
     renderStatus("Hive loaded: " + (hive.name || tagId));
 
-    if (!hive.name) {
-      setTimeout(() => hiveNameInput.focus(), 150);
-    }
+   if (!hive.name) {
+  setTimeout(() => hiveNameInput.focus(), 150);
+}
+
   }
 
   function saveCurrentHiveAndInspection() {
@@ -185,35 +185,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // NFC scan
   btn.addEventListener("click", async () => {
-    if (!("NDEFReader" in window)) {
-      alert("Web NFC not supported");
-      return;
-    }
+  if (scanning) return;
+  scanning = true;
 
-    try {
-      const reader = new NDEFReader();
-      renderStatus("Scanning… tap hive tag");
-      await reader.scan();
+  try {
+    const reader = new NDEFReader();
+    renderStatus("Scanning… tap hive tag");
+    await reader.scan();
 
-      reader.onreadingerror = () => {
-        renderStatus("Read error — try again");
-      };
+    reader.onreading = (event) => {
+      scanning = false;
+      handleHiveScan(event.serialNumber);
+      reader.abort();
+      renderStatus("Ready");
+    };
+  } catch (err) {
+    scanning = false;
+    renderStatus("Scan failed");
+  }
+});
 
-      reader.onreading = (event) => {
-        const tagId = event.serialNumber;
-        if (!tagId) {
-          renderStatus("No tag ID read");
-          return;
-        }
-
-        handleHiveScan(tagId);
-        reader.abort();
-        renderStatus("Ready");
-      };
-    } catch (err) {
-      renderStatus("Scan failed: " + err.message);
-    }
-  });
 
 }); // ✅ THIS LINE WAS MISSING
 </script>
@@ -221,6 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 </body>
 </html>
+
 
 
 
