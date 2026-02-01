@@ -180,10 +180,20 @@
       border-bottom: 1px solid #eee;
     }
     .frame-seg {
-      height: 22px;
-      border-bottom: 1px solid #eee;
-      cursor: pointer;
-    }
+  height: 36px;
+  margin: 2px 0;
+  border-radius: 4px;
+}
+    .frame-seg:active {
+  outline: 2px solid rgba(0,0,0,0.15);
+}
+    .frame-map {
+  gap: 0.6rem;   /* was 0.4rem */
+}
+
+
+
+
     .frame-seg:last-child { border-bottom: none; }
 
     .seg-none { background: #f6f6f6; }
@@ -1641,3 +1651,4 @@
   </script>
 </body>
 </html>
+
