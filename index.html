@@ -159,6 +159,45 @@
       color: #fff;
       font-size: 1rem;
     }
+
+    /* Frame map */
+    .frame-map {
+      display: grid;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+      align-items: end;
+    }
+    .frame-col {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fafafa;
+    }
+    .frame-col-title {
+      text-align: center;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.1rem;
+      border-bottom: 1px solid #eee;
+    }
+    .frame-seg {
+      height: 22px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+    }
+    .frame-seg:last-child { border-bottom: none; }
+
+    .seg-none { background: #f6f6f6; }
+    .seg-pollen { background: #ffe59a; }
+    .seg-honey { background: #ffd08a; }
+    .seg-brood { background: #c9b3ff; }
+
+    .legend {
+      display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.4rem;
+    }
+    .legend .swatch {
+      display:inline-block; width:14px; height:14px; border-radius:4px; border:1px solid #bbb; margin-right:0.3rem;
+      vertical-align: -2px;
+    }
   </style>
 </head>
 
@@ -178,15 +217,13 @@
 
   <div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
 
- <div class="row" style="margin-top:0.75rem;">
-  <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
-  <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
-  <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
-</div>
+  <div class="row" style="margin-top:0.75rem;">
+    <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
+    <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
+    <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
+  </div>
 
-<input id="importZipInput" type="file" accept=".zip,application/zip" class="hidden" />
-
-
+  <input id="importZipInput" type="file" accept=".zip,application/zip" class="hidden" />
 
   <div id="yardHives" class="card"></div>
   <div id="status" class="small"></div>
@@ -206,6 +243,16 @@
     <label for="lastInspection">Inspection Date</label>
     <input id="lastInspection" type="date" />
 
+    <label for="framesCount">Frames in Hive</label>
+    <input id="framesCount" type="number" min="1" max="20" step="1" />
+
+    <div class="small" style="margin-top:0.4rem;">
+      Tap a section to cycle: Empty → Pollen → Honey → Brood
+    </div>
+
+    <div id="frameLegend" class="legend"></div>
+    <div id="frameMap" class="frame-map"></div>
+
     <div class="card" style="margin-top:0.75rem;">
       <strong>Quick Flags</strong>
       <div class="small">Tap to toggle. These are saved on this inspection.</div>
@@ -222,7 +269,7 @@
 
     <div class="card" style="margin-top:0.75rem;">
       <strong>Photos</strong>
-      <div class="small">Saved offline on this device (IndexedDB). Use JSON export to back up data.</div>
+      <div class="small">Saved offline on this device (IndexedDB). Export ZIP backup to save photos + data.</div>
       <div class="row" style="margin-top:0.5rem;">
         <button id="addPhotoBtn" type="button" class="btn">📷 Add Photo</button>
       </div>
@@ -238,14 +285,11 @@
     <button id="viewerClose" type="button">Close</button>
     <img id="viewerImg" alt="Photo" />
   </div>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
   <script>
   document.addEventListener("DOMContentLoaded", () => {
-    // =========================================================
-    //  Light modularization (same file): Utils / Storage / Photos / UI / NFC / GPS
-    // =========================================================
-
     // ---------------- Utils ----------------
     const Utils = {
       today() { return new Date().toISOString().split("T")[0]; },
@@ -274,7 +318,6 @@
         return s;
       },
       async compressImageFileToJpegBlob(file, maxDim = 1600, quality = 0.72) {
-        // Reads file -> draws to canvas -> exports JPEG blob
         const dataUrl = await new Promise((resolve, reject) => {
           const r = new FileReader();
           r.onload = () => resolve(r.result);
@@ -309,14 +352,13 @@
 
     // ---------------- Storage ----------------
     const Storage = {
-      VERSION: 2, // bump as features grow
+      VERSION: 3, // bumped for framesCount + frameMap
 
       load(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
         catch { return fallback; }
       },
       save(key, value) {
-        // Guardrail: quota-safe save
         try {
           localStorage.setItem(key, JSON.stringify(value));
           return { ok: true };
@@ -328,11 +370,9 @@
       loadHives() { return this.load("hives", {}); },
       saveHives(hives) { return this.save("hives", hives); },
 
-      // yards: { "Yard A": { lat, lon, accuracy, timestamp } }
       loadYards() { return this.load("yards", {}); },
       saveYards(yards) { return this.save("yards", yards); },
 
-      // meta holds app version for migrations
       loadMeta() { return this.load("meta", { version: 1 }); },
       saveMeta(meta) { return this.save("meta", meta); },
 
@@ -341,22 +381,27 @@
         const from = meta.version || 1;
         if (from >= this.VERSION) return;
 
-        // Migration: add flags/photos arrays to inspections
         const hives = this.loadHives();
         for (const hive of Object.values(hives)) {
           if (!Array.isArray(hive.inspections)) hive.inspections = [];
           hive.inspections.forEach(insp => {
+            // flags
             if (!insp.flags) {
               insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
             } else {
-              // ensure keys exist
               insp.flags.strong = !!insp.flags.strong;
               insp.flags.weak = !!insp.flags.weak;
               insp.flags.queenless = !!insp.flags.queenless;
               insp.flags.followUp = !!insp.flags.followUp;
               insp.flags.fed = !!insp.flags.fed;
             }
-            if (!Array.isArray(insp.photos)) insp.photos = []; // stores photoIds
+
+            // photos
+            if (!Array.isArray(insp.photos)) insp.photos = [];
+
+            // frames (new)
+            if (typeof insp.framesCount !== "number") insp.framesCount = 10;
+            if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           });
         }
 
@@ -372,7 +417,9 @@
           queenPresent: false,
           notes: "",
           flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-          photos: []
+          photos: [],
+          framesCount: 10,
+          frameMap: []
         };
         hive.inspections.unshift(insp);
         return insp;
@@ -419,16 +466,15 @@
       },
 
       async putBlobWithId(id, blob) {
-  const db = await this.open();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(this.STORE, "readwrite");
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
-    tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
-  });
-  return id;
-},
-
+        const db = await this.open();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction(this.STORE, "readwrite");
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
+          tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
+        });
+        return id;
+      },
 
       async getBlob(id) {
         const db = await this.open();
@@ -461,56 +507,57 @@
     const State = {
       currentHiveId: null,
       currentInspectionId: null,
-      // NFC lifecycle
       scanning: false,
       activeReader: null,
       scanSession: 0,
-      // GPS
       lastPosition: null
     };
 
     // ---------------- Elements ----------------
     const el = {
-  btnScan: document.getElementById("scanNfc"),
-  status: document.getElementById("status"),
-  hiveForm: document.getElementById("hiveForm"),
+      btnScan: document.getElementById("scanNfc"),
+      status: document.getElementById("status"),
+      hiveForm: document.getElementById("hiveForm"),
 
-  hiveIdDisplay: document.getElementById("hiveIdDisplay"),
-  hiveName: document.getElementById("hiveName"),
-  location: document.getElementById("location"),
-  date: document.getElementById("lastInspection"),
-  queen: document.getElementById("queenPresent"),
-  notes: document.getElementById("notes"),
-  history: document.getElementById("history"),
+      hiveIdDisplay: document.getElementById("hiveIdDisplay"),
+      hiveName: document.getElementById("hiveName"),
+      location: document.getElementById("location"),
+      date: document.getElementById("lastInspection"),
+      framesCount: document.getElementById("framesCount"),
+      frameLegend: document.getElementById("frameLegend"),
+      frameMap: document.getElementById("frameMap"),
 
-  currentYard: document.getElementById("currentYard"),
-  yardList: document.getElementById("yardList"),
-  yardHives: document.getElementById("yardHives"),
+      queen: document.getElementById("queenPresent"),
+      notes: document.getElementById("notes"),
+      history: document.getElementById("history"),
 
-  newInspectionBtn: document.getElementById("newInspectionBtn"),
-  captureYardGps: document.getElementById("captureYardGps"),
-  detectNearestYard: document.getElementById("detectNearestYard"),
-  yardGps: document.getElementById("yardGps"),
+      currentYard: document.getElementById("currentYard"),
+      yardList: document.getElementById("yardList"),
+      yardHives: document.getElementById("yardHives"),
 
-  exportCsv: document.getElementById("exportCsv"),
-  exportZip: document.getElementById("exportZip"),
-  importZipBtn: document.getElementById("importZipBtn"),
-  importZipInput: document.getElementById("importZipInput"),
+      newInspectionBtn: document.getElementById("newInspectionBtn"),
+      captureYardGps: document.getElementById("captureYardGps"),
+      detectNearestYard: document.getElementById("detectNearestYard"),
+      yardGps: document.getElementById("yardGps"),
 
-  hiveYardGps: document.getElementById("hiveYardGps"),
+      exportCsv: document.getElementById("exportCsv"),
+      exportZip: document.getElementById("exportZip"),
+      importZipBtn: document.getElementById("importZipBtn"),
+      importZipInput: document.getElementById("importZipInput"),
 
-  flagButtons: document.getElementById("flagButtons"),
+      hiveYardGps: document.getElementById("hiveYardGps"),
 
-  addPhotoBtn: document.getElementById("addPhotoBtn"),
-  photoInput: document.getElementById("photoInput"),
-  photoGallery: document.getElementById("photoGallery"),
+      flagButtons: document.getElementById("flagButtons"),
 
-  viewer: document.getElementById("viewer"),
-  viewerImg: document.getElementById("viewerImg"),
-  viewerClose: document.getElementById("viewerClose"),
-};
+      addPhotoBtn: document.getElementById("addPhotoBtn"),
+      photoInput: document.getElementById("photoInput"),
+      photoGallery: document.getElementById("photoGallery"),
 
-    // Validate required elements (stability)
+      viewer: document.getElementById("viewer"),
+      viewerImg: document.getElementById("viewerImg"),
+      viewerClose: document.getElementById("viewerClose"),
+    };
+
     for (const [k, v] of Object.entries(el)) {
       if (!v) {
         alert(`Missing required HTML element: ${k}`);
@@ -518,9 +565,16 @@
       }
     }
 
-    // ---------------- UI helpers ----------------
+    // ---------------- UI ----------------
     const UI = {
       status(text) { el.status.textContent = text || ""; },
+
+      ensureInspectionDefaults(insp) {
+        if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
+        if (!Array.isArray(insp.photos)) insp.photos = [];
+        if (typeof insp.framesCount !== "number") insp.framesCount = 10;
+        if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+      },
 
       renderBadgesFromFlags(flags) {
         const order = [
@@ -532,13 +586,82 @@
         ];
         return order
           .filter(([key]) => !!flags?.[key])
-          .map(([key, label]) => `<span class="badge on">${label}</span>`)
+          .map(([_, label]) => `<span class="badge on">${label}</span>`)
           .join("");
       },
 
-      ensureInspectionDefaults(insp) {
-        if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
-        if (!Array.isArray(insp.photos)) insp.photos = [];
+      renderFrameLegend() {
+        const items = [
+          ["seg-none", "Empty"],
+          ["seg-pollen", "Pollen"],
+          ["seg-honey", "Honey"],
+          ["seg-brood", "Brood"],
+        ];
+        el.frameLegend.innerHTML = items.map(([cls, label]) =>
+          `<span><span class="swatch ${cls}"></span>${label}</span>`
+        ).join("");
+      },
+
+      normalizeFrameMap(insp) {
+        const frames = Math.max(1, Math.min(20, Math.floor(insp.framesCount || 10)));
+        insp.framesCount = frames;
+
+        if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+
+        for (let f = 0; f < frames; f++) {
+          if (!Array.isArray(insp.frameMap[f])) insp.frameMap[f] = [];
+          for (let s = 0; s < 4; s++) {
+            const v = insp.frameMap[f][s];
+            if (v !== "pollen" && v !== "honey" && v !== "brood" && v !== "none") {
+              insp.frameMap[f][s] = "none";
+            }
+          }
+        }
+        insp.frameMap = insp.frameMap.slice(0, frames);
+      },
+
+      nextSegValue(v) {
+        const order = ["none", "pollen", "honey", "brood"];
+        const idx = Math.max(0, order.indexOf(v));
+        return order[(idx + 1) % order.length];
+      },
+
+      renderFrameMap(hive, insp) {
+        this.ensureInspectionDefaults(insp);
+        this.normalizeFrameMap(insp);
+        this.renderFrameLegend();
+
+        el.framesCount.value = insp.framesCount;
+
+        el.frameMap.style.gridTemplateColumns = `repeat(${insp.framesCount}, minmax(0, 1fr))`;
+        el.frameMap.innerHTML = "";
+
+        for (let f = 0; f < insp.framesCount; f++) {
+          const col = document.createElement("div");
+          col.className = "frame-col";
+
+          const title = document.createElement("div");
+          title.className = "frame-col-title";
+          title.textContent = `${f + 1}`;
+          col.appendChild(title);
+
+          for (let s = 0; s < 4; s++) {
+            const seg = document.createElement("div");
+            const v = insp.frameMap[f][s] || "none";
+            seg.className = `frame-seg seg-${v}`;
+            seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
+
+            seg.addEventListener("click", () => {
+              insp.frameMap[f][s] = this.nextSegValue(insp.frameMap[f][s] || "none");
+              App.saveCurrentHiveAndInspection();
+              seg.className = `frame-seg seg-${insp.frameMap[f][s]}`;
+            });
+
+            col.appendChild(seg);
+          }
+
+          el.frameMap.appendChild(col);
+        }
       },
 
       loadInspectionIntoForm(hive, inspectionId) {
@@ -549,6 +672,7 @@
 
         State.currentInspectionId = insp.id;
         el.date.value = insp.date || Utils.today();
+        el.framesCount.value = insp.framesCount || 10;
         el.queen.checked = !!insp.queenPresent;
         el.notes.value = insp.notes || "";
         this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
@@ -556,6 +680,7 @@
         this.renderFlagButtons(hive, insp);
         this.renderHistory(hive);
         this.renderPhotoGallery(hive, insp).catch(() => {});
+        this.renderFrameMap(hive, insp);
       },
 
       renderHistory(hive) {
@@ -606,7 +731,6 @@
           delBtn.addEventListener("click", async () => {
             if (!confirm("Delete this inspection? (Photos attached to it will also be deleted.)")) return;
 
-            // delete photos in IDB first
             try { await Photos.deleteMany(insp.photos || []); } catch (_) {}
 
             hive.inspections = hive.inspections.filter(i => i.id !== insp.id);
@@ -615,19 +739,21 @@
               State.currentInspectionId = hive.inspections[0]?.id || null;
               if (State.currentInspectionId) this.loadInspectionIntoForm(hive, State.currentInspectionId);
               else {
-                // cleared form fields
                 el.date.value = Utils.today();
+                el.framesCount.value = 10;
                 el.queen.checked = false;
                 el.notes.value = "";
                 el.flagButtons.innerHTML = "";
                 el.photoGallery.innerHTML = "";
+                el.frameLegend.innerHTML = "";
+                el.frameMap.innerHTML = "";
               }
             }
 
             const hives = Storage.loadHives();
             hives[hive.id] = hive;
             const res = Storage.saveHives(hives);
-            if (!res.ok) this.status("Save failed (storage full?) — export JSON backup!");
+            if (!res.ok) this.status("Save failed (storage full?) — export ZIP backup!");
 
             this.renderHistory(hive);
             this.status("Inspection deleted");
@@ -748,8 +874,7 @@
           b.addEventListener("click", () => {
             insp.flags[key] = !insp.flags[key];
             b.classList.toggle("on", insp.flags[key]);
-
-            App.saveCurrentHiveAndInspection(); // persists + rerenders history
+            App.saveCurrentHiveAndInspection();
           });
           el.flagButtons.appendChild(b);
         });
@@ -786,7 +911,6 @@
             ev.stopPropagation();
             if (!confirm("Delete this photo?")) return;
 
-            // remove from inspection and delete blob
             insp.photos = (insp.photos || []).filter(id => id !== photoId);
             try { await Photos.delete(photoId); } catch (_) {}
 
@@ -856,7 +980,6 @@
           return;
         }
 
-        // Optional: detect nearest yard if blank
         if (!(el.currentYard.value || "").trim()) {
           try {
             const pos = await GPS.getCurrentPositionOnce();
@@ -921,22 +1044,18 @@
         const hive = hives[tagId];
         if (!Array.isArray(hive.inspections)) hive.inspections = [];
 
-        // apply selected yard if hive has no location
         const selectedYard = (el.currentYard.value || "").trim();
         if (!hive.location && selectedYard) hive.location = selectedYard;
 
-        // ensure inspection defaults exist (migration-safe)
         hive.inspections.forEach(i => UI.ensureInspectionDefaults(i));
 
         const insp = Storage.getOrCreateTodayInspection(hive);
         UI.ensureInspectionDefaults(insp);
         State.currentInspectionId = insp.id;
 
-        // persist
         const res = Storage.saveHives(hives);
-        if (!res.ok) UI.status("Save failed (storage full?) — export JSON backup!");
+        if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
 
-        // render
         el.hiveIdDisplay.textContent = tagId;
         el.hiveName.value = hive.name || "";
         el.location.value = hive.location || "";
@@ -948,12 +1067,6 @@
 
         UI.status("Hive loaded: " + (hive.name || tagId));
         if (!hive.name) setTimeout(() => el.hiveName.focus(), 150);
-      },
-
-      getCurrentHive() {
-        if (!State.currentHiveId) return null;
-        const hives = Storage.loadHives();
-        return hives[State.currentHiveId] || null;
       },
 
       saveCurrentHiveAndInspection() {
@@ -982,11 +1095,10 @@
 
         const res = Storage.saveHives(hives);
         if (!res.ok) {
-          UI.status("Save failed (storage full?) — export JSON backup!");
+          UI.status("Save failed (storage full?) — export ZIP backup!");
           return;
         }
 
-        // keep UI in sync
         UI.renderHistory(hive);
         UI.refreshYardUI();
         UI.renderHiveYardGps();
@@ -1007,10 +1119,9 @@
     });
 
     // =========================================================
-    //  Wiring (events)
+    // Wiring (events)
     // =========================================================
 
-    // Migrate older data (adds flags/photos)
     Storage.migrateIfNeeded();
 
     // Yard changes
@@ -1038,7 +1149,7 @@
           timestamp: Date.now()
         };
         const res = Storage.saveYards(yards);
-        if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export JSON backup!");
+        if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export ZIP backup!");
 
         UI.status(`Saved GPS for ${yardName}`);
         UI.renderYardGps(yardName);
@@ -1085,6 +1196,29 @@
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
 
+    // Frames count changes (IMPORTANT: only bind once here)
+    el.framesCount.addEventListener("change", () => {
+      const frames = Math.max(1, Math.min(20, Math.floor(Number(el.framesCount.value || 10))));
+      if (!State.currentHiveId || !State.currentInspectionId) return;
+
+      const hives = Storage.loadHives();
+      const hive = hives[State.currentHiveId];
+      if (!hive) return;
+
+      const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
+      if (!insp) return;
+
+      UI.ensureInspectionDefaults(insp);
+      insp.framesCount = frames;
+      UI.normalizeFrameMap(insp);
+
+      const res = Storage.saveHives(hives);
+      if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
+
+      UI.renderFrameMap(hive, insp);
+      UI.renderHistory(hive);
+    });
+
     // New inspection
     el.newInspectionBtn.addEventListener("click", () => {
       if (!State.currentHiveId) return;
@@ -1098,7 +1232,7 @@
       State.currentInspectionId = insp.id;
 
       const res = Storage.saveHives(hives);
-      if (!res.ok) UI.status("Save failed (storage full?) — export JSON backup!");
+      if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
 
       UI.loadInspectionIntoForm(hive, State.currentInspectionId);
       UI.renderHistory(hive);
@@ -1122,7 +1256,6 @@
       try {
         UI.status("Adding photo…");
 
-        // compress -> save to IndexedDB -> reference by photoId
         const blob = await Utils.compressImageFileToJpegBlob(file, 1600, 0.72);
         const photoId = await Photos.putBlob(blob);
 
@@ -1138,7 +1271,7 @@
 
         const res = Storage.saveHives(hives);
         if (!res.ok) {
-          UI.status("Save failed (storage full?) — export JSON backup!");
+          UI.status("Save failed (storage full?) — export ZIP backup!");
           return;
         }
 
@@ -1212,316 +1345,287 @@
       URL.revokeObjectURL(url);
     });
 
-   // ZIP export (JSON + photos)
-el.exportZip.addEventListener("click", async () => {
-  try {
-    if (!window.JSZip) {
-      alert("ZIP export needs JSZip. If you're offline, open this page once while online so the library can load, then try again.");
-      return;
-    }
+    // ZIP export (JSON + photos)
+    el.exportZip.addEventListener("click", async () => {
+      try {
+        if (!window.JSZip) {
+          alert("ZIP export needs JSZip. If you're offline, open this page once while online so the library can load, then try again.");
+          return;
+        }
 
-    UI.status("Building backup ZIP…");
+        UI.status("Building backup ZIP…");
 
-    const zip = new JSZip();
+        const zip = new JSZip();
 
-    // --- Build JSON payload (full data) ---
-    const payload = {
-      app: "hive-tracker",
-      version: Storage.VERSION,
-      exportedAt: new Date().toISOString(),
-      meta: Storage.loadMeta(),
-      yards: Storage.loadYards(),
-      hives: Storage.loadHives(),
-      photos: {
-        note: "Photos are included in this ZIP under /photos as JPEG files. Inspections reference photos by photoId.",
+        const payload = {
+          app: "hive-tracker",
+          version: Storage.VERSION,
+          exportedAt: new Date().toISOString(),
+          meta: Storage.loadMeta(),
+          yards: Storage.loadYards(),
+          hives: Storage.loadHives(),
+          photos: { note: "Photos are included in this ZIP under /photos as JPEG files." }
+        };
+
+        zip.file("hive-tracker-backup.json", JSON.stringify(payload, null, 2));
+
+        const hives = payload.hives || {};
+        const photoIds = new Set();
+
+        for (const hive of Object.values(hives)) {
+          const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
+          for (const insp of insps) {
+            const ids = Array.isArray(insp.photos) ? insp.photos : [];
+            ids.forEach(id => photoIds.add(id));
+          }
+        }
+
+        const photosFolder = zip.folder("photos");
+
+        let added = 0, missing = 0;
+        for (const id of photoIds) {
+          const blob = await Photos.getBlob(id);
+          if (!blob) { missing++; continue; }
+          photosFolder.file(`${id}.jpg`, blob);
+          added++;
+          UI.status(`Adding photos… (${added}/${photoIds.size})`);
+        }
+
+        UI.status("Compressing ZIP…");
+        const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `hive-tracker-backup-${Utils.today()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        UI.status(`Backup ZIP exported ✅ (photos: ${added}${missing ? `, missing: ${missing}` : ""})`);
+      } catch (err) {
+        alert("ZIP export error: " + (err?.message || err));
+        UI.status("Ready");
       }
-    };
+    });
 
-    zip.file("hive-tracker-backup.json", JSON.stringify(payload, null, 2));
-
-    // --- Collect referenced photo IDs ---
-    const hives = payload.hives || {};
-    const photoIds = new Set();
-
-    for (const hive of Object.values(hives)) {
-      const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
-      for (const insp of insps) {
-        const ids = Array.isArray(insp.photos) ? insp.photos : [];
-        ids.forEach(id => photoIds.add(id));
+    // ZIP import (restore JSON + photos) with OVERWRITE or MERGE
+    el.importZipBtn.addEventListener("click", () => {
+      if (!window.JSZip) {
+        alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
+        return;
       }
+      el.importZipInput.value = "";
+      el.importZipInput.click();
+    });
+
+    function normalizeHive(h) {
+      if (!h || typeof h !== "object") return { id: "", name: "", location: "", inspections: [] };
+      if (!Array.isArray(h.inspections)) h.inspections = [];
+      return h;
     }
 
-    const photosFolder = zip.folder("photos");
-
-    // --- Pull photos from IndexedDB and add to zip ---
-    let added = 0, missing = 0;
-    for (const id of photoIds) {
-      const blob = await Photos.getBlob(id);
-      if (!blob) {
-        missing++;
-        continue;
+    function normalizeInspection(i) {
+      if (!i || typeof i !== "object") {
+        return {
+          id: Utils.uuid(),
+          date: Utils.today(),
+          queenPresent: false,
+          notes: "",
+          flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
+          photos: [],
+          framesCount: 10,
+          frameMap: []
+        };
       }
-      // Stored as JPEG blobs in our app flow
-      photosFolder.file(`${id}.jpg`, blob);
-      added++;
-      UI.status(`Adding photos… (${added}/${photoIds.size})`);
+      if (!i.id) i.id = Utils.uuid();
+      if (!i.date) i.date = Utils.today();
+      if (!i.flags) i.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
+      if (!Array.isArray(i.photos)) i.photos = [];
+      if (typeof i.framesCount !== "number") i.framesCount = 10;
+      if (!Array.isArray(i.frameMap)) i.frameMap = [];
+      return i;
     }
 
-    // --- Generate zip ---
-    UI.status("Compressing ZIP…");
-    const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `hive-tracker-backup-${Utils.today()}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-
-    UI.status(`Backup ZIP exported ✅ (photos: ${added}${missing ? `, missing: ${missing}` : ""})`);
-  } catch (err) {
-    alert("ZIP export error: " + (err?.message || err));
-    UI.status("Ready");
-  }
-});
-
-   // ZIP import (restore JSON + photos) with OVERWRITE or MERGE
-el.importZipBtn.addEventListener("click", () => {
-  if (!window.JSZip) {
-    alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
-    return;
-  }
-  el.importZipInput.value = "";
-  el.importZipInput.click();
-});
-
-function normalizeHive(h) {
-  if (!h || typeof h !== "object") return { id: "", name: "", location: "", inspections: [] };
-  if (!Array.isArray(h.inspections)) h.inspections = [];
-  return h;
-}
-
-function normalizeInspection(i) {
-  if (!i || typeof i !== "object") {
-    return {
-      id: Utils.uuid(),
-      date: Utils.today(),
-      queenPresent: false,
-      notes: "",
-      flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-      photos: []
-    };
-  }
-  if (!i.id) i.id = Utils.uuid();
-  if (!i.date) i.date = Utils.today();
-  if (!i.flags) i.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
-  if (!Array.isArray(i.photos)) i.photos = [];
-  return i;
-}
-
-function mergeYards(existing, incoming) {
-  const out = { ...(existing || {}) };
-  for (const [name, y] of Object.entries(incoming || {})) {
-    if (!out[name]) {
-      out[name] = y;
-      continue;
-    }
-    // Fill GPS only if existing yard doesn't have valid coords
-    const ex = out[name];
-    const exHasGps = ex && typeof ex.lat === "number" && typeof ex.lon === "number";
-    const inHasGps = y && typeof y.lat === "number" && typeof y.lon === "number";
-    if (!exHasGps && inHasGps) out[name] = y;
-  }
-  return out;
-}
-
-function mergeHives(existing, incoming) {
-  const out = { ...(existing || {}) };
-
-  for (const [hiveId, inHiveRaw] of Object.entries(incoming || {})) {
-    const inHive = normalizeHive({ ...inHiveRaw, id: hiveId });
-
-    // normalize inspections in incoming
-    inHive.inspections = (inHive.inspections || []).map(i => normalizeInspection({ ...i }));
-
-    if (!out[hiveId]) {
-      out[hiveId] = inHive;
-      continue;
-    }
-
-    const exHive = normalizeHive(out[hiveId]);
-
-    // Fill blanks only (keep existing if already set)
-    if (!((exHive.name || "").trim()) && (inHive.name || "").trim()) exHive.name = inHive.name;
-    if (!((exHive.location || "").trim()) && (inHive.location || "").trim()) exHive.location = inHive.location;
-
-    // Merge inspections by id
-    const exById = new Map((exHive.inspections || []).map(i => [i.id, normalizeInspection(i)]));
-    for (const insp of (inHive.inspections || [])) {
-      if (!exById.has(insp.id)) {
-        exHive.inspections.push(insp);
-        exById.set(insp.id, insp);
+    function mergeYards(existing, incoming) {
+      const out = { ...(existing || {}) };
+      for (const [name, y] of Object.entries(incoming || {})) {
+        if (!out[name]) { out[name] = y; continue; }
+        const ex = out[name];
+        const exHasGps = ex && typeof ex.lat === "number" && typeof ex.lon === "number";
+        const inHasGps = y && typeof y.lat === "number" && typeof y.lon === "number";
+        if (!exHasGps && inHasGps) out[name] = y;
       }
-      // If collision: skip imported (safer than duplicating)
+      return out;
     }
 
-    // Keep newest-first order
-    exHive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    function mergeHives(existing, incoming) {
+      const out = { ...(existing || {}) };
 
-    out[hiveId] = exHive;
-  }
+      for (const [hiveId, inHiveRaw] of Object.entries(incoming || {})) {
+        const inHive = normalizeHive({ ...inHiveRaw, id: hiveId });
+        inHive.inspections = (inHive.inspections || []).map(i => normalizeInspection({ ...i }));
 
-  return out;
-}
+        if (!out[hiveId]) { out[hiveId] = inHive; continue; }
 
-async function restorePhotosFromZip(zip, UI) {
-  const photoFiles = Object.values(zip.files).filter(f =>
-    !f.dir &&
-    f.name.startsWith("photos/") &&
-    (f.name.toLowerCase().endsWith(".jpg") || f.name.toLowerCase().endsWith(".jpeg"))
-  );
+        const exHive = normalizeHive(out[hiveId]);
 
-  let restored = 0;
-  for (const f of photoFiles) {
-    const name = f.name.split("/").pop();         // "<id>.jpg"
-    const id = (name || "").replace(/\.(jpe?g)$/i, "");
-    if (!id) continue;
+        if (!((exHive.name || "").trim()) && (inHive.name || "").trim()) exHive.name = inHive.name;
+        if (!((exHive.location || "").trim()) && (inHive.location || "").trim()) exHive.location = inHive.location;
 
-    const blob = await f.async("blob");
-    await Photos.putBlobWithId(id, blob);
+        const exById = new Map((exHive.inspections || []).map(i => [i.id, normalizeInspection(i)]));
+        for (const insp of (inHive.inspections || [])) {
+          if (!exById.has(insp.id)) {
+            exHive.inspections.push(insp);
+            exById.set(insp.id, insp);
+          }
+        }
 
-    restored++;
-    if (restored % 10 === 0) UI.status(`Restoring photos… (${restored}/${photoFiles.length})`);
-  }
-  return restored;
-}
+        exHive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+        out[hiveId] = exHive;
+      }
 
-function resetUiAfterImport(UI) {
-  State.currentHiveId = null;
-  State.currentInspectionId = null;
-
-  el.hiveForm.classList.add("hidden");
-  el.hiveIdDisplay.textContent = "";
-  el.hiveName.value = "";
-  el.location.value = "";
-  el.notes.value = "";
-  el.queen.checked = false;
-  el.photoGallery.innerHTML = "";
-  el.flagButtons.innerHTML = "";
-  el.history.innerHTML = "";
-
-  UI.refreshYardUI();
-  UI.renderYardGps((el.currentYard.value || "").trim());
-  UI.renderHiveYardGps();
-}
-
-el.importZipInput.addEventListener("change", async () => {
-  const file = el.importZipInput.files && el.importZipInput.files[0];
-  if (!file) return;
-
-  try {
-    if (!window.JSZip) {
-      alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
-      return;
+      return out;
     }
 
-    // Choose mode
-    const overwrite = confirm(
-      "Import mode:\n\n" +
-      "OK = OVERWRITE this device (replace all hives/yards)\n" +
-      "Cancel = MERGE (keep existing, add missing, fill blanks)\n\n" +
-      "Tip: Export a ZIP first if you want a safety copy."
-    );
+    async function restorePhotosFromZip(zip) {
+      const photoFiles = Object.values(zip.files).filter(f =>
+        !f.dir &&
+        f.name.startsWith("photos/") &&
+        (f.name.toLowerCase().endsWith(".jpg") || f.name.toLowerCase().endsWith(".jpeg"))
+      );
 
-    UI.status("Reading ZIP…");
-    const zip = await JSZip.loadAsync(file);
+      let restored = 0;
+      for (const f of photoFiles) {
+        const name = f.name.split("/").pop();
+        const id = (name || "").replace(/\.(jpe?g)$/i, "");
+        if (!id) continue;
 
-    // --- Find backup JSON ---
-    let jsonFile =
-      zip.file("hive-tracker-backup.json") ||
-      zip.file("backup.json") ||
-      zip.file("hive-tracker.json");
+        const blob = await f.async("blob");
+        await Photos.putBlobWithId(id, blob);
 
-    if (!jsonFile) {
-      const anyJson = Object.values(zip.files).find(f => !f.dir && f.name.toLowerCase().endsWith(".json"));
-      if (anyJson) jsonFile = zip.file(anyJson.name);
-    }
-    if (!jsonFile) throw new Error("No JSON file found in ZIP.");
-
-    const jsonText = await jsonFile.async("string");
-    const payload = JSON.parse(jsonText);
-
-    if (!payload || payload.app !== "hive-tracker") {
-      throw new Error("This ZIP doesn't look like a Hive Tracker backup.");
+        restored++;
+        if (restored % 10 === 0) UI.status(`Restoring photos… (${restored}/${photoFiles.length})`);
+      }
+      return restored;
     }
 
-    const inYards = payload.yards || {};
-    const inHives = payload.hives || {};
-    const inMeta  = payload.meta  || { version: 1 };
+    function resetUiAfterImport() {
+      State.currentHiveId = null;
+      State.currentInspectionId = null;
 
-    if (overwrite) {
-      // --- OVERWRITE localStorage ---
-      UI.status("Overwriting data…");
+      el.hiveForm.classList.add("hidden");
+      el.hiveIdDisplay.textContent = "";
+      el.hiveName.value = "";
+      el.location.value = "";
+      el.date.value = Utils.today();
+      el.framesCount.value = 10;
+      el.notes.value = "";
+      el.queen.checked = false;
+      el.photoGallery.innerHTML = "";
+      el.flagButtons.innerHTML = "";
+      el.history.innerHTML = "";
+      el.frameLegend.innerHTML = "";
+      el.frameMap.innerHTML = "";
 
-            let res = Storage.save("yards", inYards);
-      if (!res.ok) throw new Error("Failed to save yards (storage full?).");
-
-      res = Storage.save("hives", inHives);
-      if (!res.ok) throw new Error("Failed to save hives (storage full?).");
-
-      res = Storage.save("meta", inMeta);
-      if (!res.ok) throw new Error("Failed to save meta (storage full?).");
-
-    } else {
-      // --- MERGE with existing ---
-      UI.status("Merging data…");
-
-      const exYards = Storage.loadYards();
-      const exHives = Storage.loadHives();
-      const exMeta  = Storage.loadMeta();
-
-      const mergedYards = mergeYards(exYards, inYards);
-      const mergedHives = mergeHives(exHives, inHives);
-
-      const mergedMeta = {
-        ...(exMeta || {}),
-        ...(inMeta || {}),
-        // keep the highest version number we see
-        version: Math.max(exMeta?.version || 1, inMeta?.version || 1, Storage.VERSION)
-      };
-
-      let res = Storage.save("yards", mergedYards);
-      if (!res.ok) throw new Error("Failed to save merged yards (storage full?).");
-
-      res = Storage.save("hives", mergedHives);
-      if (!res.ok) throw new Error("Failed to save merged hives (storage full?).");
-
-      res = Storage.save("meta", mergedMeta);
-      if (!res.ok) throw new Error("Failed to save merged meta (storage full?).");
+      UI.refreshYardUI();
+      UI.renderYardGps((el.currentYard.value || "").trim());
+      UI.renderHiveYardGps();
     }
 
-    // Ensure new fields exist
-    Storage.migrateIfNeeded();
+    el.importZipInput.addEventListener("change", async () => {
+      const file = el.importZipInput.files && el.importZipInput.files[0];
+      if (!file) return;
 
-    // --- Restore photos (works for both modes) ---
-    UI.status("Restoring photos…");
-    const restored = await restorePhotosFromZip(zip, UI);
+      try {
+        if (!window.JSZip) {
+          alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
+          return;
+        }
 
-    resetUiAfterImport(UI);
+        const overwrite = confirm(
+          "Import mode:\n\n" +
+          "OK = OVERWRITE this device (replace all hives/yards)\n" +
+          "Cancel = MERGE (keep existing, add missing, fill blanks)\n\n" +
+          "Tip: Export a ZIP first if you want a safety copy."
+        );
 
-    UI.status(`Import complete ✅ (${overwrite ? "overwrite" : "merge"}; photos restored: ${restored})`);
-    alert(`Import complete!\n\nMode: ${overwrite ? "Overwrite" : "Merge"}\nPhotos restored: ${restored}\n\nPick a yard/hive to continue.`);
-  } catch (err) {
-    alert("ZIP import error: " + (err?.message || err));
-    UI.status("Ready");
-  }
-});
+        UI.status("Reading ZIP…");
+        const zip = await JSZip.loadAsync(file);
 
+        let jsonFile =
+          zip.file("hive-tracker-backup.json") ||
+          zip.file("backup.json") ||
+          zip.file("hive-tracker.json");
 
+        if (!jsonFile) {
+          const anyJson = Object.values(zip.files).find(f => !f.dir && f.name.toLowerCase().endsWith(".json"));
+          if (anyJson) jsonFile = zip.file(anyJson.name);
+        }
+        if (!jsonFile) throw new Error("No JSON file found in ZIP.");
 
+        const jsonText = await jsonFile.async("string");
+        const payload = JSON.parse(jsonText);
 
+        if (!payload || payload.app !== "hive-tracker") {
+          throw new Error("This ZIP doesn't look like a Hive Tracker backup.");
+        }
+
+        const inYards = payload.yards || {};
+        const inHives = payload.hives || {};
+        const inMeta  = payload.meta  || { version: 1 };
+
+        if (overwrite) {
+          UI.status("Overwriting data…");
+          let res = Storage.save("yards", inYards);
+          if (!res.ok) throw new Error("Failed to save yards (storage full?).");
+
+          res = Storage.save("hives", inHives);
+          if (!res.ok) throw new Error("Failed to save hives (storage full?).");
+
+          res = Storage.save("meta", inMeta);
+          if (!res.ok) throw new Error("Failed to save meta (storage full?).");
+        } else {
+          UI.status("Merging data…");
+
+          const exYards = Storage.loadYards();
+          const exHives = Storage.loadHives();
+          const exMeta  = Storage.loadMeta();
+
+          const mergedYards = mergeYards(exYards, inYards);
+          const mergedHives = mergeHives(exHives, inHives);
+
+          const mergedMeta = {
+            ...(exMeta || {}),
+            ...(inMeta || {}),
+            version: Math.max(exMeta?.version || 1, inMeta?.version || 1, Storage.VERSION)
+          };
+
+          let res = Storage.save("yards", mergedYards);
+          if (!res.ok) throw new Error("Failed to save merged yards (storage full?).");
+
+          res = Storage.save("hives", mergedHives);
+          if (!res.ok) throw new Error("Failed to save merged hives (storage full?).");
+
+          res = Storage.save("meta", mergedMeta);
+          if (!res.ok) throw new Error("Failed to save merged meta (storage full?).");
+        }
+
+        Storage.migrateIfNeeded();
+
+        UI.status("Restoring photos…");
+        const restored = await restorePhotosFromZip(zip);
+
+        resetUiAfterImport();
+
+        UI.status(`Import complete ✅ (${overwrite ? "overwrite" : "merge"}; photos restored: ${restored})`);
+        alert(`Import complete!\n\nMode: ${overwrite ? "Overwrite" : "Merge"}\nPhotos restored: ${restored}\n\nPick a yard/hive to continue.`);
+      } catch (err) {
+        alert("ZIP import error: " + (err?.message || err));
+        UI.status("Ready");
+      }
+    });
 
     // NFC button
     el.btnScan.addEventListener("click", async () => {
