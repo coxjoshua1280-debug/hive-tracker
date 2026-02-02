@@ -427,1300 +427,1095 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
-  <script>
-  document.addEventListener("DOMContentLoaded", () => {
+ <script>
+document.addEventListener("DOMContentLoaded", () => {
 
-    // ---------------- Offline-friendly JSZip fallback ----------------
-    async function ensureJSZipReady() {
-      if (window.JSZip) return true;
+  // =========================================================
+  // 0) BOOTSTRAP / THIRD-PARTY HELPERS
+  //    Put CDN loaders / polyfills / one-time boot helpers here.
+  // =========================================================
 
-      const CACHE_KEY = "jszip_cache_v1";
-      const cached = localStorage.getItem(CACHE_KEY);
+  async function ensureJSZipReady() {
+    if (window.JSZip) return true;
 
-      if (cached) {
+    const CACHE_KEY = "jszip_cache_v1";
+    const cached = localStorage.getItem(CACHE_KEY);
+
+    if (cached) {
+      try {
+        // eslint-disable-next-line no-eval
+        eval(cached);
+        if (window.JSZip) return true;
+      } catch (_) {}
+    }
+
+    try {
+      const url = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+      const res = await fetch(url, { cache: "force-cache" });
+      if (!res.ok) throw new Error("JSZip fetch failed");
+      const code = await res.text();
+      localStorage.setItem(CACHE_KEY, code);
+      // eslint-disable-next-line no-eval
+      eval(code);
+      return !!window.JSZip;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // =========================================================
+  // 1) UTILS (Pure functions, no DOM)
+  // =========================================================
+
+  const Utils = {
+    today() { return new Date().toISOString().split("T")[0]; },
+    uuid() {
+      return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2));
+    },
+    toRad(deg) { return deg * Math.PI / 180; },
+    distanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = this.toRad(lat2 - lat1);
+      const dLon = this.toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    },
+    mapsLink(lat, lon) {
+      const q = `${lat},${lon}`;
+      return `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
+    },
+    fmtDateTime(ts) {
+      if (!ts) return "";
+      try { return new Date(ts).toLocaleString(); } catch (_) { return ""; }
+    },
+    csvEscape(v) {
+      const s = (v ?? "").toString();
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    },
+    async compressImageFileToJpegBlob(file, maxDim = 1600, quality = 0.72) {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = dataUrl;
+      });
+
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      const cw = Math.max(1, Math.round(w * scale));
+      const ch = Math.max(1, Math.round(h * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, cw, ch);
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (!blob) throw new Error("Could not compress image.");
+      return blob;
+    }
+  };
+
+  // =========================================================
+  // 2) STORAGE (LocalStorage + schema + migrations)
+  // =========================================================
+
+  const Storage = {
+    VERSION: 4,
+
+    load(key, fallback) {
+      try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+      catch { return fallback; }
+    },
+    save(key, value) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e };
+      }
+    },
+
+    loadHives() { return this.load("hives", {}); },
+    saveHives(hives) { return this.save("hives", hives); },
+
+    loadYards() { return this.load("yards", {}); },
+    saveYards(yards) { return this.save("yards", yards); },
+
+    loadMeta() { return this.load("meta", { version: 1 }); },
+    saveMeta(meta) { return this.save("meta", meta); },
+
+    migrateIfNeeded() {
+      const meta = this.loadMeta();
+      const from = meta.version || 1;
+      if (from >= this.VERSION) return;
+
+      const hives = this.loadHives();
+      for (const hive of Object.values(hives)) {
+        if (!Array.isArray(hive.inspections)) hive.inspections = [];
+        hive.inspections.forEach(insp => {
+          if (!insp.flags) {
+            insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
+          } else {
+            insp.flags.strong = !!insp.flags.strong;
+            insp.flags.weak = !!insp.flags.weak;
+            insp.flags.queenless = !!insp.flags.queenless;
+            insp.flags.followUp = !!insp.flags.followUp;
+            insp.flags.fed = !!insp.flags.fed;
+          }
+
+          if (!Array.isArray(insp.photos)) insp.photos = [];
+          if (typeof insp.framesCount !== "number") insp.framesCount = 10;
+          if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+
+          if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
+            insp.miteTreatment = { type:"", installed:"", due:"" };
+          } else {
+            insp.miteTreatment.type = (insp.miteTreatment.type || "");
+            insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
+            insp.miteTreatment.due = (insp.miteTreatment.due || "");
+          }
+        });
+      }
+
+      this.saveHives(hives);
+      meta.version = this.VERSION;
+      this.saveMeta(meta);
+    },
+
+    createInspection(hive, date) {
+      const prev = Array.isArray(hive.inspections) ? hive.inspections[0] : null;
+
+      const insp = {
+        id: Utils.uuid(),
+        date: date || Utils.today(),
+        queenPresent: false,
+        notes: "",
+        flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
+        photos: [],
+
+        framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
+        frameMap: Array.isArray(prev?.frameMap)
+          ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
+          : [],
+
+        miteTreatment: { type:"", installed:"", due:"" }
+      };
+
+      hive.inspections.unshift(insp);
+      return insp;
+    },
+
+    getOrCreateTodayInspection(hive) {
+      const t = Utils.today();
+      return hive.inspections.find(i => i.date === t) || this.createInspection(hive, t);
+    }
+  };
+
+  // =========================================================
+  // 3) PHOTOS (IndexedDB)
+  // =========================================================
+
+  const Photos = {
+    db: null,
+    DB_NAME: "hive-tracker",
+    STORE: "photos",
+
+    async open() {
+      if (this.db) return this.db;
+      this.db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open(this.DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(this.STORE)) {
+            db.createObjectStore(this.STORE, { keyPath: "id" });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+      });
+      return this.db;
+    },
+
+    async putBlob(blob) {
+      const id = Utils.uuid();
+      const db = await this.open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(this.STORE, "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("Photo save failed"));
+        tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
+      });
+      return id;
+    },
+
+    async putBlobWithId(id, blob) {
+      const db = await this.open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(this.STORE, "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
+        tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
+      });
+      return id;
+    },
+
+    async getBlob(id) {
+      const db = await this.open();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(this.STORE, "readonly");
+        const req = tx.objectStore(this.STORE).get(id);
+        req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+        req.onerror = () => reject(req.error || new Error("Photo read failed"));
+      });
+    },
+
+    async delete(id) {
+      const db = await this.open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(this.STORE, "readwrite");
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error("Photo delete failed"));
+        tx.objectStore(this.STORE).delete(id);
+      });
+    },
+
+    async deleteMany(ids) {
+      for (const id of (ids || [])) {
+        try { await this.delete(id); } catch (_) {}
+      }
+    }
+  };
+
+  // =========================================================
+  // 4) STATE (Runtime-only values)
+  // =========================================================
+
+  const State = {
+    currentHiveId: null,
+    currentInspectionId: null,
+
+    // NFC scan lifecycle
+    scanning: false,
+    activeReader: null,
+    scanSession: 0,
+
+    // Last GPS position
+    lastPosition: null,
+
+    // Frame painting
+    painting: false,
+    paintValue: null,
+
+    // Listener safety (prevents double-binding)
+    listenersBound: false
+  };
+
+  // =========================================================
+  // 5) ELEMENT MAP (All document.getElementById here)
+  // =========================================================
+
+  const el = {
+    btnScan: document.getElementById("scanNfc"),
+    status: document.getElementById("status"),
+    hiveForm: document.getElementById("hiveForm"),
+
+    hiveIdDisplay: document.getElementById("hiveIdDisplay"),
+    hiveName: document.getElementById("hiveName"),
+    location: document.getElementById("location"),
+    date: document.getElementById("lastInspection"),
+    framesCount: document.getElementById("framesCount"),
+    frameLegend: document.getElementById("frameLegend"),
+    frameMap: document.getElementById("frameMap"),
+    frameSummary: document.getElementById("frameSummary"),
+
+    queen: document.getElementById("queenPresent"),
+    notes: document.getElementById("notes"),
+    history: document.getElementById("history"),
+
+    currentYard: document.getElementById("currentYard"),
+    yardList: document.getElementById("yardList"),
+    yardHives: document.getElementById("yardHives"),
+
+    newInspectionBtn: document.getElementById("newInspectionBtn"),
+    captureYardGps: document.getElementById("captureYardGps"),
+    detectNearestYard: document.getElementById("detectNearestYard"),
+    yardGps: document.getElementById("yardGps"),
+
+    exportCsv: document.getElementById("exportCsv"),
+    exportZip: document.getElementById("exportZip"),
+    importZipBtn: document.getElementById("importZipBtn"),
+    importZipInput: document.getElementById("importZipInput"),
+    exportCurrentYardOnly: document.getElementById("exportCurrentYardOnly"),
+
+    hiveYardGps: document.getElementById("hiveYardGps"),
+
+    flagButtons: document.getElementById("flagButtons"),
+
+    addPhotoBtn: document.getElementById("addPhotoBtn"),
+    photoInput: document.getElementById("photoInput"),
+    photoGallery: document.getElementById("photoGallery"),
+
+    viewer: document.getElementById("viewer"),
+    viewerImg: document.getElementById("viewerImg"),
+    viewerClose: document.getElementById("viewerClose"),
+
+    // mites (collapsible)
+    miteToggleBtn: document.getElementById("miteToggleBtn"),
+    miteSection: document.getElementById("miteSection"),
+    miteClearBtn: document.getElementById("miteClearBtn"),
+
+    miteTreatmentType: document.getElementById("miteTreatmentType"),
+    miteInstalled: document.getElementById("miteInstalled"),
+    miteDue: document.getElementById("miteDue"),
+    miteBadgeCurrent: document.getElementById("miteBadgeCurrent"),
+    miteNotice: document.getElementById("miteNotice"),
+    miteTimeline: document.getElementById("miteTimeline"),
+  };
+
+  // Fail fast if IDs mismatch. This protects you from silent breakage.
+  for (const [k, v] of Object.entries(el)) {
+    if (!v) {
+      alert(`Missing required HTML element: ${k}`);
+      return;
+    }
+  }
+
+  // =========================================================
+  // 6) UI (Rendering & DOM manipulation ONLY)
+  //    Rule: UI methods should NOT attach global listeners.
+  // =========================================================
+
+  const UI = {
+    status(text) { el.status.textContent = text || ""; },
+
+    ensureInspectionDefaults(insp) {
+      if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
+      if (!Array.isArray(insp.photos)) insp.photos = [];
+      if (typeof insp.framesCount !== "number") insp.framesCount = 10;
+      if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+      if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
+        insp.miteTreatment = { type:"", installed:"", due:"" };
+      } else {
+        insp.miteTreatment.type = (insp.miteTreatment.type || "");
+        insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
+        insp.miteTreatment.due = (insp.miteTreatment.due || "");
+      }
+    },
+
+    renderBadgesFromFlags(flags) {
+      const order = [
+        ["strong", "Strong"],
+        ["weak", "Weak"],
+        ["queenless", "Queenless"],
+        ["followUp", "Follow-up"],
+        ["fed", "Fed"]
+      ];
+      return order
+        .filter(([key]) => !!flags?.[key])
+        .map(([_, label]) => `<span class="badge on">${label}</span>`)
+        .join("");
+    },
+
+    // ---------- Mites ----------
+    parseISODate(d) {
+      if (!d || typeof d !== "string") return null;
+      const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
+      if (!y || !m || !day) return null;
+      return new Date(y, m - 1, day);
+    },
+
+    daysDiff(a, b) {
+      const ms = 24 * 60 * 60 * 1000;
+      return Math.round((b.getTime() - a.getTime()) / ms);
+    },
+
+    renderMiteBadge(miteTreatment) {
+      const t = (miteTreatment?.type || "").trim();
+      if (!t) return "";
+
+      const dueStr = (miteTreatment?.due || "").trim();
+      const todayStr = Utils.today();
+
+      let cls = "badge on";
+      if (dueStr) {
+        const due = new Date(dueStr + "T00:00:00");
+        const today = new Date(todayStr + "T00:00:00");
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const days = Math.round((due - today) / msPerDay);
+
+        if (days <= 0) cls = "badge warn";
+        else if (days <= 7) cls = "badge soon";
+      }
+
+      const dueText = dueStr ? ` • due ${dueStr}` : "";
+      return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
+    },
+
+    getMiteStatus(insp) {
+      const mt = insp?.miteTreatment;
+      const type = (mt?.type || "").trim();
+      const dueStr = mt?.due || "";
+      const installedStr = mt?.installed || "";
+
+      if (!type && !dueStr && !installedStr) return { level: "none", text: "" };
+
+      const today = this.parseISODate(Utils.today());
+      const due = this.parseISODate(dueStr);
+
+      if (!due || !today) {
+        return { level: "warn", text: "Mite treatment saved — add a due date for reminders." };
+      }
+
+      const d = this.daysDiff(today, due);
+
+      if (d === 0) return { level: "warn", text: "🟠 Due today" };
+      if (d < 0)  return { level: "bad",  text: `🔴 Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` };
+      if (d <= 3) return { level: "warn", text: `🟠 Due in ${d} day${d === 1 ? "" : "s"}` };
+
+      return { level: "good", text: `🟢 Due in ${d} days` };
+    },
+
+    renderMiteBadgeInForm(insp) {
+      const html = this.renderMiteBadge(insp?.miteTreatment);
+      if (!html) {
+        el.miteBadgeCurrent.innerHTML = `<em>No mite treatment set for this inspection.</em>`;
+        return;
+      }
+      el.miteBadgeCurrent.innerHTML = `Treatment status: ${html}`;
+    },
+
+    renderMiteNoticeInForm(insp) {
+      const s = this.getMiteStatus(insp);
+
+      if (!s.text) {
+        el.miteNotice.textContent = "";
+        el.miteNotice.className = "small";
+        return;
+      }
+
+      el.miteNotice.textContent = s.text;
+      el.miteNotice.className = "small " + (
+        s.level === "bad"  ? "notice-bad" :
+        s.level === "warn" ? "notice-warn" :
+        s.level === "good" ? "notice-good" : ""
+      );
+    },
+
+    renderMiteTimeline(hive) {
+      const insps = Array.isArray(hive?.inspections) ? hive.inspections : [];
+      const rows = [];
+
+      for (const insp of insps) {
+        const mt = insp?.miteTreatment;
+        const type = (mt?.type || "").trim();
+        const installed = mt?.installed || "";
+        const due = mt?.due || "";
+        if (!type && !installed && !due) continue;
+
+        const whenStr = due || installed || insp.date || "";
+        const when = this.parseISODate(whenStr) || this.parseISODate(insp.date) || null;
+
+        const status = this.getMiteStatus(insp);
+
+        rows.push({
+          inspId: insp.id,
+          date: insp.date || "",
+          type,
+          installed,
+          due,
+          when,
+          status
+        });
+      }
+
+      if (rows.length === 0) {
+        el.miteTimeline.innerHTML = `<em class="small">No mite treatments recorded yet for this hive.</em>`;
+        return;
+      }
+
+      rows.sort((a, b) => {
+        const ta = a.when ? a.when.getTime() : 0;
+        const tb = b.when ? b.when.getTime() : 0;
+        return tb - ta;
+      });
+
+      const maxRows = 20;
+      const shown = rows.slice(0, maxRows);
+
+      el.miteTimeline.innerHTML = "";
+      for (const r of shown) {
+        const row = document.createElement("div");
+        row.className = "timeline-row";
+
+        const dot = document.createElement("div");
+        dot.className = "timeline-dot " + (
+          r.status.level === "bad" ? "bad" :
+          r.status.level === "warn" ? "warn" :
+          r.status.level === "good" ? "good" : ""
+        );
+
+        const main = document.createElement("div");
+        main.className = "timeline-main";
+
+        const title = document.createElement("div");
+        title.className = "timeline-title";
+        title.textContent = r.type ? r.type : "Mite treatment";
+
+        const meta = document.createElement("div");
+        meta.className = "timeline-meta";
+        meta.textContent =
+          `${r.date ? `Inspection: ${r.date}` : ""}` +
+          `${r.installed ? ` • Installed: ${r.installed}` : ""}` +
+          `${r.due ? ` • Due: ${r.due}` : ""}`;
+
+        const actions = document.createElement("div");
+        actions.className = "timeline-actions";
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "timeline-btn";
+        btn.textContent = "Open inspection";
+        btn.addEventListener("click", () => {
+          UI.loadInspectionIntoForm(hive, r.inspId);
+          try { el.miteTreatmentType.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
+        });
+
+        actions.appendChild(btn);
+
+        if (r.status.text) {
+          const s = document.createElement("div");
+          s.className =
+            "small " +
+            (r.status.level === "bad" ? "notice-bad" :
+             r.status.level === "warn" ? "notice-warn" :
+             r.status.level === "good" ? "notice-good" : "");
+          s.style.marginTop = "0.25rem";
+          s.textContent = r.status.text;
+          main.appendChild(s);
+        }
+
+        main.appendChild(title);
+        main.appendChild(meta);
+        main.appendChild(actions);
+
+        row.appendChild(dot);
+        row.appendChild(main);
+        el.miteTimeline.appendChild(row);
+      }
+
+      if (rows.length > maxRows) {
+        const more = document.createElement("div");
+        more.className = "small";
+        more.style.marginTop = "0.5rem";
+        more.textContent = `Showing latest ${maxRows} of ${rows.length} treatments.`;
+        el.miteTimeline.appendChild(more);
+      }
+    },
+
+    miteIsInUse(insp) {
+      const mt = insp?.miteTreatment || {};
+      return !!((mt.type || "").trim() || (mt.installed || "").trim() || (mt.due || "").trim());
+    },
+
+    updateMiteSectionVisibility(insp) {
+      const inUse = this.miteIsInUse(insp);
+
+      if (inUse) {
+        el.miteSection.classList.remove("hidden");
+        el.miteToggleBtn.textContent = "🐜 Mite Treatment (in use) — Hide";
+      } else {
+        el.miteSection.classList.add("hidden");
+        el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+      }
+    },
+
+    clearMiteUI() {
+      el.miteBadgeCurrent.innerHTML = "";
+      el.miteNotice.textContent = "";
+      el.miteTimeline.innerHTML = "";
+    },
+
+    updateMitesUI(hive, insp) {
+      this.updateMiteSectionVisibility(insp);
+      if (!el.miteSection.classList.contains("hidden")) {
+        this.renderMiteBadgeInForm(insp);
+        this.renderMiteNoticeInForm(insp);
+        this.renderMiteTimeline(hive);
+      } else {
+        this.clearMiteUI();
+      }
+    },
+
+    // ---------- Frames ----------
+    renderFrameSummary(insp) {
+      if (!Array.isArray(insp.frameMap)) {
+        el.frameSummary.textContent = "";
+        return;
+      }
+
+      let pollen = 0, honey = 0, brood = 0, empty = 0;
+
+      for (const frame of insp.frameMap) {
+        for (const seg of (frame || [])) {
+          if (seg === "pollen") pollen++;
+          else if (seg === "honey") honey++;
+          else if (seg === "brood") brood++;
+          else empty++;
+        }
+      }
+
+      const frames = Math.max(0, Number(insp.framesCount || insp.frameMap.length || 0));
+      const totalSections = frames * 4;
+
+      const pct = (n) => {
+        if (!totalSections) return "0%";
+        return `${Math.round((n / totalSections) * 100)}%`;
+      };
+
+      const broodPct = totalSections ? brood / totalSections : 0;
+      const cue =
+        broodPct >= 0.60 ? "🔥 Strong brood" :
+        broodPct >= 0.35 ? "✅ Good brood" :
+        broodPct > 0    ? "⚠️ Light brood" :
+                          "—";
+
+      el.frameSummary.innerHTML =
+        `🟨 Pollen: <strong>${pollen}</strong> (${pct(pollen)}) &nbsp; ` +
+        `🍯 Honey: <strong>${honey}</strong> (${pct(honey)}) &nbsp; ` +
+        `🟪 Brood: <strong>${brood}</strong> (${pct(brood)})` +
+        `<br>` +
+        `🧮 Total sections: <strong>${totalSections}</strong> (${frames} frames) &nbsp; • &nbsp; ${cue}`;
+    },
+
+    renderFrameLegend() {
+      const items = [
+        ["seg-none", "Empty"],
+        ["seg-honey", "Honey"],
+        ["seg-brood", "Brood"],
+        ["seg-pollen", "Pollen"],
+      ];
+      el.frameLegend.innerHTML = items.map(([cls, label]) =>
+        `<span><span class="swatch ${cls}"></span>${label}</span>`
+      ).join("");
+    },
+
+    normalizeFrameMap(insp) {
+      const frames = Math.max(1, Math.min(20, Math.floor(insp.framesCount || 10)));
+      insp.framesCount = frames;
+
+      if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+
+      for (let f = 0; f < frames; f++) {
+        if (!Array.isArray(insp.frameMap[f])) insp.frameMap[f] = [];
+        for (let s = 0; s < 4; s++) {
+          const v = insp.frameMap[f][s];
+          if (v !== "pollen" && v !== "honey" && v !== "brood" && v !== "none") {
+            insp.frameMap[f][s] = "none";
+          }
+        }
+      }
+      insp.frameMap = insp.frameMap.slice(0, frames);
+    },
+
+    nextSegValue(v) {
+      const order = ["none", "honey", "brood", "pollen"];
+      const idx = Math.max(0, order.indexOf(v));
+      return order[(idx + 1) % order.length];
+    },
+
+    frameIntensity(frameSegments) {
+      const segs = Array.isArray(frameSegments) ? frameSegments : [];
+      const filled = segs.filter(v => v && v !== "none").length;
+      return Math.max(0, Math.min(1, filled / 4));
+    },
+
+    applySegValue(hive, insp, f, s, value, segEl) {
+      if (!State.currentHiveId || !State.currentInspectionId) return;
+
+      const hives = Storage.loadHives();
+      const hive2 = hives[State.currentHiveId];
+      if (!hive2 || !Array.isArray(hive2.inspections)) return;
+
+      const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
+      if (!insp2) return;
+
+      UI.ensureInspectionDefaults(insp2);
+      UI.normalizeFrameMap(insp2);
+
+      insp2.frameMap[f][s] = value;
+
+      const res = Storage.saveHives(hives);
+      if (!res.ok) {
+        UI.status("Save failed (storage full?) — export ZIP backup!");
+        return;
+      }
+
+      insp.frameMap[f][s] = value;
+      if (segEl) segEl.className = `frame-seg seg-${value}`;
+
+      UI.renderFrameSummary(insp2);
+
+      const colEl = segEl?.closest(".frame-col");
+      if (colEl) {
+        const intensity = UI.frameIntensity(insp2.frameMap[f]);
+        colEl.style.setProperty("--intensity", String(intensity));
+
+        const meterFill = colEl.querySelector(".frame-meter-fill");
+        if (meterFill) {
+          const filled = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
+            .filter(v => v && v !== "none").length;
+          meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
+        }
+      }
+    },
+
+    startPainting(value) {
+      State.painting = true;
+      State.paintValue = value;
+    },
+
+    stopPainting() {
+      State.painting = false;
+      State.paintValue = null;
+    },
+
+    renderFrameMap(hive, insp) {
+      this.ensureInspectionDefaults(insp);
+      this.normalizeFrameMap(insp);
+      this.renderFrameLegend();
+      this.renderFrameSummary(insp);
+
+      el.framesCount.value = insp.framesCount;
+      el.frameMap.style.gridTemplateColumns = `repeat(${insp.framesCount}, minmax(0, 1fr))`;
+      el.frameMap.innerHTML = "";
+
+      for (let f = 0; f < insp.framesCount; f++) {
+        const col = document.createElement("div");
+        col.className = "frame-col";
+
+        const intensity = this.frameIntensity(insp.frameMap[f]);
+        col.style.setProperty("--intensity", String(intensity));
+
+        const title = document.createElement("div");
+        title.className = "frame-col-title";
+        title.textContent = `${f + 1}`;
+        col.appendChild(title);
+
+        const meter = document.createElement("div");
+        meter.className = "frame-meter";
+        const meterFill = document.createElement("div");
+        meterFill.className = "frame-meter-fill";
+        meter.appendChild(meterFill);
+        col.appendChild(meter);
+
+        const filled0 = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : [])
+          .filter(v => v && v !== "none").length;
+        meterFill.style.width = `${Math.round((filled0 / 4) * 100)}%`;
+
+        for (let s = 0; s < 4; s++) {
+          const seg = document.createElement("div");
+          const v = insp.frameMap[f][s] || "none";
+          seg.className = `frame-seg seg-${v}`;
+          seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
+
+          seg.addEventListener("pointerdown", (ev) => {
+            ev.preventDefault();
+            seg.setPointerCapture(ev.pointerId);
+
+            const current = insp.frameMap[f][s] || "none";
+            const next = UI.nextSegValue(current);
+
+            UI.startPainting(next);
+            UI.applySegValue(hive, insp, f, s, next, seg);
+          });
+
+          seg.addEventListener("pointerenter", () => {
+            if (!State.painting || !State.paintValue) return;
+            const current = insp.frameMap[f][s] || "none";
+            if (current === State.paintValue) return;
+            UI.applySegValue(hive, insp, f, s, State.paintValue, seg);
+          });
+
+          seg.addEventListener("pointerup", () => UI.stopPainting());
+          seg.addEventListener("pointercancel", () => UI.stopPainting());
+
+          col.appendChild(seg);
+        }
+
+        el.frameMap.appendChild(col);
+      }
+    },
+
+    // ---- The rest of your UI methods from your paste stay the same ----
+    // (These are REQUIRED by your app flow; keep your existing implementations)
+    loadInspectionIntoForm(hive, inspectionId) { /* KEEP your existing code here */ },
+    renderHistory(hive) { /* KEEP your existing code here */ },
+    refreshYardUI() { /* KEEP your existing code here */ },
+    renderYardGps(yardName) { /* KEEP your existing code here */ },
+    renderHiveYardGps() { /* KEEP your existing code here */ },
+    renderFlagButtons(hive, insp) { /* KEEP your existing code here */ },
+    renderPhotoGallery(hive, insp) { /* KEEP your existing code here */ },
+  };
+
+  // =========================================================
+  // 7) GPS (Device API)
+  // =========================================================
+
+  const GPS = {
+    getCurrentPositionOnce() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      });
+    },
+
+    findNearestYard(radiusMeters = 100) {
+      if (!State.lastPosition) return null;
+      const yards = Storage.loadYards();
+      const lat = State.lastPosition.coords.latitude;
+      const lon = State.lastPosition.coords.longitude;
+
+      let best = null;
+      for (const [name, y] of Object.entries(yards)) {
+        if (!y || typeof y.lat !== "number" || typeof y.lon !== "number") continue;
+        const d = Utils.distanceMeters(lat, lon, y.lat, y.lon);
+        if (d <= radiusMeters && (!best || d < best.meters)) best = { name, meters: d };
+      }
+      return best;
+    }
+  };
+
+  // =========================================================
+  // 8) NFC (Device API)
+  // =========================================================
+
+  const NFC = {
+    stopScan() {
+      State.scanning = false;
+      State.scanSession++;
+      if (State.activeReader) {
+        try { State.activeReader.onreading = null; } catch (_) {}
+        try { State.activeReader.onreadingerror = null; } catch (_) {}
+        try { State.activeReader.abort(); } catch (_) {}
+      }
+      State.activeReader = null;
+      UI.status("Ready");
+    },
+
+    async startScan() {
+      if (State.scanning) return;
+      this.stopScan();
+      State.scanning = true;
+      const mySession = State.scanSession;
+
+      if (!("NDEFReader" in window)) {
+        alert("Web NFC not supported on this device/browser.");
+        State.scanning = false;
+        return;
+      }
+
+      if (!(el.currentYard.value || "").trim()) {
         try {
-          // eslint-disable-next-line no-eval
-          eval(cached);
-          if (window.JSZip) return true;
+          const pos = await GPS.getCurrentPositionOnce();
+          State.lastPosition = pos;
+          const nearest = GPS.findNearestYard(100);
+          if (nearest) {
+            el.currentYard.value = nearest.name;
+            UI.refreshYardUI();
+            UI.renderYardGps(nearest.name);
+          }
         } catch (_) {}
       }
 
       try {
-        const url = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
-        const res = await fetch(url, { cache: "force-cache" });
-        if (!res.ok) throw new Error("JSZip fetch failed");
-        const code = await res.text();
-        localStorage.setItem(CACHE_KEY, code);
-        // eslint-disable-next-line no-eval
-        eval(code);
-        return !!window.JSZip;
-      } catch (_) {
-        return false;
-      }
-    }
+        const reader = new NDEFReader();
+        State.activeReader = reader;
 
-    // ---------------- Utils ----------------
-    const Utils = {
-      today() { return new Date().toISOString().split("T")[0]; },
-      uuid() {
-        return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2));
-      },
-      toRad(deg) { return deg * Math.PI / 180; },
-      distanceMeters(lat1, lon1, lat2, lon2) {
-        const R = 6371000;
-        const dLat = this.toRad(lat2 - lat1);
-        const dLon = this.toRad(lon2 - lon1);
-        const a =
-          Math.sin(dLat/2) * Math.sin(dLat/2) +
-          Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
-          Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-      },
-      mapsLink(lat, lon) {
-        const q = `${lat},${lon}`;
-        return `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
-      },
-      fmtDateTime(ts) {
-        if (!ts) return "";
-        try { return new Date(ts).toLocaleString(); } catch (_) { return ""; }
-      },
-      csvEscape(v) {
-        const s = (v ?? "").toString();
-        if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-        return s;
-      },
-      async compressImageFileToJpegBlob(file, maxDim = 1600, quality = 0.72) {
-        const dataUrl = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.onerror = reject;
-          r.readAsDataURL(file);
-        });
+        UI.status("Scanning… tap hive tag");
+        await reader.scan();
 
-        const img = await new Promise((resolve, reject) => {
-          const i = new Image();
-          i.onload = () => resolve(i);
-          i.onerror = reject;
-          i.src = dataUrl;
-        });
-
-        const w = img.naturalWidth || img.width;
-        const h = img.naturalHeight || img.height;
-        const scale = Math.min(1, maxDim / Math.max(w, h));
-        const cw = Math.max(1, Math.round(w * scale));
-        const ch = Math.max(1, Math.round(h * scale));
-
-        const canvas = document.createElement("canvas");
-        canvas.width = cw;
-        canvas.height = ch;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, cw, ch);
-
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-        if (!blob) throw new Error("Could not compress image.");
-        return blob;
-      }
-    };
-
-    // ---------------- Storage ----------------
-    const Storage = {
-      VERSION: 4,
-
-      load(key, fallback) {
-        try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
-        catch { return fallback; }
-      },
-      save(key, value) {
-        try {
-          localStorage.setItem(key, JSON.stringify(value));
-          return { ok: true };
-        } catch (e) {
-          return { ok: false, error: e };
-        }
-      },
-
-      loadHives() { return this.load("hives", {}); },
-      saveHives(hives) { return this.save("hives", hives); },
-
-      loadYards() { return this.load("yards", {}); },
-      saveYards(yards) { return this.save("yards", yards); },
-
-      loadMeta() { return this.load("meta", { version: 1 }); },
-      saveMeta(meta) { return this.save("meta", meta); },
-
-      migrateIfNeeded() {
-        const meta = this.loadMeta();
-        const from = meta.version || 1;
-        if (from >= this.VERSION) return;
-
-        const hives = this.loadHives();
-        for (const hive of Object.values(hives)) {
-          if (!Array.isArray(hive.inspections)) hive.inspections = [];
-          hive.inspections.forEach(insp => {
-            if (!insp.flags) {
-              insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
-            } else {
-              insp.flags.strong = !!insp.flags.strong;
-              insp.flags.weak = !!insp.flags.weak;
-              insp.flags.queenless = !!insp.flags.queenless;
-              insp.flags.followUp = !!insp.flags.followUp;
-              insp.flags.fed = !!insp.flags.fed;
-            }
-
-            if (!Array.isArray(insp.photos)) insp.photos = [];
-            if (typeof insp.framesCount !== "number") insp.framesCount = 10;
-            if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
-
-            if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
-              insp.miteTreatment = { type:"", installed:"", due:"" };
-            } else {
-              insp.miteTreatment.type = (insp.miteTreatment.type || "");
-              insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
-              insp.miteTreatment.due = (insp.miteTreatment.due || "");
-            }
-          });
-        }
-
-        this.saveHives(hives);
-        meta.version = this.VERSION;
-        this.saveMeta(meta);
-      },
-
-      createInspection(hive, date) {
-        const prev = Array.isArray(hive.inspections) ? hive.inspections[0] : null;
-
-        const insp = {
-          id: Utils.uuid(),
-          date: date || Utils.today(),
-          queenPresent: false,
-          notes: "",
-          flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-          photos: [],
-
-          framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
-          frameMap: Array.isArray(prev?.frameMap)
-            ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
-            : [],
-
-          miteTreatment: { type:"", installed:"", due:"" }
+        reader.onreadingerror = () => {
+          if (mySession !== State.scanSession) return;
+          UI.status("Read error — press Scan again");
+          this.stopScan();
         };
 
-        hive.inspections.unshift(insp);
-        return insp;
-      },
+        reader.onreading = (event) => {
+          if (mySession !== State.scanSession) return;
 
-      getOrCreateTodayInspection(hive) {
-        const t = Utils.today();
-        return hive.inspections.find(i => i.date === t) || this.createInspection(hive, t);
+          const tagId = event.serialNumber;
+          if (!tagId) {
+            UI.status("No tag ID read — press Scan again");
+            this.stopScan();
+            return;
+          }
+
+          App.handleHiveLoad(tagId);
+          this.stopScan();
+        };
+
+      } catch (err) {
+        UI.status("Scan failed: " + (err.message || err));
+        this.stopScan();
       }
-    };
+    }
+  };
 
-    // ---------------- Photos (IndexedDB) ----------------
-    const Photos = {
-      db: null,
-      DB_NAME: "hive-tracker",
-      STORE: "photos",
+  // =========================================================
+  // 9) APP (High-level workflows)
+  // =========================================================
 
-      async open() {
-        if (this.db) return this.db;
-        this.db = await new Promise((resolve, reject) => {
-          const req = indexedDB.open(this.DB_NAME, 1);
-          req.onupgradeneeded = () => {
-            const db = req.result;
-            if (!db.objectStoreNames.contains(this.STORE)) {
-              db.createObjectStore(this.STORE, { keyPath: "id" });
-            }
-          };
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
-        });
-        return this.db;
-      },
+  const App = {
+    handleHiveLoad(tagId) {
+      const hives = Storage.loadHives();
+      State.currentHiveId = tagId;
 
-      async putBlob(blob) {
-        const id = Utils.uuid();
-        const db = await this.open();
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction(this.STORE, "readwrite");
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error || new Error("Photo save failed"));
-          tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
-        });
-        return id;
-      },
-
-      async putBlobWithId(id, blob) {
-        const db = await this.open();
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction(this.STORE, "readwrite");
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
-          tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
-        });
-        return id;
-      },
-
-      async getBlob(id) {
-        const db = await this.open();
-        return await new Promise((resolve, reject) => {
-          const tx = db.transaction(this.STORE, "readonly");
-          const req = tx.objectStore(this.STORE).get(id);
-          req.onsuccess = () => resolve(req.result ? req.result.blob : null);
-          req.onerror = () => reject(req.error || new Error("Photo read failed"));
-        });
-      },
-
-      async delete(id) {
-        const db = await this.open();
-        await new Promise((resolve, reject) => {
-          const tx = db.transaction(this.STORE, "readwrite");
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error || new Error("Photo delete failed"));
-          tx.objectStore(this.STORE).delete(id);
-        });
-      },
-
-      async deleteMany(ids) {
-        for (const id of (ids || [])) {
-          try { await this.delete(id); } catch (_) {}
-        }
+      if (!hives[tagId]) {
+        hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
       }
-    };
 
-    // ---------------- State ----------------
-    const State = {
-      currentHiveId: null,
-      currentInspectionId: null,
-      scanning: false,
-      activeReader: null,
-      scanSession: 0,
-      lastPosition: null,
+      const hive = hives[tagId];
+      if (!Array.isArray(hive.inspections)) hive.inspections = [];
 
-      painting: false,
-      paintValue: null
-    };
+      const selectedYard = (el.currentYard.value || "").trim();
+      if (!hive.location && selectedYard) hive.location = selectedYard;
 
-    // ---------------- Elements ----------------
-    const el = {
-      btnScan: document.getElementById("scanNfc"),
-      status: document.getElementById("status"),
-      hiveForm: document.getElementById("hiveForm"),
+      hive.inspections.forEach(i => UI.ensureInspectionDefaults(i));
 
-      hiveIdDisplay: document.getElementById("hiveIdDisplay"),
-      hiveName: document.getElementById("hiveName"),
-      location: document.getElementById("location"),
-      date: document.getElementById("lastInspection"),
-      framesCount: document.getElementById("framesCount"),
-      frameLegend: document.getElementById("frameLegend"),
-      frameMap: document.getElementById("frameMap"),
-      frameSummary: document.getElementById("frameSummary"),
+      const insp = Storage.getOrCreateTodayInspection(hive);
+      UI.ensureInspectionDefaults(insp);
+      State.currentInspectionId = insp.id;
 
-      queen: document.getElementById("queenPresent"),
-      notes: document.getElementById("notes"),
-      history: document.getElementById("history"),
+      const res = Storage.saveHives(hives);
+      if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
 
-      currentYard: document.getElementById("currentYard"),
-      yardList: document.getElementById("yardList"),
-      yardHives: document.getElementById("yardHives"),
+      el.hiveIdDisplay.textContent = tagId;
+      el.hiveName.value = hive.name || "";
+      el.location.value = hive.location || "";
+      UI.renderHiveYardGps();
 
-      newInspectionBtn: document.getElementById("newInspectionBtn"),
-      captureYardGps: document.getElementById("captureYardGps"),
-      detectNearestYard: document.getElementById("detectNearestYard"),
-      yardGps: document.getElementById("yardGps"),
+      el.hiveForm.classList.remove("hidden");
+      UI.loadInspectionIntoForm(hive, State.currentInspectionId);
+      UI.refreshYardUI();
 
-      exportCsv: document.getElementById("exportCsv"),
-      exportZip: document.getElementById("exportZip"),
-      importZipBtn: document.getElementById("importZipBtn"),
-      importZipInput: document.getElementById("importZipInput"),
+      UI.status("Hive loaded: " + (hive.name || tagId));
+      if (!hive.name) setTimeout(() => el.hiveName.focus(), 150);
+    },
 
-      exportCurrentYardOnly: document.getElementById("exportCurrentYardOnly"),
+    saveCurrentHiveAndInspection() {
+      if (!State.currentHiveId) return;
 
-      hiveYardGps: document.getElementById("hiveYardGps"),
+      const hives = Storage.loadHives();
+      const hive = hives[State.currentHiveId];
+      if (!hive) return;
 
-      flagButtons: document.getElementById("flagButtons"),
+      hive.name = el.hiveName.value;
+      hive.location = el.location.value;
+      if (!Array.isArray(hive.inspections)) hive.inspections = [];
 
-      addPhotoBtn: document.getElementById("addPhotoBtn"),
-      photoInput: document.getElementById("photoInput"),
-      photoGallery: document.getElementById("photoGallery"),
+      const insp = hive.inspections.find(i => i.id === State.currentInspectionId) || hive.inspections[0];
+      if (!insp) return;
 
-      viewer: document.getElementById("viewer"),
-      viewerImg: document.getElementById("viewerImg"),
-      viewerClose: document.getElementById("viewerClose"),
+      UI.ensureInspectionDefaults(insp);
 
-      // mites (collapsible)
-      miteToggleBtn: document.getElementById("miteToggleBtn"),
-      miteSection: document.getElementById("miteSection"),
-      miteClearBtn: document.getElementById("miteClearBtn"),
+      insp.date = el.date.value || Utils.today();
+      insp.queenPresent = el.queen.checked;
+      insp.notes = el.notes.value;
 
-      miteTreatmentType: document.getElementById("miteTreatmentType"),
-      miteInstalled: document.getElementById("miteInstalled"),
-      miteDue: document.getElementById("miteDue"),
-      miteBadgeCurrent: document.getElementById("miteBadgeCurrent"),
-      miteNotice: document.getElementById("miteNotice"),
-      miteTimeline: document.getElementById("miteTimeline"),
-    };
+      State.currentInspectionId = insp.id;
 
-    for (const [k, v] of Object.entries(el)) {
-      if (!v) {
-        alert(`Missing required HTML element: ${k}`);
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      const res = Storage.saveHives(hives);
+      if (!res.ok) {
+        UI.status("Save failed (storage full?) — export ZIP backup!");
         return;
       }
+
+      UI.renderHistory(hive);
+      UI.refreshYardUI();
+      UI.renderHiveYardGps();
+      UI.status("Saved: " + (hive.name || hive.id));
+    }
+  };
+
+  // =========================================================
+  // 10) FORM -> MODEL HELPERS (small dedicated save helpers)
+  // =========================================================
+
+  function saveMiteTreatmentFromForm() {
+    if (!State.currentHiveId || !State.currentInspectionId) return;
+
+    const hives = Storage.loadHives();
+    const hive = hives[State.currentHiveId];
+    if (!hive) return;
+
+    const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
+    if (!insp) return;
+
+    UI.ensureInspectionDefaults(insp);
+
+    insp.miteTreatment = {
+      type: (el.miteTreatmentType.value || "").trim(),
+      installed: el.miteInstalled.value || "",
+      due: el.miteDue.value || ""
+    };
+
+    const res = Storage.saveHives(hives);
+    if (!res.ok) {
+      UI.status("Save failed (storage full?) — export ZIP backup!");
+      return;
     }
 
-    // ---------------- UI ----------------
-    const UI = {
-      status(text) { el.status.textContent = text || ""; },
-
-      ensureInspectionDefaults(insp) {
-        if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
-        if (!Array.isArray(insp.photos)) insp.photos = [];
-        if (typeof insp.framesCount !== "number") insp.framesCount = 10;
-        if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
-        if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
-          insp.miteTreatment = { type:"", installed:"", due:"" };
-        } else {
-          insp.miteTreatment.type = (insp.miteTreatment.type || "");
-          insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
-          insp.miteTreatment.due = (insp.miteTreatment.due || "");
-        }
-      },
-
-      renderBadgesFromFlags(flags) {
-        const order = [
-          ["strong", "Strong"],
-          ["weak", "Weak"],
-          ["queenless", "Queenless"],
-          ["followUp", "Follow-up"],
-          ["fed", "Fed"]
-        ];
-        return order
-          .filter(([key]) => !!flags?.[key])
-          .map(([_, label]) => `<span class="badge on">${label}</span>`)
-          .join("");
-      },
-
-      // ---------- Mites ----------
-      parseISODate(d) {
-        if (!d || typeof d !== "string") return null;
-        const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
-        if (!y || !m || !day) return null;
-        return new Date(y, m - 1, day);
-      },
-
-      daysDiff(a, b) {
-        const ms = 24 * 60 * 60 * 1000;
-        return Math.round((b.getTime() - a.getTime()) / ms);
-      },
-
-      renderMiteBadge(miteTreatment) {
-        const t = (miteTreatment?.type || "").trim();
-        if (!t) return "";
-
-        const dueStr = (miteTreatment?.due || "").trim();
-        const todayStr = Utils.today();
-
-        let cls = "badge on";
-        if (dueStr) {
-          const due = new Date(dueStr + "T00:00:00");
-          const today = new Date(todayStr + "T00:00:00");
-          const msPerDay = 24 * 60 * 60 * 1000;
-          const days = Math.round((due - today) / msPerDay);
-
-          if (days <= 0) cls = "badge warn";
-          else if (days <= 7) cls = "badge soon";
-        }
-
-        const dueText = dueStr ? ` • due ${dueStr}` : "";
-        return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
-      },
-
-      getMiteStatus(insp) {
-        const mt = insp?.miteTreatment;
-        const type = (mt?.type || "").trim();
-        const dueStr = mt?.due || "";
-        const installedStr = mt?.installed || "";
-
-        if (!type && !dueStr && !installedStr) return { level: "none", text: "" };
-
-        const today = this.parseISODate(Utils.today());
-        const due = this.parseISODate(dueStr);
-
-        if (!due || !today) {
-          return { level: "warn", text: "Mite treatment saved — add a due date for reminders." };
-        }
-
-        const d = this.daysDiff(today, due);
-
-        if (d === 0) return { level: "warn", text: "🟠 Due today" };
-        if (d < 0)  return { level: "bad",  text: `🔴 Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` };
-        if (d <= 3) return { level: "warn", text: `🟠 Due in ${d} day${d === 1 ? "" : "s"}` };
-
-        return { level: "good", text: `🟢 Due in ${d} days` };
-      },
-
-      renderMiteBadgeInForm(insp) {
-        const html = this.renderMiteBadge(insp?.miteTreatment);
-        if (!html) {
-          el.miteBadgeCurrent.innerHTML = `<em>No mite treatment set for this inspection.</em>`;
-          return;
-        }
-        el.miteBadgeCurrent.innerHTML = `Treatment status: ${html}`;
-      },
-
-      renderMiteNoticeInForm(insp) {
-        const s = this.getMiteStatus(insp);
-
-        if (!s.text) {
-          el.miteNotice.textContent = "";
-          el.miteNotice.className = "small";
-          return;
-        }
-
-        el.miteNotice.textContent = s.text;
-        el.miteNotice.className = "small " + (
-          s.level === "bad"  ? "notice-bad" :
-          s.level === "warn" ? "notice-warn" :
-          s.level === "good" ? "notice-good" : ""
-        );
-      },
-
-      renderMiteTimeline(hive) {
-        const insps = Array.isArray(hive?.inspections) ? hive.inspections : [];
-        const rows = [];
-
-        for (const insp of insps) {
-          const mt = insp?.miteTreatment;
-          const type = (mt?.type || "").trim();
-          const installed = mt?.installed || "";
-          const due = mt?.due || "";
-          if (!type && !installed && !due) continue;
-
-          const whenStr = due || installed || insp.date || "";
-          const when = this.parseISODate(whenStr) || this.parseISODate(insp.date) || null;
-
-          const status = this.getMiteStatus(insp);
-
-          rows.push({
-            inspId: insp.id,
-            date: insp.date || "",
-            type,
-            installed,
-            due,
-            when,
-            status
-          });
-        }
-
-        if (rows.length === 0) {
-          el.miteTimeline.innerHTML = `<em class="small">No mite treatments recorded yet for this hive.</em>`;
-          return;
-        }
-
-        rows.sort((a, b) => {
-          const ta = a.when ? a.when.getTime() : 0;
-          const tb = b.when ? b.when.getTime() : 0;
-          return tb - ta;
-        });
-
-        const maxRows = 20;
-        const shown = rows.slice(0, maxRows);
-
-        el.miteTimeline.innerHTML = "";
-        for (const r of shown) {
-          const row = document.createElement("div");
-          row.className = "timeline-row";
-
-          const dot = document.createElement("div");
-          dot.className = "timeline-dot " + (
-            r.status.level === "bad" ? "bad" :
-            r.status.level === "warn" ? "warn" :
-            r.status.level === "good" ? "good" : ""
-          );
-
-          const main = document.createElement("div");
-          main.className = "timeline-main";
-
-          const title = document.createElement("div");
-          title.className = "timeline-title";
-          title.textContent = r.type ? r.type : "Mite treatment";
-
-          const meta = document.createElement("div");
-          meta.className = "timeline-meta";
-          meta.textContent =
-            `${r.date ? `Inspection: ${r.date}` : ""}` +
-            `${r.installed ? ` • Installed: ${r.installed}` : ""}` +
-            `${r.due ? ` • Due: ${r.due}` : ""}`;
-
-          const actions = document.createElement("div");
-          actions.className = "timeline-actions";
-
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "timeline-btn";
-          btn.textContent = "Open inspection";
-          btn.addEventListener("click", () => {
-            UI.loadInspectionIntoForm(hive, r.inspId);
-            try { el.miteTreatmentType.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
-          });
-
-          actions.appendChild(btn);
-
-          if (r.status.text) {
-            const s = document.createElement("div");
-            s.className =
-              "small " +
-              (r.status.level === "bad" ? "notice-bad" :
-               r.status.level === "warn" ? "notice-warn" :
-               r.status.level === "good" ? "notice-good" : "");
-            s.style.marginTop = "0.25rem";
-            s.textContent = r.status.text;
-            main.appendChild(s);
-          }
-
-          main.appendChild(title);
-          main.appendChild(meta);
-          main.appendChild(actions);
-
-          row.appendChild(dot);
-          row.appendChild(main);
-          el.miteTimeline.appendChild(row);
-        }
-
-        if (rows.length > maxRows) {
-          const more = document.createElement("div");
-          more.className = "small";
-          more.style.marginTop = "0.5rem";
-          more.textContent = `Showing latest ${maxRows} of ${rows.length} treatments.`;
-          el.miteTimeline.appendChild(more);
-        }
-      },
-
-      miteIsInUse(insp) {
-        const mt = insp?.miteTreatment || {};
-        return !!((mt.type || "").trim() || (mt.installed || "").trim() || (mt.due || "").trim());
-      },
-
-      updateMiteSectionVisibility(insp) {
-        const inUse = this.miteIsInUse(insp);
-
-        if (inUse) {
-          el.miteSection.classList.remove("hidden");
-          el.miteToggleBtn.textContent = "🐜 Mite Treatment (in use) — Hide";
-        } else {
-          el.miteSection.classList.add("hidden");
-          el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
-        }
-      },
-
-      clearMiteUI() {
-        el.miteBadgeCurrent.innerHTML = "";
-        el.miteNotice.textContent = "";
-        el.miteTimeline.innerHTML = "";
-      },
-
-      updateMitesUI(hive, insp) {
-        this.updateMiteSectionVisibility(insp);
-        if (!el.miteSection.classList.contains("hidden")) {
-          this.renderMiteBadgeInForm(insp);
-          this.renderMiteNoticeInForm(insp);
-          this.renderMiteTimeline(hive);
-        } else {
-          this.clearMiteUI();
-        }
-      },
-
-      // ---------- Frames ----------
-      renderFrameSummary(insp) {
-        if (!Array.isArray(insp.frameMap)) {
-          el.frameSummary.textContent = "";
-          return;
-        }
-
-        let pollen = 0, honey = 0, brood = 0, empty = 0;
-
-        for (const frame of insp.frameMap) {
-          for (const seg of (frame || [])) {
-            if (seg === "pollen") pollen++;
-            else if (seg === "honey") honey++;
-            else if (seg === "brood") brood++;
-            else empty++;
-          }
-        }
-
-        const frames = Math.max(0, Number(insp.framesCount || insp.frameMap.length || 0));
-        const totalSections = frames * 4;
-
-        const pct = (n) => {
-          if (!totalSections) return "0%";
-          return `${Math.round((n / totalSections) * 100)}%`;
-        };
-
-        const broodPct = totalSections ? brood / totalSections : 0;
-        const cue =
-          broodPct >= 0.60 ? "🔥 Strong brood" :
-          broodPct >= 0.35 ? "✅ Good brood" :
-          broodPct > 0    ? "⚠️ Light brood" :
-                            "—";
-
-        el.frameSummary.innerHTML =
-          `🟨 Pollen: <strong>${pollen}</strong> (${pct(pollen)}) &nbsp; ` +
-          `🍯 Honey: <strong>${honey}</strong> (${pct(honey)}) &nbsp; ` +
-          `🟪 Brood: <strong>${brood}</strong> (${pct(brood)})` +
-          `<br>` +
-          `🧮 Total sections: <strong>${totalSections}</strong> (${frames} frames) &nbsp; • &nbsp; ${cue}`;
-      },
-
-      renderFrameLegend() {
-        const items = [
-          ["seg-none", "Empty"],
-          ["seg-honey", "Honey"],
-          ["seg-brood", "Brood"],
-          ["seg-pollen", "Pollen"],
-        ];
-        el.frameLegend.innerHTML = items.map(([cls, label]) =>
-          `<span><span class="swatch ${cls}"></span>${label}</span>`
-        ).join("");
-      },
-
-      normalizeFrameMap(insp) {
-        const frames = Math.max(1, Math.min(20, Math.floor(insp.framesCount || 10)));
-        insp.framesCount = frames;
-
-        if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
-
-        for (let f = 0; f < frames; f++) {
-          if (!Array.isArray(insp.frameMap[f])) insp.frameMap[f] = [];
-          for (let s = 0; s < 4; s++) {
-            const v = insp.frameMap[f][s];
-            if (v !== "pollen" && v !== "honey" && v !== "brood" && v !== "none") {
-              insp.frameMap[f][s] = "none";
-            }
-          }
-        }
-        insp.frameMap = insp.frameMap.slice(0, frames);
-      },
-
-      nextSegValue(v) {
-        const order = ["none", "honey", "brood", "pollen"];
-        const idx = Math.max(0, order.indexOf(v));
-        return order[(idx + 1) % order.length];
-      },
-
-      frameIntensity(frameSegments) {
-        const segs = Array.isArray(frameSegments) ? frameSegments : [];
-        const filled = segs.filter(v => v && v !== "none").length;
-        return Math.max(0, Math.min(1, filled / 4));
-      },
-
-      applySegValue(hive, insp, f, s, value, segEl) {
-        if (!State.currentHiveId || !State.currentInspectionId) return;
-
-        const hives = Storage.loadHives();
-        const hive2 = hives[State.currentHiveId];
-        if (!hive2 || !Array.isArray(hive2.inspections)) return;
-
-        const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
-        if (!insp2) return;
-
-        UI.ensureInspectionDefaults(insp2);
-        UI.normalizeFrameMap(insp2);
-
-        insp2.frameMap[f][s] = value;
-
-        const res = Storage.saveHives(hives);
-        if (!res.ok) {
-          UI.status("Save failed (storage full?) — export ZIP backup!");
-          return;
-        }
-
-        insp.frameMap[f][s] = value;
-        if (segEl) segEl.className = `frame-seg seg-${value}`;
-
-        UI.renderFrameSummary(insp2);
-
-        const colEl = segEl?.closest(".frame-col");
-        if (colEl) {
-          const intensity = UI.frameIntensity(insp2.frameMap[f]);
-          colEl.style.setProperty("--intensity", String(intensity));
-
-          const meterFill = colEl.querySelector(".frame-meter-fill");
-          if (meterFill) {
-            const filled = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
-              .filter(v => v && v !== "none").length;
-            meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
-          }
-        }
-      },
-
-      startPainting(value) {
-        State.painting = true;
-        State.paintValue = value;
-      },
-
-      stopPainting() {
-        State.painting = false;
-        State.paintValue = null;
-      },
-
-      renderFrameMap(hive, insp) {
-        this.ensureInspectionDefaults(insp);
-        this.normalizeFrameMap(insp);
-        this.renderFrameLegend();
-        this.renderFrameSummary(insp);
-
-        el.framesCount.value = insp.framesCount;
-        el.frameMap.style.gridTemplateColumns = `repeat(${insp.framesCount}, minmax(0, 1fr))`;
-        el.frameMap.innerHTML = "";
-
-        for (let f = 0; f < insp.framesCount; f++) {
-          const col = document.createElement("div");
-          col.className = "frame-col";
-
-          const intensity = this.frameIntensity(insp.frameMap[f]);
-          col.style.setProperty("--intensity", String(intensity));
-
-          const title = document.createElement("div");
-          title.className = "frame-col-title";
-          title.textContent = `${f + 1}`;
-          col.appendChild(title);
-
-          const meter = document.createElement("div");
-          meter.className = "frame-meter";
-          const meterFill = document.createElement("div");
-          meterFill.className = "frame-meter-fill";
-          meter.appendChild(meterFill);
-          col.appendChild(meter);
-
-          const filled0 = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : [])
-            .filter(v => v && v !== "none").length;
-          meterFill.style.width = `${Math.round((filled0 / 4) * 100)}%`;
-
-          for (let s = 0; s < 4; s++) {
-            const seg = document.createElement("div");
-            const v = insp.frameMap[f][s] || "none";
-            seg.className = `frame-seg seg-${v}`;
-            seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
-
-            seg.addEventListener("pointerdown", (ev) => {
-              ev.preventDefault();
-              seg.setPointerCapture(ev.pointerId);
-
-              const current = insp.frameMap[f][s] || "none";
-              const next = UI.nextSegValue(current);
-
-              UI.startPainting(next);
-              UI.applySegValue(hive, insp, f, s, next, seg);
-            });
-
-            seg.addEventListener("pointerenter", () => {
-              if (!State.painting || !State.paintValue) return;
-              const current = insp.frameMap[f][s] || "none";
-              if (current === State.paintValue) return;
-              UI.applySegValue(hive, insp, f, s, State.paintValue, seg);
-            });
-
-            seg.addEventListener("pointerup", () => UI.stopPainting());
-            seg.addEventListener("pointercancel", () => UI.stopPainting());
-
-            col.appendChild(seg);
-          }
-
-          el.frameMap.appendChild(col);
-        }
-      },
-
-      loadInspectionIntoForm(hive, inspectionId) {
-        const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
-        if (!insp) return;
-
-        this.ensureInspectionDefaults(insp);
-
-        State.currentInspectionId = insp.id;
-        el.date.value = insp.date || Utils.today();
-        el.framesCount.value = insp.framesCount || 10;
-        el.queen.checked = !!insp.queenPresent;
-        el.notes.value = insp.notes || "";
-
-        // mites
-        el.miteTreatmentType.value = insp.miteTreatment?.type || "";
-        el.miteInstalled.value = insp.miteTreatment?.installed || "";
-        el.miteDue.value = insp.miteTreatment?.due || "";
-        this.updateMitesUI(hive, insp);
-
-        this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
-
-        this.renderFlagButtons(hive, insp);
-        this.renderHistory(hive);
-        this.renderPhotoGallery(hive, insp).catch(() => {});
-        this.renderFrameMap(hive, insp);
-      },
-
-      renderHistory(hive) {
-        el.history.innerHTML = "";
-
-        if (!hive.inspections || hive.inspections.length === 0) {
-          el.history.innerHTML = "<em>No inspections yet.</em>";
-          return;
-        }
-
-        hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-        hive.inspections.forEach((insp) => {
-          this.ensureInspectionDefaults(insp);
-
-          const row = document.createElement("div");
-          row.className = "history-item" + (insp.id === State.currentInspectionId ? " selected" : "");
-
-          const left = document.createElement("div");
-          left.className = "history-left";
-
-          const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
-          const notesPreview = (insp.notes || "").trim().slice(0, 60);
-          const badges = this.renderBadgesFromFlags(insp.flags);
-          const miteBadge = this.renderMiteBadge(insp.miteTreatment);
-          const photoCount = (insp.photos?.length || 0);
-
-          left.innerHTML = `
-            <div><strong>${insp.date || "(no date)"}</strong></div>
-            <div class="small">
-              ${queenText}
-              ${badges ? " • " + badges : ""}
-              ${miteBadge ? " • " + miteBadge : ""}
-              ${photoCount ? ` • 📷 ${photoCount}` : ""}
-              ${notesPreview ? " • " + notesPreview : ""}
-            </div>
-          `;
-
-          left.addEventListener("click", () => {
-            this.loadInspectionIntoForm(hive, insp.id);
-          });
-
-          const delBtn = document.createElement("button");
-          delBtn.type = "button";
-          delBtn.className = "btn btn-danger";
-          delBtn.style.width = "auto";
-          delBtn.style.padding = "0.4rem 0.6rem";
-          delBtn.textContent = "Delete";
-
-          delBtn.addEventListener("click", async () => {
-            if (!confirm("Delete this inspection? (Photos attached to it will also be deleted.)")) return;
-
-            try { await Photos.deleteMany(insp.photos || []); } catch (_) {}
-
-            hive.inspections = hive.inspections.filter(i => i.id !== insp.id);
-
-            if (State.currentInspectionId === insp.id) {
-              State.currentInspectionId = hive.inspections[0]?.id || null;
-              if (State.currentInspectionId) this.loadInspectionIntoForm(hive, State.currentInspectionId);
-              else {
-                el.date.value = Utils.today();
-                el.framesCount.value = 10;
-                el.queen.checked = false;
-                el.notes.value = "";
-
-                // mites UI cleanup
-                el.miteTreatmentType.value = "";
-                el.miteInstalled.value = "";
-                el.miteDue.value = "";
-                el.miteSection.classList.add("hidden");
-                el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
-                this.clearMiteUI();
-
-                el.flagButtons.innerHTML = "";
-                el.photoGallery.innerHTML = "";
-                el.frameLegend.innerHTML = "";
-                el.frameMap.innerHTML = "";
-              }
-            }
-
-            const hives = Storage.loadHives();
-            hives[hive.id] = hive;
-            const res = Storage.saveHives(hives);
-            if (!res.ok) this.status("Save failed (storage full?) — export ZIP backup!");
-
-            this.renderHistory(hive);
-            this.status("Inspection deleted");
-          });
-
-          row.appendChild(left);
-          row.appendChild(delBtn);
-          el.history.appendChild(row);
-        });
-      },
-
-      refreshYardUI() {
-        const hives = Storage.loadHives();
-
-        const yardsSet = new Set();
-        Object.values(hives).forEach(h => { if (h.location) yardsSet.add(h.location); });
-
-        el.yardList.innerHTML = "";
-        [...yardsSet].sort().forEach(y => {
-          const opt = document.createElement("option");
-          opt.value = y;
-          el.yardList.appendChild(opt);
-        });
-
-        const selected = (el.currentYard.value || "").trim();
-        if (!selected) {
-          el.yardHives.innerHTML = "<em>Enter a yard name to list its hives.</em>";
-          return;
-        }
-
-        const yardHives = Object.values(hives)
-          .filter(h => (h.location || "").trim() === selected)
-          .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-
-        if (yardHives.length === 0) {
-          el.yardHives.innerHTML = `<em>No hives saved in "${selected}".</em>`;
-          return;
-        }
-
-        el.yardHives.innerHTML = `<strong>Hives in ${selected}:</strong><div id="yardHiveButtons" style="margin-top:0.5rem;"></div>`;
-        const container = document.getElementById("yardHiveButtons");
-
-        yardHives.forEach(h => {
-          const b = document.createElement("button");
-          b.type = "button";
-          b.className = "btn";
-          b.style.margin = "0.25rem 0";
-          b.textContent = h.name ? `${h.name}` : h.id;
-          b.addEventListener("click", () => App.handleHiveLoad(h.id));
-          container.appendChild(b);
-        });
-      },
-
-      renderYardGps(yardName) {
-        if (!yardName) { el.yardGps.textContent = ""; return; }
-
-        const y = Storage.loadYards()[yardName];
-        if (!y) {
-          el.yardGps.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
-          return;
-        }
-
-        let distText = "";
-        if (State.lastPosition) {
-          const d = Utils.distanceMeters(
-            State.lastPosition.coords.latitude,
-            State.lastPosition.coords.longitude,
-            y.lat, y.lon
-          );
-          distText = ` • Distance: ${Math.round(d)} m`;
-        }
-
-        const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
-
-        el.yardGps.innerHTML =
-          `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
-          `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
-      },
-
-      renderHiveYardGps() {
-        const yardName = (el.location.value || "").trim();
-        if (!yardName) { el.hiveYardGps.textContent = ""; return; }
-
-        const y = Storage.loadYards()[yardName];
-        if (!y) {
-          el.hiveYardGps.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
-          return;
-        }
-
-        let distText = "";
-        if (State.lastPosition) {
-          const d = Utils.distanceMeters(
-            State.lastPosition.coords.latitude,
-            State.lastPosition.coords.longitude,
-            y.lat, y.lon
-          );
-          distText = ` • Distance: ${Math.round(d)} m`;
-        }
-
-        const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
-
-        el.hiveYardGps.innerHTML =
-          `📍 ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
-          `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
-      },
-
-      renderFlagButtons(hive, insp) {
-        const defs = [
-          ["strong", "Strong 💪"],
-          ["weak", "Weak 🥶"],
-          ["queenless", "Queenless 👑❌"],
-          ["followUp", "Follow-up 🔁"],
-          ["fed", "Fed 🍯"]
-        ];
-
-        el.flagButtons.innerHTML = "";
-        defs.forEach(([key, label]) => {
-          const b = document.createElement("button");
-          b.type = "button";
-          b.className = "flag-btn" + (insp.flags?.[key] ? " on" : "");
-          b.textContent = label;
-          b.addEventListener("click", () => {
-            insp.flags[key] = !insp.flags[key];
-            b.classList.toggle("on", insp.flags[key]);
-            App.saveCurrentHiveAndInspection();
-          });
-          el.flagButtons.appendChild(b);
-        });
-      },
-
-      async renderPhotoGallery(hive, insp) {
-        el.photoGallery.innerHTML = "";
-        const ids = insp.photos || [];
-        if (ids.length === 0) return;
-
-        for (const photoId of ids) {
-          const blob = await Photos.getBlob(photoId);
-          if (!blob) continue;
-
-          const url = URL.createObjectURL(blob);
-
-          const wrap = document.createElement("div");
-          wrap.className = "thumb-wrap";
-
-          const img = document.createElement("img");
-          img.className = "thumb";
-          img.src = url;
-          img.alt = "Photo";
-          img.addEventListener("click", () => {
-            el.viewerImg.src = url;
-            el.viewer.style.display = "flex";
-          });
-
-          const del = document.createElement("button");
-          del.type = "button";
-          del.className = "thumb-del";
-          del.textContent = "✕";
-          del.addEventListener("click", async (ev) => {
-            ev.stopPropagation();
-            if (!confirm("Delete this photo?")) return;
-
-            insp.photos = (insp.photos || []).filter(id => id !== photoId);
-            try { await Photos.delete(photoId); } catch (_) {}
-
-            App.saveCurrentHiveAndInspection();
-            await this.renderPhotoGallery(hive, insp);
-          });
-
-          wrap.appendChild(img);
-          wrap.appendChild(del);
-          el.photoGallery.appendChild(wrap);
-        }
-      }
-    };
-
-    // ---------------- GPS ----------------
-    const GPS = {
-      getCurrentPositionOnce() {
-        return new Promise((resolve, reject) => {
-          if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
-          navigator.geolocation.getCurrentPosition(
-            (pos) => resolve(pos),
-            (err) => reject(err),
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-          );
-        });
-      },
-
-      findNearestYard(radiusMeters = 100) {
-        if (!State.lastPosition) return null;
-        const yards = Storage.loadYards();
-        const lat = State.lastPosition.coords.latitude;
-        const lon = State.lastPosition.coords.longitude;
-
-        let best = null;
-        for (const [name, y] of Object.entries(yards)) {
-          if (!y || typeof y.lat !== "number" || typeof y.lon !== "number") continue;
-          const d = Utils.distanceMeters(lat, lon, y.lat, y.lon);
-          if (d <= radiusMeters && (!best || d < best.meters)) best = { name, meters: d };
-        }
-        return best;
-      }
-    };
-
-    // ---------------- NFC ----------------
-    const NFC = {
-      stopScan() {
-        State.scanning = false;
-        State.scanSession++;
-        if (State.activeReader) {
-          try { State.activeReader.onreading = null; } catch (_) {}
-          try { State.activeReader.onreadingerror = null; } catch (_) {}
-          try { State.activeReader.abort(); } catch (_) {}
-        }
-        State.activeReader = null;
-        UI.status("Ready");
-      },
-
-      async startScan() {
-        if (State.scanning) return;
-        this.stopScan();
-        State.scanning = true;
-        const mySession = State.scanSession;
-
-        if (!("NDEFReader" in window)) {
-          alert("Web NFC not supported on this device/browser.");
-          State.scanning = false;
-          return;
-        }
-
-        if (!(el.currentYard.value || "").trim()) {
-          try {
-            const pos = await GPS.getCurrentPositionOnce();
-            State.lastPosition = pos;
-            const nearest = GPS.findNearestYard(100);
-            if (nearest) {
-              el.currentYard.value = nearest.name;
-              UI.refreshYardUI();
-              UI.renderYardGps(nearest.name);
-            }
-          } catch (_) {}
-        }
-
-        try {
-          const reader = new NDEFReader();
-          State.activeReader = reader;
-
-          UI.status("Scanning… tap hive tag");
-          await reader.scan();
-
-          reader.onreadingerror = () => {
-            if (mySession !== State.scanSession) return;
-            UI.status("Read error — press Scan again");
-            this.stopScan();
-          };
-
-          reader.onreading = (event) => {
-            if (mySession !== State.scanSession) return;
-
-            const tagId = event.serialNumber;
-            if (!tagId) {
-              UI.status("No tag ID read — press Scan again");
-              this.stopScan();
-              return;
-            }
-
-            App.handleHiveLoad(tagId);
-            this.stopScan();
-          };
-
-        } catch (err) {
-          UI.status("Scan failed: " + (err.message || err));
-          this.stopScan();
-        }
-      }
-    };
-
+    UI.updateMitesUI(hive, insp);
+    UI.renderHistory(hive);
+  }
+
+  // =========================================================
+  // 11) EVENT LISTENERS (ONE place only)
+  //     Rule: never scatter addEventListener elsewhere.
+  // =========================================================
+
+  function bindEventListeners() {
+    if (State.listenersBound) return; // safety guard
+    State.listenersBound = true;
+
+    // Stop NFC scanning if app backgrounded
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) NFC.stopScan();
     });
 
-    // ---------------- App ----------------
-    const App = {
-      handleHiveLoad(tagId) {
-        const hives = Storage.loadHives();
-        State.currentHiveId = tagId;
-
-        if (!hives[tagId]) {
-          hives[tagId] = { id: tagId, name: "", location: "", inspections: [] };
-        }
-
-        const hive = hives[tagId];
-        if (!Array.isArray(hive.inspections)) hive.inspections = [];
-
-        const selectedYard = (el.currentYard.value || "").trim();
-        if (!hive.location && selectedYard) hive.location = selectedYard;
-
-        hive.inspections.forEach(i => UI.ensureInspectionDefaults(i));
-
-        const insp = Storage.getOrCreateTodayInspection(hive);
-        UI.ensureInspectionDefaults(insp);
-        State.currentInspectionId = insp.id;
-
-        const res = Storage.saveHives(hives);
-        if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
-
-        el.hiveIdDisplay.textContent = tagId;
-        el.hiveName.value = hive.name || "";
-        el.location.value = hive.location || "";
-        UI.renderHiveYardGps();
-
-        el.hiveForm.classList.remove("hidden");
-        UI.loadInspectionIntoForm(hive, State.currentInspectionId);
-        UI.refreshYardUI();
-
-        UI.status("Hive loaded: " + (hive.name || tagId));
-        if (!hive.name) setTimeout(() => el.hiveName.focus(), 150);
-      },
-
-      saveCurrentHiveAndInspection() {
-        if (!State.currentHiveId) return;
-
-        const hives = Storage.loadHives();
-        const hive = hives[State.currentHiveId];
-        if (!hive) return;
-
-        hive.name = el.hiveName.value;
-        hive.location = el.location.value;
-        if (!Array.isArray(hive.inspections)) hive.inspections = [];
-
-        const insp = hive.inspections.find(i => i.id === State.currentInspectionId) || hive.inspections[0];
-        if (!insp) return;
-
-        UI.ensureInspectionDefaults(insp);
-
-        insp.date = el.date.value || Utils.today();
-        insp.queenPresent = el.queen.checked;
-        insp.notes = el.notes.value;
-
-        State.currentInspectionId = insp.id;
-
-        hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-        const res = Storage.saveHives(hives);
-        if (!res.ok) {
-          UI.status("Save failed (storage full?) — export ZIP backup!");
-          return;
-        }
-
-        UI.renderHistory(hive);
-        UI.refreshYardUI();
-        UI.renderHiveYardGps();
-        UI.status("Saved: " + (hive.name || hive.id));
-      }
-    };
-
-    // ---------------- Photo viewer ----------------
-    el.viewerClose.addEventListener("click", () => {
-      el.viewer.style.display = "none";
-      el.viewerImg.src = "";
-    });
-    el.viewer.addEventListener("click", (e) => {
-      if (e.target === el.viewer) {
-        el.viewer.style.display = "none";
-        el.viewerImg.src = "";
-      }
-    });
-
-    // =========================================================
-    // Wiring (events)
-    // =========================================================
-
-    Storage.migrateIfNeeded();
-
+    // Global pointer safety for paint-mode
     document.addEventListener("pointerup", () => UI.stopPainting());
     document.addEventListener("pointercancel", () => UI.stopPainting());
 
+    // Yard typing updates yard UI + GPS panels
     el.currentYard.addEventListener("input", () => {
       UI.refreshYardUI();
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
     });
 
+    // Yard GPS capture
     el.captureYardGps.addEventListener("click", async () => {
       const yardName = (el.currentYard.value || "").trim();
       if (!yardName) { alert("Enter a yard name first."); return; }
@@ -1750,6 +1545,7 @@
       }
     });
 
+    // Nearest yard detection
     el.detectNearestYard.addEventListener("click", async () => {
       try {
         UI.status("Detecting nearest yard…");
@@ -1775,6 +1571,7 @@
       }
     });
 
+    // Hive form inputs -> save
     el.hiveName.addEventListener("input", () => App.saveCurrentHiveAndInspection());
     el.location.addEventListener("input", () => {
       App.saveCurrentHiveAndInspection();
@@ -1784,6 +1581,7 @@
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
 
+    // Frames count change -> normalize and rerender
     el.framesCount.addEventListener("change", () => {
       const frames = Math.max(1, Math.min(20, Math.floor(Number(el.framesCount.value || 10))));
       if (!State.currentHiveId || !State.currentInspectionId) return;
@@ -1806,6 +1604,7 @@
       UI.renderHistory(hive);
     });
 
+    // New inspection button
     el.newInspectionBtn.addEventListener("click", () => {
       if (!State.currentHiveId) return;
       const hives = Storage.loadHives();
@@ -1825,6 +1624,7 @@
       UI.status("New inspection created");
     });
 
+    // Photo add
     el.addPhotoBtn.addEventListener("click", () => {
       if (!State.currentHiveId || !State.currentInspectionId) {
         alert("Load a hive and inspection first.");
@@ -1834,6 +1634,7 @@
       el.photoInput.click();
     });
 
+    // Photo file input
     el.photoInput.addEventListener("change", async () => {
       const file = el.photoInput.files && el.photoInput.files[0];
       if (!file) return;
@@ -1869,39 +1670,12 @@
       }
     });
 
-    // ---------------- Mites ----------------
-    function saveMiteTreatmentFromForm() {
-      if (!State.currentHiveId || !State.currentInspectionId) return;
-
-      const hives = Storage.loadHives();
-      const hive = hives[State.currentHiveId];
-      if (!hive) return;
-
-      const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
-      if (!insp) return;
-
-      UI.ensureInspectionDefaults(insp);
-
-      insp.miteTreatment = {
-        type: (el.miteTreatmentType.value || "").trim(),
-        installed: el.miteInstalled.value || "",
-        due: el.miteDue.value || ""
-      };
-
-      const res = Storage.saveHives(hives);
-      if (!res.ok) {
-        UI.status("Save failed (storage full?) — export ZIP backup!");
-        return;
-      }
-
-      UI.updateMitesUI(hive, insp);
-      UI.renderHistory(hive);
-    }
-
+    // Mites: save on change
     el.miteTreatmentType.addEventListener("change", saveMiteTreatmentFromForm);
     el.miteInstalled.addEventListener("change", saveMiteTreatmentFromForm);
     el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
 
+    // Mite toggle (show/hide)
     el.miteToggleBtn.addEventListener("click", () => {
       if (!State.currentHiveId || !State.currentInspectionId) return;
 
@@ -1936,6 +1710,7 @@
       UI.clearMiteUI();
     });
 
+    // Mite clear button
     el.miteClearBtn.addEventListener("click", () => {
       if (!confirm("Clear mite treatment for this inspection?")) return;
 
@@ -1949,17 +1724,52 @@
       UI.clearMiteUI();
     });
 
-    // NFC button
+    // NFC scan button
     el.btnScan.addEventListener("click", async () => {
       await NFC.startScan();
     });
 
-    // Initial UI
+    // Photo viewer close / click-outside
+    el.viewerClose.addEventListener("click", () => {
+      el.viewer.style.display = "none";
+      el.viewerImg.src = "";
+    });
+    el.viewer.addEventListener("click", (e) => {
+      if (e.target === el.viewer) {
+        el.viewer.style.display = "none";
+        el.viewerImg.src = "";
+      }
+    });
+
+    // Export / Import listeners belong here too (when you paste them in)
+    // el.exportCsv.addEventListener("click", exportCsvHandler);
+    // el.exportZip.addEventListener("click", exportZipHandler);
+    // el.importZipBtn.addEventListener("click", () => el.importZipInput.click());
+    // el.importZipInput.addEventListener("change", importZipHandler);
+
+    console.debug("Listeners bound");
+  }
+
+  // =========================================================
+  // 12) INIT (Do these in order, once)
+  // =========================================================
+
+  function init() {
+    Storage.migrateIfNeeded();
+    bindEventListeners();
+
     UI.status("Ready");
     UI.refreshYardUI();
     UI.renderYardGps((el.currentYard.value || "").trim());
     UI.renderHiveYardGps();
-  });
-  </script>
+  }
+
+  // Start the app
+  init();
+
+});
+</script>
+
 </body>
 </html>
+
