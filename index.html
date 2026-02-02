@@ -203,9 +203,7 @@
       touch-action: none;
       user-select: none;
     }
-    .frame-seg:active {
-      outline: 2px solid rgba(0,0,0,0.15);
-    }
+    .frame-seg:active { outline: 2px solid rgba(0,0,0,0.15); }
 
     .seg-none { background: #f6f6f6; }
     .seg-pollen { background: #ffe59a; }
@@ -357,7 +355,7 @@
       Queen Present
     </label>
 
-    <!-- ✅ Mite Treatments (collapsible when unused) -->
+    <!-- Mites (collapsible) -->
     <button id="miteToggleBtn" type="button" class="btn btn-muted" style="margin-top:0.75rem;">
       ➕ Add Mite Treatment
     </button>
@@ -456,7 +454,7 @@
         // eslint-disable-next-line no-eval
         eval(code);
         return !!window.JSZip;
-      } catch (err) {
+      } catch (_) {
         return false;
       }
     }
@@ -1015,6 +1013,12 @@
         }
       },
 
+      clearMiteUI() {
+        el.miteBadgeCurrent.innerHTML = "";
+        el.miteNotice.textContent = "";
+        el.miteTimeline.innerHTML = "";
+      },
+
       updateMitesUI(hive, insp) {
         this.updateMiteSectionVisibility(insp);
         if (!el.miteSection.classList.contains("hidden")) {
@@ -1022,10 +1026,7 @@
           this.renderMiteNoticeInForm(insp);
           this.renderMiteTimeline(hive);
         } else {
-          // keep these clean when hidden
-          el.miteBadgeCurrent.innerHTML = "";
-          el.miteNotice.textContent = "";
-          el.miteTimeline.innerHTML = "";
+          this.clearMiteUI();
         }
       },
 
@@ -1317,11 +1318,15 @@
                 el.framesCount.value = 10;
                 el.queen.checked = false;
                 el.notes.value = "";
+
+                // mites UI cleanup
                 el.miteTreatmentType.value = "";
                 el.miteInstalled.value = "";
                 el.miteDue.value = "";
                 el.miteSection.classList.add("hidden");
                 el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+                this.clearMiteUI();
+
                 el.flagButtons.innerHTML = "";
                 el.photoGallery.innerHTML = "";
                 el.frameLegend.innerHTML = "";
@@ -1707,18 +1712,15 @@
 
     Storage.migrateIfNeeded();
 
-    // Safety: stop painting anywhere when pointer ends
     document.addEventListener("pointerup", () => UI.stopPainting());
     document.addEventListener("pointercancel", () => UI.stopPainting());
 
-    // Yard changes
     el.currentYard.addEventListener("input", () => {
       UI.refreshYardUI();
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
     });
 
-    // GPS buttons
     el.captureYardGps.addEventListener("click", async () => {
       const yardName = (el.currentYard.value || "").trim();
       if (!yardName) { alert("Enter a yard name first."); return; }
@@ -1773,7 +1775,6 @@
       }
     });
 
-    // Hive save events
     el.hiveName.addEventListener("input", () => App.saveCurrentHiveAndInspection());
     el.location.addEventListener("input", () => {
       App.saveCurrentHiveAndInspection();
@@ -1783,7 +1784,6 @@
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
 
-    // Frames count changes
     el.framesCount.addEventListener("change", () => {
       const frames = Math.max(1, Math.min(20, Math.floor(Number(el.framesCount.value || 10))));
       if (!State.currentHiveId || !State.currentInspectionId) return;
@@ -1806,7 +1806,6 @@
       UI.renderHistory(hive);
     });
 
-    // New inspection
     el.newInspectionBtn.addEventListener("click", () => {
       if (!State.currentHiveId) return;
       const hives = Storage.loadHives();
@@ -1826,7 +1825,6 @@
       UI.status("New inspection created");
     });
 
-    // Add photo
     el.addPhotoBtn.addEventListener("click", () => {
       if (!State.currentHiveId || !State.currentInspectionId) {
         alert("Load a hive and inspection first.");
@@ -1871,7 +1869,7 @@
       }
     });
 
-    // ---------------- Mites (single, non-duplicated save path) ----------------
+    // ---------------- Mites ----------------
     function saveMiteTreatmentFromForm() {
       if (!State.currentHiveId || !State.currentInspectionId) return;
 
@@ -1920,22 +1918,22 @@
       if (hidden) {
         el.miteSection.classList.remove("hidden");
         el.miteToggleBtn.textContent = "🐜 Mite Treatment (editing) — Hide";
-        // helpful focus
         setTimeout(() => { try { el.miteTreatmentType.focus(); } catch (_) {} }, 50);
+
         UI.renderMiteBadgeInForm(insp);
         UI.renderMiteNoticeInForm(insp);
         UI.renderMiteTimeline(hive);
         return;
       }
 
-      // if visible: only allow hiding when not in use
       if (UI.miteIsInUse(insp)) {
-        alert("This hive has an active/recorded mite treatment. Use “Clear Treatment” to remove it, or leave this section open.");
+        alert("This inspection has a mite treatment saved. Use “Clear Treatment” to remove it, or leave this section open.");
         return;
       }
 
       el.miteSection.classList.add("hidden");
       el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+      UI.clearMiteUI();
     });
 
     el.miteClearBtn.addEventListener("click", () => {
@@ -1944,394 +1942,11 @@
       el.miteTreatmentType.value = "";
       el.miteInstalled.value = "";
       el.miteDue.value = "";
-      saveMiteTreatmentFromForm(); // persists + updates UI + collapses if unused
+      saveMiteTreatmentFromForm();
 
-      // collapse after clearing
       el.miteSection.classList.add("hidden");
       el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
-    });
-
-    function shouldFilterToCurrentYard() {
-      return !!el.exportCurrentYardOnly.checked && (el.currentYard.value || "").trim();
-    }
-
-    function filteredHivesByCurrentYard(hives) {
-      if (!shouldFilterToCurrentYard()) return hives;
-      const yard = (el.currentYard.value || "").trim();
-      const out = {};
-      for (const [id, hive] of Object.entries(hives || {})) {
-        if ((hive?.location || "").trim() === yard) out[id] = hive;
-      }
-      return out;
-    }
-
-    // CSV export
-    el.exportCsv.addEventListener("click", () => {
-      const hivesAll = Storage.loadHives();
-      const hives = filteredHivesByCurrentYard(hivesAll);
-      const yards = Storage.loadYards();
-
-      const rows = [];
-      rows.push([
-        "yard_name","yard_lat","yard_lon","yard_accuracy_m","yard_captured_at",
-        "hive_id","hive_name","hive_location",
-        "inspection_id","inspection_date","queen_present","flags","photo_count","notes",
-        "mite_treatment_type","mite_date_installed","mite_date_due",
-        "frames_count","frame_map"
-      ]);
-
-      for (const hive of Object.values(hives)) {
-        const yardName = (hive.location || "").trim();
-        const y = yards[yardName] || null;
-
-        const base = [
-          yardName,
-          y ? y.lat : "",
-          y ? y.lon : "",
-          y ? Math.round(y.accuracy) : "",
-          y?.timestamp ? new Date(y.timestamp).toISOString() : "",
-          hive.id || "",
-          hive.name || "",
-          hive.location || ""
-        ];
-
-        const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
-        if (insps.length === 0) {
-          rows.push([...base, "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-        } else {
-          for (const insp of insps) {
-            const flags = insp.flags ? Object.entries(insp.flags).filter(([_, v]) => v).map(([k]) => k).join("|") : "";
-            const photoCount = (insp.photos && insp.photos.length) ? insp.photos.length : 0;
-
-            const framesCount = typeof insp.framesCount === "number" ? insp.framesCount : "";
-            const frameMapStr = Array.isArray(insp.frameMap) ? JSON.stringify(insp.frameMap) : "";
-
-            const mt = insp.miteTreatment || {};
-            rows.push([
-              ...base,
-              insp.id || "",
-              insp.date || "",
-              insp.queenPresent ? "yes" : "no",
-              flags,
-              photoCount,
-              insp.notes || "",
-              mt.type || "",
-              mt.installed || "",
-              mt.due || "",
-              framesCount,
-              frameMapStr
-            ]);
-          }
-        }
-      }
-
-      const csv = rows.map(r => r.map(Utils.csvEscape).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `hive-tracker-export-${Utils.today()}${shouldFilterToCurrentYard() ? "-current-yard" : ""}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      URL.revokeObjectURL(url);
-    });
-
-    // ZIP export (JSON + photos)
-    el.exportZip.addEventListener("click", async () => {
-      try {
-        const ok = await ensureJSZipReady();
-        if (!ok || !window.JSZip) {
-          alert("ZIP export needs JSZip.\n\nGo online once to cache the ZIP library, then it will work offline afterward.");
-          return;
-        }
-
-        UI.status("Building backup ZIP…");
-
-        const zip = new JSZip();
-
-        const payload = {
-          app: "hive-tracker",
-          version: Storage.VERSION,
-          exportedAt: new Date().toISOString(),
-          meta: Storage.loadMeta(),
-          yards: Storage.loadYards(),
-          hives: filteredHivesByCurrentYard(Storage.loadHives()),
-          photos: { note: "Photos are included in this ZIP under /photos as JPEG files." },
-          exportFilter: shouldFilterToCurrentYard() ? { yard: (el.currentYard.value || "").trim() } : null
-        };
-
-        zip.file("hive-tracker-backup.json", JSON.stringify(payload, null, 2));
-
-        const hives = payload.hives || {};
-        const photoIds = new Set();
-
-        for (const hive of Object.values(hives)) {
-          const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
-          for (const insp of insps) {
-            const ids = Array.isArray(insp.photos) ? insp.photos : [];
-            ids.forEach(id => photoIds.add(id));
-          }
-        }
-
-        const photosFolder = zip.folder("photos");
-
-        let added = 0, missing = 0;
-        for (const id of photoIds) {
-          const blob = await Photos.getBlob(id);
-          if (!blob) { missing++; continue; }
-          photosFolder.file(`${id}.jpg`, blob);
-          added++;
-          UI.status(`Adding photos… (${added}/${photoIds.size})`);
-        }
-
-        UI.status("Compressing ZIP…");
-        const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
-
-        const url = URL.createObjectURL(zipBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `hive-tracker-backup-${Utils.today()}${shouldFilterToCurrentYard() ? "-current-yard" : ""}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-
-        UI.status(`Backup ZIP exported ✅ (photos: ${added}${missing ? `, missing: ${missing}` : ""})`);
-      } catch (err) {
-        alert("ZIP export error: " + (err?.message || err));
-        UI.status("Ready");
-      }
-    });
-
-    // ZIP import (restore JSON + photos)
-    el.importZipBtn.addEventListener("click", async () => {
-      const ok = await ensureJSZipReady();
-      if (!ok || !window.JSZip) {
-        alert("ZIP import needs JSZip.\n\nGo online once to cache the ZIP library, then it will work offline afterward.");
-        return;
-      }
-      el.importZipInput.value = "";
-      el.importZipInput.click();
-    });
-
-    function normalizeHive(h) {
-      if (!h || typeof h !== "object") return { id: "", name: "", location: "", inspections: [] };
-      if (!Array.isArray(h.inspections)) h.inspections = [];
-      return h;
-    }
-
-    function normalizeInspection(i) {
-      if (!i || typeof i !== "object") {
-        return {
-          id: Utils.uuid(),
-          date: Utils.today(),
-          queenPresent: false,
-          notes: "",
-          flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-          photos: [],
-          framesCount: 10,
-          frameMap: [],
-          miteTreatment: { type:"", installed:"", due:"" }
-        };
-      }
-      if (!i.id) i.id = Utils.uuid();
-      if (!i.date) i.date = Utils.today();
-      if (!i.flags) i.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
-      if (!Array.isArray(i.photos)) i.photos = [];
-      if (typeof i.framesCount !== "number") i.framesCount = 10;
-      if (!Array.isArray(i.frameMap)) i.frameMap = [];
-      if (!i.miteTreatment || typeof i.miteTreatment !== "object") i.miteTreatment = { type:"", installed:"", due:"" };
-      i.miteTreatment.type = (i.miteTreatment.type || "");
-      i.miteTreatment.installed = (i.miteTreatment.installed || "");
-      i.miteTreatment.due = (i.miteTreatment.due || "");
-      return i;
-    }
-
-    function mergeYards(existing, incoming) {
-      const out = { ...(existing || {}) };
-      for (const [name, y] of Object.entries(incoming || {})) {
-        if (!out[name]) { out[name] = y; continue; }
-        const ex = out[name];
-        const exHasGps = ex && typeof ex.lat === "number" && typeof ex.lon === "number";
-        const inHasGps = y && typeof y.lat === "number" && typeof y.lon === "number";
-        if (!exHasGps && inHasGps) out[name] = y;
-      }
-      return out;
-    }
-
-    function mergeHives(existing, incoming) {
-      const out = { ...(existing || {}) };
-
-      for (const [hiveId, inHiveRaw] of Object.entries(incoming || {})) {
-        const inHive = normalizeHive({ ...inHiveRaw, id: hiveId });
-        inHive.inspections = (inHive.inspections || []).map(i => normalizeInspection({ ...i }));
-
-        if (!out[hiveId]) { out[hiveId] = inHive; continue; }
-
-        const exHive = normalizeHive(out[hiveId]);
-
-        if (!((exHive.name || "").trim()) && (inHive.name || "").trim()) exHive.name = inHive.name;
-        if (!((exHive.location || "").trim()) && (inHive.location || "").trim()) exHive.location = inHive.location;
-
-        const exById = new Map((exHive.inspections || []).map(i => [i.id, normalizeInspection(i)]));
-        for (const insp of (inHive.inspections || [])) {
-          if (!exById.has(insp.id)) {
-            exHive.inspections.push(insp);
-            exById.set(insp.id, insp);
-          }
-        }
-
-        exHive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-        out[hiveId] = exHive;
-      }
-
-      return out;
-    }
-
-    async function restorePhotosFromZip(zip) {
-      const photoFiles = Object.values(zip.files).filter(f =>
-        !f.dir &&
-        f.name.startsWith("photos/") &&
-        (f.name.toLowerCase().endsWith(".jpg") || f.name.toLowerCase().endsWith(".jpeg"))
-      );
-
-      let restored = 0;
-      for (const f of photoFiles) {
-        const name = f.name.split("/").pop();
-        const id = (name || "").replace(/\.(jpe?g)$/i, "");
-        if (!id) continue;
-
-        const blob = await f.async("blob");
-        await Photos.putBlobWithId(id, blob);
-
-        restored++;
-        if (restored % 10 === 0) UI.status(`Restoring photos… (${restored}/${photoFiles.length})`);
-      }
-      return restored;
-    }
-
-    function resetUiAfterImport() {
-      State.currentHiveId = null;
-      State.currentInspectionId = null;
-
-      el.hiveForm.classList.add("hidden");
-      el.hiveIdDisplay.textContent = "";
-      el.hiveName.value = "";
-      el.location.value = "";
-      el.date.value = Utils.today();
-      el.framesCount.value = 10;
-      el.notes.value = "";
-      el.queen.checked = false;
-
-      el.miteTreatmentType.value = "";
-      el.miteInstalled.value = "";
-      el.miteDue.value = "";
-      el.miteSection.classList.add("hidden");
-      el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
-      el.miteBadgeCurrent.innerHTML = "";
-      el.miteNotice.textContent = "";
-      el.miteTimeline.innerHTML = "";
-
-      el.photoGallery.innerHTML = "";
-      el.flagButtons.innerHTML = "";
-      el.history.innerHTML = "";
-      el.frameLegend.innerHTML = "";
-      el.frameMap.innerHTML = "";
-
-      UI.refreshYardUI();
-      UI.renderYardGps((el.currentYard.value || "").trim());
-      UI.renderHiveYardGps();
-    }
-
-    el.importZipInput.addEventListener("change", async () => {
-      const file = el.importZipInput.files && el.importZipInput.files[0];
-      if (!file) return;
-
-      try {
-        const overwrite = confirm(
-          "Import mode:\n\n" +
-          "OK = OVERWRITE this device (replace all hives/yards)\n" +
-          "Cancel = MERGE (keep existing, add missing, fill blanks)\n\n" +
-          "Tip: Export a ZIP first if you want a safety copy."
-        );
-
-        UI.status("Reading ZIP…");
-        const zip = await JSZip.loadAsync(file);
-
-        let jsonFile =
-          zip.file("hive-tracker-backup.json") ||
-          zip.file("backup.json") ||
-          zip.file("hive-tracker.json");
-
-        if (!jsonFile) {
-          const anyJson = Object.values(zip.files).find(f => !f.dir && f.name.toLowerCase().endsWith(".json"));
-          if (anyJson) jsonFile = zip.file(anyJson.name);
-        }
-        if (!jsonFile) throw new Error("No JSON file found in ZIP.");
-
-        const jsonText = await jsonFile.async("string");
-        const payload = JSON.parse(jsonText);
-
-        if (!payload || payload.app !== "hive-tracker") {
-          throw new Error("This ZIP doesn't look like a Hive Tracker backup.");
-        }
-
-        const inYards = payload.yards || {};
-        const inHives = payload.hives || {};
-        const inMeta  = payload.meta  || { version: 1 };
-
-        if (overwrite) {
-          UI.status("Overwriting data…");
-          let res = Storage.save("yards", inYards);
-          if (!res.ok) throw new Error("Failed to save yards (storage full?).");
-
-          res = Storage.save("hives", inHives);
-          if (!res.ok) throw new Error("Failed to save hives (storage full?).");
-
-          res = Storage.save("meta", inMeta);
-          if (!res.ok) throw new Error("Failed to save meta (storage full?).");
-        } else {
-          UI.status("Merging data…");
-
-          const exYards = Storage.loadYards();
-          const exHives = Storage.loadHives();
-          const exMeta  = Storage.loadMeta();
-
-          const mergedYards = mergeYards(exYards, inYards);
-          const mergedHives = mergeHives(exHives, inHives);
-
-          const mergedMeta = {
-            ...(exMeta || {}),
-            ...(inMeta || {}),
-            version: Math.max(exMeta?.version || 1, inMeta?.version || 1, Storage.VERSION)
-          };
-
-          let res = Storage.save("yards", mergedYards);
-          if (!res.ok) throw new Error("Failed to save merged yards (storage full?).");
-
-          res = Storage.save("hives", mergedHives);
-          if (!res.ok) throw new Error("Failed to save merged hives (storage full?).");
-
-          res = Storage.save("meta", mergedMeta);
-          if (!res.ok) throw new Error("Failed to save merged meta (storage full?).");
-        }
-
-        Storage.migrateIfNeeded();
-
-        UI.status("Restoring photos…");
-        const restored = await restorePhotosFromZip(zip);
-
-        resetUiAfterImport();
-
-        UI.status(`Import complete ✅ (${overwrite ? "overwrite" : "merge"}; photos restored: ${restored})`);
-        alert(`Import complete!\n\nMode: ${overwrite ? "Overwrite" : "Merge"}\nPhotos restored: ${restored}\n\nPick a yard/hive to continue.`);
-      } catch (err) {
-        alert("ZIP import error: " + (err?.message || err));
-        UI.status("Ready");
-      }
+      UI.clearMiteUI();
     });
 
     // NFC button
