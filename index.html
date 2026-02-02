@@ -427,17 +427,18 @@
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
- <script>
+<script>
 document.addEventListener("DOMContentLoaded", () => {
 
   // =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
-  //    Put CDN loaders / polyfills / one-time boot helpers here.
   // =========================================================
 
   async function ensureJSZipReady() {
+    // If you include the CDN <script> tag, this will be true immediately online.
     if (window.JSZip) return true;
 
+    // Offline-friendly fallback: cache the JSZip code in localStorage
     const CACHE_KEY = "jszip_cache_v1";
     const cached = localStorage.getItem(CACHE_KEY);
 
@@ -470,7 +471,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const Utils = {
     today() { return new Date().toISOString().split("T")[0]; },
     uuid() {
-      return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2));
+      return (crypto.randomUUID
+        ? crypto.randomUUID()
+        : String(Date.now()) + "-" + Math.random().toString(16).slice(2)
+      );
     },
     toRad(deg) { return deg * Math.PI / 180; },
     distanceMeters(lat1, lon1, lat2, lon2) {
@@ -663,17 +667,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return id;
     },
 
-    async putBlobWithId(id, blob) {
-      const db = await this.open();
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(this.STORE, "readwrite");
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
-        tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
-      });
-      return id;
-    },
-
     async getBlob(id) {
       const db = await this.open();
       return await new Promise((resolve, reject) => {
@@ -702,7 +695,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // =========================================================
-  // 4) STATE (Runtime-only values)
+  // 4) STATE (Runtime-only)
   // =========================================================
 
   const State = {
@@ -726,7 +719,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // =========================================================
-  // 5) ELEMENT MAP (All document.getElementById here)
+  // 5) ELEMENT MAP (ALL getElementById goes here)
   // =========================================================
 
   const el = {
@@ -787,7 +780,7 @@ document.addEventListener("DOMContentLoaded", () => {
     miteTimeline: document.getElementById("miteTimeline"),
   };
 
-  // Fail fast if IDs mismatch. This protects you from silent breakage.
+  // Fail fast if IDs mismatch. Protects you from silent breakage.
   for (const [k, v] of Object.entries(el)) {
     if (!v) {
       alert(`Missing required HTML element: ${k}`);
@@ -796,8 +789,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // 6) UI (Rendering & DOM manipulation ONLY)
-  //    Rule: UI methods should NOT attach global listeners.
+  // 6) UI (Rendering & DOM only)
   // =========================================================
 
   const UI = {
@@ -831,7 +823,7 @@ document.addEventListener("DOMContentLoaded", () => {
         .join("");
     },
 
-    // ---------- Mites ----------
+    // ---------- Mites (your existing code kept) ----------
     parseISODate(d) {
       if (!d || typeof d !== "string") return null;
       const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
@@ -1061,7 +1053,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // ---------- Frames ----------
+    // ---------- Frames (your existing code kept) ----------
     renderFrameSummary(insp) {
       if (!Array.isArray(insp.frameMap)) {
         el.frameSummary.textContent = "";
@@ -1261,15 +1253,293 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     },
 
-    // ---- The rest of your UI methods from your paste stay the same ----
-    // (These are REQUIRED by your app flow; keep your existing implementations)
-    loadInspectionIntoForm(hive, inspectionId) { /* KEEP your existing code here */ },
-    renderHistory(hive) { /* KEEP your existing code here */ },
-    refreshYardUI() { /* KEEP your existing code here */ },
-    renderYardGps(yardName) { /* KEEP your existing code here */ },
-    renderHiveYardGps() { /* KEEP your existing code here */ },
-    renderFlagButtons(hive, insp) { /* KEEP your existing code here */ },
-    renderPhotoGallery(hive, insp) { /* KEEP your existing code here */ },
+    // =======================================================
+    // 6A) UI: HISTORY / FLAGS / PHOTOS / YARDS / LOAD INSPECTION
+    //     These were missing in your current pasted file.
+    //     They are REQUIRED for the app to run.
+    // =======================================================
+
+    loadInspectionIntoForm(hive, inspectionId) {
+      const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
+      if (!insp) return;
+
+      this.ensureInspectionDefaults(insp);
+
+      State.currentInspectionId = insp.id;
+      el.date.value = insp.date || Utils.today();
+      el.framesCount.value = insp.framesCount || 10;
+      el.queen.checked = !!insp.queenPresent;
+      el.notes.value = insp.notes || "";
+
+      // mites
+      el.miteTreatmentType.value = insp.miteTreatment?.type || "";
+      el.miteInstalled.value = insp.miteTreatment?.installed || "";
+      el.miteDue.value = insp.miteTreatment?.due || "";
+      this.updateMitesUI(hive, insp);
+
+      this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
+
+      this.renderFlagButtons(hive, insp);
+      this.renderHistory(hive);
+      this.renderPhotoGallery(hive, insp).catch(() => {});
+      this.renderFrameMap(hive, insp);
+    },
+
+    renderHistory(hive) {
+      el.history.innerHTML = "";
+
+      if (!hive.inspections || hive.inspections.length === 0) {
+        el.history.innerHTML = "<em>No inspections yet.</em>";
+        return;
+      }
+
+      hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+      hive.inspections.forEach((insp) => {
+        this.ensureInspectionDefaults(insp);
+
+        const row = document.createElement("div");
+        row.className = "history-item" + (insp.id === State.currentInspectionId ? " selected" : "");
+
+        const left = document.createElement("div");
+        left.className = "history-left";
+
+        const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
+        const notesPreview = (insp.notes || "").trim().slice(0, 60);
+        const badges = this.renderBadgesFromFlags(insp.flags);
+        const miteBadge = this.renderMiteBadge(insp.miteTreatment);
+        const photoCount = (insp.photos?.length || 0);
+
+        left.innerHTML = `
+          <div><strong>${insp.date || "(no date)"}</strong></div>
+          <div class="small">
+            ${queenText}
+            ${badges ? " • " + badges : ""}
+            ${miteBadge ? " • " + miteBadge : ""}
+            ${photoCount ? ` • 📷 ${photoCount}` : ""}
+            ${notesPreview ? " • " + notesPreview : ""}
+          </div>
+        `;
+
+        left.addEventListener("click", () => {
+          this.loadInspectionIntoForm(hive, insp.id);
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn btn-danger";
+        delBtn.style.width = "auto";
+        delBtn.style.padding = "0.4rem 0.6rem";
+        delBtn.textContent = "Delete";
+
+        delBtn.addEventListener("click", async () => {
+          if (!confirm("Delete this inspection? (Photos attached to it will also be deleted.)")) return;
+
+          try { await Photos.deleteMany(insp.photos || []); } catch (_) {}
+
+          hive.inspections = hive.inspections.filter(i => i.id !== insp.id);
+
+          if (State.currentInspectionId === insp.id) {
+            State.currentInspectionId = hive.inspections[0]?.id || null;
+            if (State.currentInspectionId) this.loadInspectionIntoForm(hive, State.currentInspectionId);
+            else {
+              el.date.value = Utils.today();
+              el.framesCount.value = 10;
+              el.queen.checked = false;
+              el.notes.value = "";
+
+              // mites UI cleanup
+              el.miteTreatmentType.value = "";
+              el.miteInstalled.value = "";
+              el.miteDue.value = "";
+              el.miteSection.classList.add("hidden");
+              el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+              this.clearMiteUI();
+
+              el.flagButtons.innerHTML = "";
+              el.photoGallery.innerHTML = "";
+              el.frameLegend.innerHTML = "";
+              el.frameMap.innerHTML = "";
+            }
+          }
+
+          const hives = Storage.loadHives();
+          hives[hive.id] = hive;
+          const res = Storage.saveHives(hives);
+          if (!res.ok) this.status("Save failed (storage full?) — export ZIP backup!");
+
+          this.renderHistory(hive);
+          this.status("Inspection deleted");
+        });
+
+        row.appendChild(left);
+        row.appendChild(delBtn);
+        el.history.appendChild(row);
+      });
+    },
+
+    refreshYardUI() {
+      const hives = Storage.loadHives();
+
+      const yardsSet = new Set();
+      Object.values(hives).forEach(h => { if (h.location) yardsSet.add(h.location); });
+
+      el.yardList.innerHTML = "";
+      [...yardsSet].sort().forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        el.yardList.appendChild(opt);
+      });
+
+      const selected = (el.currentYard.value || "").trim();
+      if (!selected) {
+        el.yardHives.innerHTML = "<em>Enter a yard name to list its hives.</em>";
+        return;
+      }
+
+      const yardHives = Object.values(hives)
+        .filter(h => (h.location || "").trim() === selected)
+        .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+
+      if (yardHives.length === 0) {
+        el.yardHives.innerHTML = `<em>No hives saved in "${selected}".</em>`;
+        return;
+      }
+
+      el.yardHives.innerHTML = `<strong>Hives in ${selected}:</strong><div id="yardHiveButtons" style="margin-top:0.5rem;"></div>`;
+      const container = document.getElementById("yardHiveButtons");
+
+      yardHives.forEach(h => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn";
+        b.style.margin = "0.25rem 0";
+        b.textContent = h.name ? `${h.name}` : h.id;
+        b.addEventListener("click", () => App.handleHiveLoad(h.id));
+        container.appendChild(b);
+      });
+    },
+
+    renderYardGps(yardName) {
+      if (!yardName) { el.yardGps.textContent = ""; return; }
+
+      const y = Storage.loadYards()[yardName];
+      if (!y) {
+        el.yardGps.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+        return;
+      }
+
+      let distText = "";
+      if (State.lastPosition) {
+        const d = Utils.distanceMeters(
+          State.lastPosition.coords.latitude,
+          State.lastPosition.coords.longitude,
+          y.lat, y.lon
+        );
+        distText = ` • Distance: ${Math.round(d)} m`;
+      }
+
+      const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+
+      el.yardGps.innerHTML =
+        `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+        `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+    },
+
+    renderHiveYardGps() {
+      const yardName = (el.location.value || "").trim();
+      if (!yardName) { el.hiveYardGps.textContent = ""; return; }
+
+      const y = Storage.loadYards()[yardName];
+      if (!y) {
+        el.hiveYardGps.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
+        return;
+      }
+
+      let distText = "";
+      if (State.lastPosition) {
+        const d = Utils.distanceMeters(
+          State.lastPosition.coords.latitude,
+          State.lastPosition.coords.longitude,
+          y.lat, y.lon
+        );
+        distText = ` • Distance: ${Math.round(d)} m`;
+      }
+
+      const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+
+      el.hiveYardGps.innerHTML =
+        `📍 ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
+        `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+    },
+
+    renderFlagButtons(hive, insp) {
+      const defs = [
+        ["strong", "Strong 💪"],
+        ["weak", "Weak 🥶"],
+        ["queenless", "Queenless 👑❌"],
+        ["followUp", "Follow-up 🔁"],
+        ["fed", "Fed 🍯"]
+      ];
+
+      el.flagButtons.innerHTML = "";
+      defs.forEach(([key, label]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "flag-btn" + (insp.flags?.[key] ? " on" : "");
+        b.textContent = label;
+        b.addEventListener("click", () => {
+          insp.flags[key] = !insp.flags[key];
+          b.classList.toggle("on", insp.flags[key]);
+          App.saveCurrentHiveAndInspection();
+        });
+        el.flagButtons.appendChild(b);
+      });
+    },
+
+    async renderPhotoGallery(hive, insp) {
+      el.photoGallery.innerHTML = "";
+      const ids = insp.photos || [];
+      if (ids.length === 0) return;
+
+      for (const photoId of ids) {
+        const blob = await Photos.getBlob(photoId);
+        if (!blob) continue;
+
+        const url = URL.createObjectURL(blob);
+
+        const wrap = document.createElement("div");
+        wrap.className = "thumb-wrap";
+
+        const img = document.createElement("img");
+        img.className = "thumb";
+        img.src = url;
+        img.alt = "Photo";
+        img.addEventListener("click", () => {
+          el.viewerImg.src = url;
+          el.viewer.style.display = "flex";
+        });
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "thumb-del";
+        del.textContent = "✕";
+        del.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          if (!confirm("Delete this photo?")) return;
+
+          insp.photos = (insp.photos || []).filter(id => id !== photoId);
+          try { await Photos.delete(photoId); } catch (_) {}
+
+          App.saveCurrentHiveAndInspection();
+          await this.renderPhotoGallery(hive, insp);
+        });
+
+        wrap.appendChild(img);
+        wrap.appendChild(del);
+        el.photoGallery.appendChild(wrap);
+      }
+    }
   };
 
   // =========================================================
@@ -1333,6 +1603,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      // If no current yard, try to auto-fill nearest
       if (!(el.currentYard.value || "").trim()) {
         try {
           const pos = await GPS.getCurrentPositionOnce();
@@ -1381,7 +1652,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // =========================================================
-  // 9) APP (High-level workflows)
+  // 9) APP (Workflows)
   // =========================================================
 
   const App = {
@@ -1459,7 +1730,31 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // =========================================================
-  // 10) FORM -> MODEL HELPERS (small dedicated save helpers)
+  // 10) FEATURE BLOCK: EXPORT / IMPORT (SAFE PLACE TO EDIT)
+  //     Put CSV + ZIP logic here.
+  // =========================================================
+
+  async function handleExportCsv() {
+    // NOTE: You had a full CSV exporter before; paste/keep it here.
+    alert("CSV export not wired in this structured file yet. Paste your export logic into handleExportCsv().");
+  }
+
+  async function handleExportZip() {
+    // NOTE: You had ZIP export before; paste/keep it here.
+    const ok = await ensureJSZipReady();
+    if (!ok) { alert("JSZip not available (offline and not cached yet)."); return; }
+    alert("ZIP export not wired in this structured file yet. Paste your ZIP export logic into handleExportZip().");
+  }
+
+  async function handleImportZipFromFile(file) {
+    // NOTE: You had ZIP import before; paste/keep it here.
+    const ok = await ensureJSZipReady();
+    if (!ok) { alert("JSZip not available (offline and not cached yet)."); return; }
+    alert("ZIP import not wired in this structured file yet. Paste your ZIP import logic into handleImportZipFromFile(file).");
+  }
+
+  // =========================================================
+  // 11) FORM -> MODEL HELPERS
   // =========================================================
 
   function saveMiteTreatmentFromForm() {
@@ -1491,15 +1786,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================================================
-  // 11) EVENT LISTENERS (ONE place only)
-  //     Rule: never scatter addEventListener elsewhere.
+  // 12) EVENT LISTENERS (ONE PLACE ONLY)
   // =========================================================
 
   function bindEventListeners() {
-    if (State.listenersBound) return; // safety guard
+    if (State.listenersBound) return;
     State.listenersBound = true;
 
-    // Stop NFC scanning if app backgrounded
+    // Stop NFC scanning if backgrounded
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) NFC.stopScan();
     });
@@ -1741,17 +2035,21 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Export / Import listeners belong here too (when you paste them in)
-    // el.exportCsv.addEventListener("click", exportCsvHandler);
-    // el.exportZip.addEventListener("click", exportZipHandler);
-    // el.importZipBtn.addEventListener("click", () => el.importZipInput.click());
-    // el.importZipInput.addEventListener("change", importZipHandler);
+    // Export / Import
+    el.exportCsv.addEventListener("click", handleExportCsv);
+    el.exportZip.addEventListener("click", handleExportZip);
 
-    console.debug("Listeners bound");
+    el.importZipBtn.addEventListener("click", () => el.importZipInput.click());
+    el.importZipInput.addEventListener("change", async () => {
+      const file = el.importZipInput.files && el.importZipInput.files[0];
+      el.importZipInput.value = "";
+      if (!file) return;
+      await handleImportZipFromFile(file);
+    });
   }
 
   // =========================================================
-  // 12) INIT (Do these in order, once)
+  // 13) INIT (Do these once, in order)
   // =========================================================
 
   function init() {
@@ -1764,12 +2062,13 @@ document.addEventListener("DOMContentLoaded", () => {
     UI.renderHiveYardGps();
   }
 
-  // Start the app
   init();
 
 });
 </script>
 
+
 </body>
 </html>
+
 
