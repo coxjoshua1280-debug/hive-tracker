@@ -245,6 +245,44 @@
     @media (max-width: 520px) {
       .two-col { grid-template-columns: 1fr; }
     }
+    .notice-good { color: #0b6; font-weight: 600; }
+.notice-warn { color: #c60; font-weight: 700; }
+.notice-bad  { color: #b00; font-weight: 800; }
+
+.timeline-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #eee;
+}
+.timeline-row:last-child { border-bottom: none; }
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  margin-top: 0.25rem;
+  flex: 0 0 auto;
+  background: #999;
+}
+.timeline-dot.good { background: #0b6; }
+.timeline-dot.warn { background: #c60; }
+.timeline-dot.bad  { background: #b00; }
+
+.timeline-main { flex: 1; }
+.timeline-title { font-weight: 700; }
+.timeline-meta { font-size: 0.9rem; opacity: 0.85; margin-top: 0.15rem; }
+.timeline-actions { margin-top: 0.25rem; }
+.timeline-btn {
+  width: auto;
+  padding: 0.35rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid #999;
+  background: #fff;
+  font-size: 0.95rem;
+}
+
   </style>
 </head>
 
@@ -351,6 +389,14 @@
       </div>
     </div>
     <div id="miteBadgeCurrent" class="small" style="margin-top:0.5rem;"></div>
+    <div id="miteNotice" class="small" style="margin-top:0.35rem;"></div>
+
+<div class="card" style="margin-top:0.75rem;">
+  <strong>📅 Mite Treatment Timeline</strong>
+  <div class="small">Upcoming and recent treatments across this hive.</div>
+  <div id="miteTimeline" style="margin-top:0.5rem;"></div>
+</div>
+
 
 
     <label for="notes">Notes</label>
@@ -716,6 +762,9 @@
       miteInstalled: document.getElementById("miteInstalled"),
       miteDue: document.getElementById("miteDue"),
       miteBadgeCurrent: document.getElementById("miteBadgeCurrent"),
+      miteNotice: document.getElementById("miteNotice"),
+miteTimeline: document.getElementById("miteTimeline"),
+
 
     };
 
@@ -793,6 +842,195 @@
   const dueText = dueStr ? ` • due ${dueStr}` : "";
   return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
 },
+      parseISODate(d) {
+  // Expect "YYYY-MM-DD"
+  if (!d || typeof d !== "string") return null;
+  const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
+  if (!y || !m || !day) return null;
+  // local midnight
+  return new Date(y, m - 1, day);
+},
+
+dateKey(d) {
+  // Date -> YYYY-MM-DD (local)
+  if (!(d instanceof Date)) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+},
+
+daysDiff(a, b) {
+  // (b - a) in whole days, local midnight assumption
+  const ms = 24 * 60 * 60 * 1000;
+  return Math.round((b.getTime() - a.getTime()) / ms);
+},
+
+getMiteStatus(insp) {
+  // returns { level: "good"|"warn"|"bad"|"none", text: string }
+  const mt = insp?.miteTreatment;
+  const type = (mt?.type || "").trim();
+  const dueStr = mt?.due || "";
+  const installedStr = mt?.installed || "";
+
+  if (!type && !dueStr && !installedStr) return { level: "none", text: "" };
+
+  const today = this.parseISODate(Utils.today());
+  const due = this.parseISODate(dueStr);
+
+  if (!due || !today) {
+    return { level: "warn", text: "Mite treatment saved — add a due date for reminders." };
+  }
+
+  const d = this.daysDiff(today, due);
+
+  if (d === 0) return { level: "warn", text: "🟠 Due today" };
+  if (d < 0)  return { level: "bad",  text: `🔴 Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` };
+  if (d <= 3) return { level: "warn", text: `🟠 Due in ${d} day${d === 1 ? "" : "s"}` };
+
+  return { level: "good", text: `🟢 Due in ${d} days` };
+},
+
+renderMiteNoticeInForm(insp) {
+  if (!el.miteNotice) return;
+  const s = this.getMiteStatus(insp);
+
+  if (!s.text) {
+    el.miteNotice.textContent = "";
+    el.miteNotice.className = "small";
+    return;
+  }
+
+  el.miteNotice.textContent = s.text;
+
+  // apply a simple class for color
+  el.miteNotice.className = "small " + (
+    s.level === "bad"  ? "notice-bad" :
+    s.level === "warn" ? "notice-warn" :
+    s.level === "good" ? "notice-good" : ""
+  );
+},
+
+renderMiteTimeline(hive) {
+  if (!el.miteTimeline) return;
+  const insps = Array.isArray(hive?.inspections) ? hive.inspections : [];
+  const rows = [];
+
+  // collect any inspection with mite treatment info
+  for (const insp of insps) {
+    const mt = insp?.miteTreatment;
+    const type = (mt?.type || "").trim();
+    const installed = mt?.installed || "";
+    const due = mt?.due || "";
+    if (!type && !installed && !due) continue;
+
+    // pick a “when” for sorting: due if present else installed else insp.date
+    const whenStr = due || installed || insp.date || "";
+    const when = this.parseISODate(whenStr) || this.parseISODate(insp.date) || null;
+
+    const status = this.getMiteStatus(insp);
+
+    rows.push({
+      inspId: insp.id,
+      date: insp.date || "",
+      type,
+      installed,
+      due,
+      when,
+      status
+    });
+  }
+
+  // if none, show friendly empty
+  if (rows.length === 0) {
+    el.miteTimeline.innerHTML = `<em class="small">No mite treatments recorded yet for this hive.</em>`;
+    return;
+  }
+
+  // Sort by "when" descending (most relevant first)
+  rows.sort((a, b) => {
+    const ta = a.when ? a.when.getTime() : 0;
+    const tb = b.when ? b.when.getTime() : 0;
+    return tb - ta;
+  });
+
+  // Limit so it doesn’t get huge on long histories
+  const maxRows = 20;
+  const shown = rows.slice(0, maxRows);
+
+  el.miteTimeline.innerHTML = "";
+  for (const r of shown) {
+    const row = document.createElement("div");
+    row.className = "timeline-row";
+
+    const dot = document.createElement("div");
+    dot.className = "timeline-dot " + (
+      r.status.level === "bad" ? "bad" :
+      r.status.level === "warn" ? "warn" :
+      r.status.level === "good" ? "good" : ""
+    );
+
+    const main = document.createElement("div");
+    main.className = "timeline-main";
+
+    const title = document.createElement("div");
+    title.className = "timeline-title";
+    title.textContent = r.type ? r.type : "Mite treatment";
+
+    const meta = document.createElement("div");
+    meta.className = "timeline-meta";
+    meta.textContent =
+      `${r.date ? `Inspection: ${r.date}` : ""}` +
+      `${r.installed ? ` • Installed: ${r.installed}` : ""}` +
+      `${r.due ? ` • Due: ${r.due}` : ""}`;
+
+    const actions = document.createElement("div");
+    actions.className = "timeline-actions";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "timeline-btn";
+    btn.textContent = "Open inspection";
+    btn.addEventListener("click", () => {
+      // jump to that inspection
+      UI.loadInspectionIntoForm(hive, r.inspId);
+      // scroll the form area a bit so user sees the fields
+      try { el.miteTreatmentType?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
+    });
+
+    actions.appendChild(btn);
+
+    // status line (due today/overdue/etc)
+    if (r.status.text) {
+      const s = document.createElement("div");
+      s.className =
+        "small " +
+        (r.status.level === "bad" ? "notice-bad" :
+         r.status.level === "warn" ? "notice-warn" :
+         r.status.level === "good" ? "notice-good" : "");
+      s.style.marginTop = "0.25rem";
+      s.textContent = r.status.text;
+      main.appendChild(s);
+    }
+
+    main.appendChild(title);
+    main.appendChild(meta);
+    main.appendChild(actions);
+
+    row.appendChild(dot);
+    row.appendChild(main);
+    el.miteTimeline.appendChild(row);
+  }
+
+  if (rows.length > maxRows) {
+    const more = document.createElement("div");
+    more.className = "small";
+    more.style.marginTop = "0.5rem";
+    more.textContent = `Showing latest ${maxRows} of ${rows.length} treatments.`;
+    el.miteTimeline.appendChild(more);
+  }
+},
+
 
 
       renderFrameSummary(insp) {
@@ -1016,6 +1254,9 @@
   el.miteTreatmentType.value = insp.miteTreatment?.type || "";
   el.miteInstalled.value = insp.miteTreatment?.installed || "";
   el.miteDue.value = insp.miteTreatment?.due || "";
+        this.renderMiteNoticeInForm(insp);
+this.renderMiteTimeline(hive);
+
 
   // ✅ show the badge in the form immediately
   this.renderMiteBadgeInForm(insp);
@@ -1508,6 +1749,9 @@
 
   UI.renderMiteBadgeInForm(insp);
   UI.renderHistory(hive);
+      UI.renderMiteNoticeInForm(insp);
+UI.renderMiteTimeline(hive);
+
 }
     el.miteTreatmentType.addEventListener("change", saveMiteTreatmentFromForm);
 el.miteInstalled.addEventListener("change", saveMiteTreatmentFromForm);
@@ -2078,3 +2322,4 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
   </script>
 </body>
 </html>
+
