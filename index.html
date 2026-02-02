@@ -667,6 +667,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return id;
     },
 
+    async putBlobWithId(id, blob) {
+  const db = await this.open();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(this.STORE, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || new Error("Photo restore failed"));
+    tx.objectStore(this.STORE).put({ id, blob, createdAt: Date.now() });
+  });
+  return id;
+},
+
+
     async getBlob(id) {
       const db = await this.open();
       return await new Promise((resolve, reject) => {
@@ -1734,24 +1746,271 @@ document.addEventListener("DOMContentLoaded", () => {
   //     Put CSV + ZIP logic here.
   // =========================================================
 
-  async function handleExportCsv() {
-    // NOTE: You had a full CSV exporter before; paste/keep it here.
-    alert("CSV export not wired in this structured file yet. Paste your export logic into handleExportCsv().");
-  }
+  // =========================================================
+// 10) FEATURE BLOCK: EXPORT / IMPORT (SAFE PLACE TO EDIT)
+// =========================================================
 
-  async function handleExportZip() {
-    // NOTE: You had ZIP export before; paste/keep it here.
-    const ok = await ensureJSZipReady();
-    if (!ok) { alert("JSZip not available (offline and not cached yet)."); return; }
-    alert("ZIP export not wired in this structured file yet. Paste your ZIP export logic into handleExportZip().");
-  }
+function shouldFilterToCurrentYard() {
+  return !!el.exportCurrentYardOnly.checked;
+}
 
-  async function handleImportZipFromFile(file) {
-    // NOTE: You had ZIP import before; paste/keep it here.
-    const ok = await ensureJSZipReady();
-    if (!ok) { alert("JSZip not available (offline and not cached yet)."); return; }
-    alert("ZIP import not wired in this structured file yet. Paste your ZIP import logic into handleImportZipFromFile(file).");
+function getCurrentYardName() {
+  return (el.currentYard.value || "").trim();
+}
+
+function filterHivesByYard(hivesObj, yardName) {
+  if (!yardName) return { ...hivesObj };
+  const out = {};
+  for (const [id, hive] of Object.entries(hivesObj || {})) {
+    if ((hive?.location || "").trim() === yardName) out[id] = hive;
   }
+  return out;
+}
+
+function collectPhotoIdsFromHives(hivesObj) {
+  const ids = new Set();
+  for (const hive of Object.values(hivesObj || {})) {
+    for (const insp of (hive?.inspections || [])) {
+      for (const pid of (insp?.photos || [])) ids.add(pid);
+    }
+  }
+  return [...ids];
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function buildCsvRowsFromHives(hivesObj) {
+  // One row per inspection (easiest to analyze later)
+  const rows = [];
+  for (const hive of Object.values(hivesObj || {})) {
+    const hiveId = hive?.id || "";
+    const hiveName = hive?.name || "";
+    const yard = hive?.location || "";
+
+    const inspections = Array.isArray(hive?.inspections) ? hive.inspections : [];
+    for (const insp of inspections) {
+      const flags = insp?.flags || {};
+      const mt = insp?.miteTreatment || {};
+
+      // frameMap -> compact string like: "honey,none,brood,pollen|none,none,none,none|..."
+      const frameMap = Array.isArray(insp?.frameMap)
+        ? insp.frameMap.map(frame => (Array.isArray(frame) ? frame.join(",") : "")).join("|")
+        : "";
+
+      rows.push({
+        hiveId,
+        hiveName,
+        yard,
+        inspectionId: insp?.id || "",
+        inspectionDate: insp?.date || "",
+        queenPresent: insp?.queenPresent ? "yes" : "no",
+        notes: insp?.notes || "",
+        framesCount: String(insp?.framesCount ?? ""),
+        frameMap,
+        flag_strong: flags.strong ? "1" : "0",
+        flag_weak: flags.weak ? "1" : "0",
+        flag_queenless: flags.queenless ? "1" : "0",
+        flag_followUp: flags.followUp ? "1" : "0",
+        flag_fed: flags.fed ? "1" : "0",
+        mite_type: mt.type || "",
+        mite_installed: mt.installed || "",
+        mite_due: mt.due || "",
+        photoCount: String((insp?.photos || []).length),
+      });
+    }
+  }
+  return rows;
+}
+
+async function handleExportCsv() {
+  try {
+    UI.status("Building CSV…");
+
+    const hivesAll = Storage.loadHives();
+    const yardsAll = Storage.loadYards(); // not used in CSV by default, but available if you want later
+
+    let hives = hivesAll;
+    if (shouldFilterToCurrentYard()) {
+      const yard = getCurrentYardName();
+      hives = filterHivesByYard(hivesAll, yard);
+    }
+
+    const rows = buildCsvRowsFromHives(hives);
+
+    // If no inspections, still export headers
+    const headers = [
+      "hiveId","hiveName","yard",
+      "inspectionId","inspectionDate",
+      "queenPresent","notes",
+      "framesCount","frameMap",
+      "flag_strong","flag_weak","flag_queenless","flag_followUp","flag_fed",
+      "mite_type","mite_installed","mite_due",
+      "photoCount"
+    ];
+
+    const csv = [
+      headers.join(","),
+      ...rows.map(r => headers.map(h => Utils.csvEscape(r[h])).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const stamp = Utils.today();
+    const suffix = shouldFilterToCurrentYard() && getCurrentYardName()
+      ? `_${getCurrentYardName().replace(/\s+/g, "_")}`
+      : "";
+    downloadBlob(blob, `hive-tracker${suffix}_${stamp}.csv`);
+
+    UI.status(`CSV exported (${rows.length} inspection rows)`);
+  } catch (err) {
+    alert("CSV export error: " + (err.message || err));
+    UI.status("Ready");
+  }
+}
+
+async function handleExportZip() {
+  try {
+    UI.status("Preparing ZIP…");
+
+    const ok = await ensureJSZipReady();
+    if (!ok) { alert("JSZip not available (offline and not cached yet)."); UI.status("Ready"); return; }
+
+    const zip = new JSZip();
+
+    const hivesAll = Storage.loadHives();
+    const yardsAll = Storage.loadYards();
+    const metaAll = Storage.loadMeta();
+
+    let hives = hivesAll;
+    let yards = yardsAll;
+
+    if (shouldFilterToCurrentYard()) {
+      const yard = getCurrentYardName();
+      hives = filterHivesByYard(hivesAll, yard);
+
+      // Only include that yard's GPS entry (if present)
+      yards = yard ? (yardsAll[yard] ? { [yard]: yardsAll[yard] } : {}) : {};
+    }
+
+    // Core data
+    zip.file("hives.json", JSON.stringify(hives, null, 2));
+    zip.file("yards.json", JSON.stringify(yards, null, 2));
+    zip.file("meta.json", JSON.stringify(metaAll, null, 2));
+
+    // Photos
+    const photoIds = collectPhotoIdsFromHives(hives);
+    const photosFolder = zip.folder("photos");
+
+    UI.status(`Adding ${photoIds.length} photos…`);
+
+    for (let i = 0; i < photoIds.length; i++) {
+      const id = photoIds[i];
+      const blob = await Photos.getBlob(id);
+      if (!blob) continue;
+
+      // Store as jpeg, but keep original ID for stable linking
+      photosFolder.file(`${id}.jpg`, blob);
+    }
+
+    UI.status("Compressing ZIP…");
+    const outBlob = await zip.generateAsync({ type: "blob" });
+
+    const stamp = Utils.today();
+    const suffix = shouldFilterToCurrentYard() && getCurrentYardName()
+      ? `_${getCurrentYardName().replace(/\s+/g, "_")}`
+      : "";
+    downloadBlob(outBlob, `hive-tracker-backup${suffix}_${stamp}.zip`);
+
+    UI.status("ZIP backup exported");
+  } catch (err) {
+    alert("ZIP export error: " + (err.message || err));
+    UI.status("Ready");
+  }
+}
+
+async function handleImportZipFromFile(file) {
+  try {
+    UI.status("Reading ZIP…");
+
+    const ok = await ensureJSZipReady();
+    if (!ok) { alert("JSZip not available (offline and not cached yet)."); UI.status("Ready"); return; }
+
+    const zip = await JSZip.loadAsync(file);
+
+    // Read JSON files (if present)
+    const readJson = async (name) => {
+      const f = zip.file(name);
+      if (!f) return null;
+      const txt = await f.async("string");
+      return JSON.parse(txt);
+    };
+
+    const hivesIn = await readJson("hives.json");
+    const yardsIn = await readJson("yards.json");
+    const metaIn  = await readJson("meta.json");
+
+    if (!hivesIn || typeof hivesIn !== "object") {
+      alert("Invalid ZIP: missing hives.json");
+      UI.status("Ready");
+      return;
+    }
+
+    // Restore photos (folder photos/)
+    const photoFiles = zip.file(/^photos\/.+\.jpg$/i) || [];
+    UI.status(`Restoring photos (${photoFiles.length})…`);
+
+    for (const f of photoFiles) {
+      // photos/<id>.jpg
+      const name = f.name || "";
+      const id = name.replace(/^photos\//i, "").replace(/\.jpg$/i, "");
+      if (!id) continue;
+      const blob = await f.async("blob");
+      await Photos.putBlobWithId(id, blob);
+    }
+
+    // Merge strategy:
+    // - We merge imported hives into existing hives by hive id (import overwrites same id)
+    // - Same for yards
+    const hivesCurrent = Storage.loadHives();
+    const yardsCurrent = Storage.loadYards();
+    const metaCurrent  = Storage.loadMeta();
+
+    const mergedHives = { ...(hivesCurrent || {}), ...(hivesIn || {}) };
+    const mergedYards = { ...(yardsCurrent || {}), ...(yardsIn || {}) };
+    const mergedMeta  = { ...(metaCurrent || {}), ...(metaIn || {}) };
+
+    // Save
+    let res = Storage.saveHives(mergedHives);
+    if (!res.ok) throw new Error("Could not save hives (storage full?)");
+    res = Storage.saveYards(mergedYards);
+    if (!res.ok) throw new Error("Could not save yards (storage full?)");
+    res = Storage.saveMeta(mergedMeta);
+    if (!res.ok) throw new Error("Could not save meta (storage full?)");
+
+    // Ensure schema is up to date
+    Storage.migrateIfNeeded();
+
+    // Refresh UI
+    UI.refreshYardUI();
+    UI.renderYardGps((el.currentYard.value || "").trim());
+    UI.renderHiveYardGps();
+
+    UI.status("Import complete ✅");
+    alert("Import complete ✅\nYour data and photos have been restored/merged.");
+  } catch (err) {
+    alert("ZIP import error: " + (err.message || err));
+    UI.status("Ready");
+  }
+}
+
 
   // =========================================================
   // 11) FORM -> MODEL HELPERS
@@ -2070,5 +2329,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 </body>
 </html>
+
 
 
