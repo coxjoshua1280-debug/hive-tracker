@@ -87,16 +87,15 @@
       color: #fff;
     }
     .badge.warn {
-  border-color: #b00;
-  background: #b00;
-  color: #fff;
-}
-.badge.soon {
-  border-color: #c60;
-  background: #c60;
-  color: #fff;
-}
-
+      border-color: #b00;
+      background: #b00;
+      color: #fff;
+    }
+    .badge.soon {
+      border-color: #c60;
+      background: #c60;
+      color: #fff;
+    }
 
     .flag-row { margin-top: 0.5rem; }
     .flag-btn {
@@ -245,44 +244,44 @@
     @media (max-width: 520px) {
       .two-col { grid-template-columns: 1fr; }
     }
+
     .notice-good { color: #0b6; font-weight: 600; }
-.notice-warn { color: #c60; font-weight: 700; }
-.notice-bad  { color: #b00; font-weight: 800; }
+    .notice-warn { color: #c60; font-weight: 700; }
+    .notice-bad  { color: #b00; font-weight: 800; }
 
-.timeline-row {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-start;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #eee;
-}
-.timeline-row:last-child { border-bottom: none; }
+    .timeline-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #eee;
+    }
+    .timeline-row:last-child { border-bottom: none; }
 
-.timeline-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  margin-top: 0.25rem;
-  flex: 0 0 auto;
-  background: #999;
-}
-.timeline-dot.good { background: #0b6; }
-.timeline-dot.warn { background: #c60; }
-.timeline-dot.bad  { background: #b00; }
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      margin-top: 0.25rem;
+      flex: 0 0 auto;
+      background: #999;
+    }
+    .timeline-dot.good { background: #0b6; }
+    .timeline-dot.warn { background: #c60; }
+    .timeline-dot.bad  { background: #b00; }
 
-.timeline-main { flex: 1; }
-.timeline-title { font-weight: 700; }
-.timeline-meta { font-size: 0.9rem; opacity: 0.85; margin-top: 0.15rem; }
-.timeline-actions { margin-top: 0.25rem; }
-.timeline-btn {
-  width: auto;
-  padding: 0.35rem 0.55rem;
-  border-radius: 10px;
-  border: 1px solid #999;
-  background: #fff;
-  font-size: 0.95rem;
-}
-
+    .timeline-main { flex: 1; }
+    .timeline-title { font-weight: 700; }
+    .timeline-meta { font-size: 0.9rem; opacity: 0.85; margin-top: 0.15rem; }
+    .timeline-actions { margin-top: 0.25rem; }
+    .timeline-btn {
+      width: auto;
+      padding: 0.35rem 0.55rem;
+      border-radius: 10px;
+      border: 1px solid #999;
+      background: #fff;
+      font-size: 0.95rem;
+    }
   </style>
 </head>
 
@@ -358,46 +357,53 @@
       Queen Present
     </label>
 
-    <!-- ✅ NEW: Mite Treatments -->
-    <div class="card" style="margin-top:0.75rem;">
-      <strong>Mite Treatment</strong>
-      <div class="small">Saved on this inspection.</div>
+    <!-- ✅ Mite Treatments (collapsible when unused) -->
+    <button id="miteToggleBtn" type="button" class="btn btn-muted" style="margin-top:0.75rem;">
+      ➕ Add Mite Treatment
+    </button>
 
-      <label for="miteTreatmentType">Treatment type</label>
+    <div id="miteSection" class="card hidden" style="margin-top:0.5rem;">
+      <strong>Mite Treatments</strong>
+      <div class="small">Track treatment type and key dates. This section collapses when not in use.</div>
+
+      <label for="miteTreatmentType" style="margin-top:0.75rem;">Treatment Type</label>
       <select id="miteTreatmentType">
-        <option value="">None / Not treated</option>
-        <option value="Apivar (amitraz)">Apivar (amitraz)</option>
-        <option value="Api-Bioxal (oxalic acid)">Api-Bioxal (oxalic acid)</option>
-        <option value="Oxalic acid vaporization">Oxalic acid vaporization</option>
-        <option value="Formic Pro (formic acid)">Formic Pro (formic acid)</option>
-        <option value="Mite Away Quick Strips (formic)">Mite Away Quick Strips (formic)</option>
-        <option value="Apiguard (thymol)">Apiguard (thymol)</option>
-        <option value="HopGuard III">HopGuard III</option>
-        <option value="Drone brood removal">Drone brood removal</option>
-        <option value="Powdered sugar dusting">Powdered sugar dusting</option>
+        <option value="">— None —</option>
+        <option value="Apivar">Apivar</option>
+        <option value="Formic Pro">Formic Pro</option>
+        <option value="MAQS">MAQS</option>
+        <option value="Oxalic Acid (Drip)">Oxalic Acid (Drip)</option>
+        <option value="Oxalic Acid (Vapor)">Oxalic Acid (Vapor)</option>
+        <option value="HopGuard">HopGuard</option>
+        <option value="Thymol (ApiLife Var)">Thymol (ApiLife Var)</option>
+        <option value="Thymol (Apiguard)">Thymol (Apiguard)</option>
+        <option value="Other">Other</option>
       </select>
 
       <div class="two-col" style="margin-top:0.5rem;">
         <div>
-          <label for="miteInstalled">Date installed</label>
+          <label for="miteInstalled">Date Installed</label>
           <input id="miteInstalled" type="date" />
         </div>
         <div>
-          <label for="miteDue">Date to remove / reapply</label>
+          <label for="miteDue">Date to Remove / Reapply</label>
           <input id="miteDue" type="date" />
         </div>
       </div>
+
+      <div id="miteBadgeCurrent" class="small" style="margin-top:0.5rem;"></div>
+      <div id="miteNotice" class="small" style="margin-top:0.35rem;"></div>
+
+      <div class="row" style="margin-top:0.6rem;">
+        <button id="miteClearBtn" type="button" class="btn btn-danger grow">Clear Treatment</button>
+      </div>
+
+      <div class="card" style="margin-top:0.75rem;">
+        <strong>📅 Mite Treatment Timeline</strong>
+        <div class="small">Upcoming and recent treatments across this hive.</div>
+        <div id="miteTimeline" style="margin-top:0.5rem;"></div>
+      </div>
     </div>
-    <div id="miteBadgeCurrent" class="small" style="margin-top:0.5rem;"></div>
-    <div id="miteNotice" class="small" style="margin-top:0.35rem;"></div>
-
-<div class="card" style="margin-top:0.75rem;">
-  <strong>📅 Mite Treatment Timeline</strong>
-  <div class="small">Upcoming and recent treatments across this hive.</div>
-  <div id="miteTimeline" style="margin-top:0.5rem;"></div>
-</div>
-
-
 
     <label for="notes">Notes</label>
     <textarea id="notes" rows="4" placeholder="What did you see?"></textarea>
@@ -421,15 +427,12 @@
     <img id="viewerImg" alt="Photo" />
   </div>
 
-  <!-- Load JSZip normally; offline fallback will cache it after first online load -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
   <script>
   document.addEventListener("DOMContentLoaded", () => {
 
     // ---------------- Offline-friendly JSZip fallback ----------------
-    // Caches JSZip code in localStorage after first online load,
-    // and restores it later if you’re offline.
     async function ensureJSZipReady() {
       if (window.JSZip) return true;
 
@@ -444,7 +447,6 @@
         } catch (_) {}
       }
 
-      // Try to fetch it (requires being online at least once)
       try {
         const url = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
         const res = await fetch(url, { cache: "force-cache" });
@@ -483,11 +485,7 @@
       },
       fmtDateTime(ts) {
         if (!ts) return "";
-        try {
-          return new Date(ts).toLocaleString();
-        } catch (_) {
-          return "";
-        }
+        try { return new Date(ts).toLocaleString(); } catch (_) { return ""; }
       },
       csvEscape(v) {
         const s = (v ?? "").toString();
@@ -529,7 +527,7 @@
 
     // ---------------- Storage ----------------
     const Storage = {
-      VERSION: 4, // bumped for mite treatment fields + JSZip caching is no-schema
+      VERSION: 4,
 
       load(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -562,7 +560,6 @@
         for (const hive of Object.values(hives)) {
           if (!Array.isArray(hive.inspections)) hive.inspections = [];
           hive.inspections.forEach(insp => {
-            // flags
             if (!insp.flags) {
               insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
             } else {
@@ -573,14 +570,10 @@
               insp.flags.fed = !!insp.flags.fed;
             }
 
-            // photos
             if (!Array.isArray(insp.photos)) insp.photos = [];
-
-            // frames
             if (typeof insp.framesCount !== "number") insp.framesCount = 10;
             if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
 
-            // ✅ mite treatment
             if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
               insp.miteTreatment = { type:"", installed:"", due:"" };
             } else {
@@ -612,7 +605,6 @@
             ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
             : [],
 
-          // ✅ new mite treatment fields (start blank)
           miteTreatment: { type:"", installed:"", due:"" }
         };
 
@@ -758,14 +750,17 @@
       viewerImg: document.getElementById("viewerImg"),
       viewerClose: document.getElementById("viewerClose"),
 
+      // mites (collapsible)
+      miteToggleBtn: document.getElementById("miteToggleBtn"),
+      miteSection: document.getElementById("miteSection"),
+      miteClearBtn: document.getElementById("miteClearBtn"),
+
       miteTreatmentType: document.getElementById("miteTreatmentType"),
       miteInstalled: document.getElementById("miteInstalled"),
       miteDue: document.getElementById("miteDue"),
       miteBadgeCurrent: document.getElementById("miteBadgeCurrent"),
       miteNotice: document.getElementById("miteNotice"),
-miteTimeline: document.getElementById("miteTimeline"),
-
-
+      miteTimeline: document.getElementById("miteTimeline"),
     };
 
     for (const [k, v] of Object.entries(el)) {
@@ -778,19 +773,6 @@ miteTimeline: document.getElementById("miteTimeline"),
     // ---------------- UI ----------------
     const UI = {
       status(text) { el.status.textContent = text || ""; },
-      renderMiteBadgeInForm(insp) {
-  if (!el.miteBadgeCurrent) return;
-
-  const html = this.renderMiteBadge(insp?.miteTreatment);
-
-  if (!html) {
-    el.miteBadgeCurrent.innerHTML = `<em>No mite treatment set for this inspection.</em>`;
-    return;
-  }
-
-  el.miteBadgeCurrent.innerHTML = `Treatment status: ${html}`;
-},
-
 
       ensureInspectionDefaults(insp) {
         if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
@@ -820,219 +802,234 @@ miteTimeline: document.getElementById("miteTimeline"),
           .join("");
       },
 
-      renderMiteBadge(miteTreatment) {
-  const t = miteTreatment?.type || "";
-  if (!t) return "";
-
-  const dueStr = (miteTreatment?.due || "").trim();
-  const todayStr = Utils.today(); // YYYY-MM-DD
-
-  let cls = "badge on";
-  if (dueStr) {
-    // Parse as local date (avoid timezone issues)
-    const due = new Date(dueStr + "T00:00:00");
-    const today = new Date(todayStr + "T00:00:00");
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const days = Math.round((due - today) / msPerDay);
-
-    if (days <= 0) cls = "badge warn";      // due today or overdue
-    else if (days <= 7) cls = "badge soon"; // due within a week
-  }
-
-  const dueText = dueStr ? ` • due ${dueStr}` : "";
-  return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
-},
+      // ---------- Mites ----------
       parseISODate(d) {
-  // Expect "YYYY-MM-DD"
-  if (!d || typeof d !== "string") return null;
-  const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
-  if (!y || !m || !day) return null;
-  // local midnight
-  return new Date(y, m - 1, day);
-},
+        if (!d || typeof d !== "string") return null;
+        const [y, m, day] = d.split("-").map(n => parseInt(n, 10));
+        if (!y || !m || !day) return null;
+        return new Date(y, m - 1, day);
+      },
 
-dateKey(d) {
-  // Date -> YYYY-MM-DD (local)
-  if (!(d instanceof Date)) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-},
+      daysDiff(a, b) {
+        const ms = 24 * 60 * 60 * 1000;
+        return Math.round((b.getTime() - a.getTime()) / ms);
+      },
 
-daysDiff(a, b) {
-  // (b - a) in whole days, local midnight assumption
-  const ms = 24 * 60 * 60 * 1000;
-  return Math.round((b.getTime() - a.getTime()) / ms);
-},
+      renderMiteBadge(miteTreatment) {
+        const t = (miteTreatment?.type || "").trim();
+        if (!t) return "";
 
-getMiteStatus(insp) {
-  // returns { level: "good"|"warn"|"bad"|"none", text: string }
-  const mt = insp?.miteTreatment;
-  const type = (mt?.type || "").trim();
-  const dueStr = mt?.due || "";
-  const installedStr = mt?.installed || "";
+        const dueStr = (miteTreatment?.due || "").trim();
+        const todayStr = Utils.today();
 
-  if (!type && !dueStr && !installedStr) return { level: "none", text: "" };
+        let cls = "badge on";
+        if (dueStr) {
+          const due = new Date(dueStr + "T00:00:00");
+          const today = new Date(todayStr + "T00:00:00");
+          const msPerDay = 24 * 60 * 60 * 1000;
+          const days = Math.round((due - today) / msPerDay);
 
-  const today = this.parseISODate(Utils.today());
-  const due = this.parseISODate(dueStr);
+          if (days <= 0) cls = "badge warn";
+          else if (days <= 7) cls = "badge soon";
+        }
 
-  if (!due || !today) {
-    return { level: "warn", text: "Mite treatment saved — add a due date for reminders." };
-  }
+        const dueText = dueStr ? ` • due ${dueStr}` : "";
+        return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
+      },
 
-  const d = this.daysDiff(today, due);
+      getMiteStatus(insp) {
+        const mt = insp?.miteTreatment;
+        const type = (mt?.type || "").trim();
+        const dueStr = mt?.due || "";
+        const installedStr = mt?.installed || "";
 
-  if (d === 0) return { level: "warn", text: "🟠 Due today" };
-  if (d < 0)  return { level: "bad",  text: `🔴 Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` };
-  if (d <= 3) return { level: "warn", text: `🟠 Due in ${d} day${d === 1 ? "" : "s"}` };
+        if (!type && !dueStr && !installedStr) return { level: "none", text: "" };
 
-  return { level: "good", text: `🟢 Due in ${d} days` };
-},
+        const today = this.parseISODate(Utils.today());
+        const due = this.parseISODate(dueStr);
 
-renderMiteNoticeInForm(insp) {
-  if (!el.miteNotice) return;
-  const s = this.getMiteStatus(insp);
+        if (!due || !today) {
+          return { level: "warn", text: "Mite treatment saved — add a due date for reminders." };
+        }
 
-  if (!s.text) {
-    el.miteNotice.textContent = "";
-    el.miteNotice.className = "small";
-    return;
-  }
+        const d = this.daysDiff(today, due);
 
-  el.miteNotice.textContent = s.text;
+        if (d === 0) return { level: "warn", text: "🟠 Due today" };
+        if (d < 0)  return { level: "bad",  text: `🔴 Overdue by ${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"}` };
+        if (d <= 3) return { level: "warn", text: `🟠 Due in ${d} day${d === 1 ? "" : "s"}` };
 
-  // apply a simple class for color
-  el.miteNotice.className = "small " + (
-    s.level === "bad"  ? "notice-bad" :
-    s.level === "warn" ? "notice-warn" :
-    s.level === "good" ? "notice-good" : ""
-  );
-},
+        return { level: "good", text: `🟢 Due in ${d} days` };
+      },
 
-renderMiteTimeline(hive) {
-  if (!el.miteTimeline) return;
-  const insps = Array.isArray(hive?.inspections) ? hive.inspections : [];
-  const rows = [];
+      renderMiteBadgeInForm(insp) {
+        const html = this.renderMiteBadge(insp?.miteTreatment);
+        if (!html) {
+          el.miteBadgeCurrent.innerHTML = `<em>No mite treatment set for this inspection.</em>`;
+          return;
+        }
+        el.miteBadgeCurrent.innerHTML = `Treatment status: ${html}`;
+      },
 
-  // collect any inspection with mite treatment info
-  for (const insp of insps) {
-    const mt = insp?.miteTreatment;
-    const type = (mt?.type || "").trim();
-    const installed = mt?.installed || "";
-    const due = mt?.due || "";
-    if (!type && !installed && !due) continue;
+      renderMiteNoticeInForm(insp) {
+        const s = this.getMiteStatus(insp);
 
-    // pick a “when” for sorting: due if present else installed else insp.date
-    const whenStr = due || installed || insp.date || "";
-    const when = this.parseISODate(whenStr) || this.parseISODate(insp.date) || null;
+        if (!s.text) {
+          el.miteNotice.textContent = "";
+          el.miteNotice.className = "small";
+          return;
+        }
 
-    const status = this.getMiteStatus(insp);
+        el.miteNotice.textContent = s.text;
+        el.miteNotice.className = "small " + (
+          s.level === "bad"  ? "notice-bad" :
+          s.level === "warn" ? "notice-warn" :
+          s.level === "good" ? "notice-good" : ""
+        );
+      },
 
-    rows.push({
-      inspId: insp.id,
-      date: insp.date || "",
-      type,
-      installed,
-      due,
-      when,
-      status
-    });
-  }
+      renderMiteTimeline(hive) {
+        const insps = Array.isArray(hive?.inspections) ? hive.inspections : [];
+        const rows = [];
 
-  // if none, show friendly empty
-  if (rows.length === 0) {
-    el.miteTimeline.innerHTML = `<em class="small">No mite treatments recorded yet for this hive.</em>`;
-    return;
-  }
+        for (const insp of insps) {
+          const mt = insp?.miteTreatment;
+          const type = (mt?.type || "").trim();
+          const installed = mt?.installed || "";
+          const due = mt?.due || "";
+          if (!type && !installed && !due) continue;
 
-  // Sort by "when" descending (most relevant first)
-  rows.sort((a, b) => {
-    const ta = a.when ? a.when.getTime() : 0;
-    const tb = b.when ? b.when.getTime() : 0;
-    return tb - ta;
-  });
+          const whenStr = due || installed || insp.date || "";
+          const when = this.parseISODate(whenStr) || this.parseISODate(insp.date) || null;
 
-  // Limit so it doesn’t get huge on long histories
-  const maxRows = 20;
-  const shown = rows.slice(0, maxRows);
+          const status = this.getMiteStatus(insp);
 
-  el.miteTimeline.innerHTML = "";
-  for (const r of shown) {
-    const row = document.createElement("div");
-    row.className = "timeline-row";
+          rows.push({
+            inspId: insp.id,
+            date: insp.date || "",
+            type,
+            installed,
+            due,
+            when,
+            status
+          });
+        }
 
-    const dot = document.createElement("div");
-    dot.className = "timeline-dot " + (
-      r.status.level === "bad" ? "bad" :
-      r.status.level === "warn" ? "warn" :
-      r.status.level === "good" ? "good" : ""
-    );
+        if (rows.length === 0) {
+          el.miteTimeline.innerHTML = `<em class="small">No mite treatments recorded yet for this hive.</em>`;
+          return;
+        }
 
-    const main = document.createElement("div");
-    main.className = "timeline-main";
+        rows.sort((a, b) => {
+          const ta = a.when ? a.when.getTime() : 0;
+          const tb = b.when ? b.when.getTime() : 0;
+          return tb - ta;
+        });
 
-    const title = document.createElement("div");
-    title.className = "timeline-title";
-    title.textContent = r.type ? r.type : "Mite treatment";
+        const maxRows = 20;
+        const shown = rows.slice(0, maxRows);
 
-    const meta = document.createElement("div");
-    meta.className = "timeline-meta";
-    meta.textContent =
-      `${r.date ? `Inspection: ${r.date}` : ""}` +
-      `${r.installed ? ` • Installed: ${r.installed}` : ""}` +
-      `${r.due ? ` • Due: ${r.due}` : ""}`;
+        el.miteTimeline.innerHTML = "";
+        for (const r of shown) {
+          const row = document.createElement("div");
+          row.className = "timeline-row";
 
-    const actions = document.createElement("div");
-    actions.className = "timeline-actions";
+          const dot = document.createElement("div");
+          dot.className = "timeline-dot " + (
+            r.status.level === "bad" ? "bad" :
+            r.status.level === "warn" ? "warn" :
+            r.status.level === "good" ? "good" : ""
+          );
 
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "timeline-btn";
-    btn.textContent = "Open inspection";
-    btn.addEventListener("click", () => {
-      // jump to that inspection
-      UI.loadInspectionIntoForm(hive, r.inspId);
-      // scroll the form area a bit so user sees the fields
-      try { el.miteTreatmentType?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
-    });
+          const main = document.createElement("div");
+          main.className = "timeline-main";
 
-    actions.appendChild(btn);
+          const title = document.createElement("div");
+          title.className = "timeline-title";
+          title.textContent = r.type ? r.type : "Mite treatment";
 
-    // status line (due today/overdue/etc)
-    if (r.status.text) {
-      const s = document.createElement("div");
-      s.className =
-        "small " +
-        (r.status.level === "bad" ? "notice-bad" :
-         r.status.level === "warn" ? "notice-warn" :
-         r.status.level === "good" ? "notice-good" : "");
-      s.style.marginTop = "0.25rem";
-      s.textContent = r.status.text;
-      main.appendChild(s);
-    }
+          const meta = document.createElement("div");
+          meta.className = "timeline-meta";
+          meta.textContent =
+            `${r.date ? `Inspection: ${r.date}` : ""}` +
+            `${r.installed ? ` • Installed: ${r.installed}` : ""}` +
+            `${r.due ? ` • Due: ${r.due}` : ""}`;
 
-    main.appendChild(title);
-    main.appendChild(meta);
-    main.appendChild(actions);
+          const actions = document.createElement("div");
+          actions.className = "timeline-actions";
 
-    row.appendChild(dot);
-    row.appendChild(main);
-    el.miteTimeline.appendChild(row);
-  }
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "timeline-btn";
+          btn.textContent = "Open inspection";
+          btn.addEventListener("click", () => {
+            UI.loadInspectionIntoForm(hive, r.inspId);
+            try { el.miteTreatmentType.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
+          });
 
-  if (rows.length > maxRows) {
-    const more = document.createElement("div");
-    more.className = "small";
-    more.style.marginTop = "0.5rem";
-    more.textContent = `Showing latest ${maxRows} of ${rows.length} treatments.`;
-    el.miteTimeline.appendChild(more);
-  }
-},
+          actions.appendChild(btn);
 
+          if (r.status.text) {
+            const s = document.createElement("div");
+            s.className =
+              "small " +
+              (r.status.level === "bad" ? "notice-bad" :
+               r.status.level === "warn" ? "notice-warn" :
+               r.status.level === "good" ? "notice-good" : "");
+            s.style.marginTop = "0.25rem";
+            s.textContent = r.status.text;
+            main.appendChild(s);
+          }
 
+          main.appendChild(title);
+          main.appendChild(meta);
+          main.appendChild(actions);
 
+          row.appendChild(dot);
+          row.appendChild(main);
+          el.miteTimeline.appendChild(row);
+        }
+
+        if (rows.length > maxRows) {
+          const more = document.createElement("div");
+          more.className = "small";
+          more.style.marginTop = "0.5rem";
+          more.textContent = `Showing latest ${maxRows} of ${rows.length} treatments.`;
+          el.miteTimeline.appendChild(more);
+        }
+      },
+
+      miteIsInUse(insp) {
+        const mt = insp?.miteTreatment || {};
+        return !!((mt.type || "").trim() || (mt.installed || "").trim() || (mt.due || "").trim());
+      },
+
+      updateMiteSectionVisibility(insp) {
+        const inUse = this.miteIsInUse(insp);
+
+        if (inUse) {
+          el.miteSection.classList.remove("hidden");
+          el.miteToggleBtn.textContent = "🐜 Mite Treatment (in use) — Hide";
+        } else {
+          el.miteSection.classList.add("hidden");
+          el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+        }
+      },
+
+      updateMitesUI(hive, insp) {
+        this.updateMiteSectionVisibility(insp);
+        if (!el.miteSection.classList.contains("hidden")) {
+          this.renderMiteBadgeInForm(insp);
+          this.renderMiteNoticeInForm(insp);
+          this.renderMiteTimeline(hive);
+        } else {
+          // keep these clean when hidden
+          el.miteBadgeCurrent.innerHTML = "";
+          el.miteNotice.textContent = "";
+          el.miteTimeline.innerHTML = "";
+        }
+      },
+
+      // ---------- Frames ----------
       renderFrameSummary(insp) {
         if (!Array.isArray(insp.frameMap)) {
           el.frameSummary.textContent = "";
@@ -1104,14 +1101,14 @@ renderMiteTimeline(hive) {
       },
 
       nextSegValue(v) {
-        const order = ["none", "honey", "brood", "pollen"]; // ✅ cycle
+        const order = ["none", "honey", "brood", "pollen"];
         const idx = Math.max(0, order.indexOf(v));
         return order[(idx + 1) % order.length];
       },
 
       frameIntensity(frameSegments) {
         const segs = Array.isArray(frameSegments) ? frameSegments : [];
-        const filled = segs.filter(v => v && v !== "none").length; // 0..4
+        const filled = segs.filter(v => v && v !== "none").length;
         return Math.max(0, Math.min(1, filled / 4));
       },
 
@@ -1136,16 +1133,11 @@ renderMiteTimeline(hive) {
           return;
         }
 
-        // keep rendered insp in sync
         insp.frameMap[f][s] = value;
-
-        // update segment class
         if (segEl) segEl.className = `frame-seg seg-${value}`;
 
-        // update summary
         UI.renderFrameSummary(insp2);
 
-        // update column intensity + meter
         const colEl = segEl?.closest(".frame-col");
         if (colEl) {
           const intensity = UI.frameIntensity(insp2.frameMap[f]);
@@ -1192,7 +1184,6 @@ renderMiteTimeline(hive) {
           title.textContent = `${f + 1}`;
           col.appendChild(title);
 
-          // meter
           const meter = document.createElement("div");
           meter.className = "frame-meter";
           const meterFill = document.createElement("div");
@@ -1239,36 +1230,30 @@ renderMiteTimeline(hive) {
       },
 
       loadInspectionIntoForm(hive, inspectionId) {
-  const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
-  if (!insp) return;
+        const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
+        if (!insp) return;
 
-  this.ensureInspectionDefaults(insp);
+        this.ensureInspectionDefaults(insp);
 
-  State.currentInspectionId = insp.id;
-  el.date.value = insp.date || Utils.today();
-  el.framesCount.value = insp.framesCount || 10;
-  el.queen.checked = !!insp.queenPresent;
-  el.notes.value = insp.notes || "";
+        State.currentInspectionId = insp.id;
+        el.date.value = insp.date || Utils.today();
+        el.framesCount.value = insp.framesCount || 10;
+        el.queen.checked = !!insp.queenPresent;
+        el.notes.value = insp.notes || "";
 
-  // ✅ mites (populate form fields from saved inspection)
-  el.miteTreatmentType.value = insp.miteTreatment?.type || "";
-  el.miteInstalled.value = insp.miteTreatment?.installed || "";
-  el.miteDue.value = insp.miteTreatment?.due || "";
-        this.renderMiteNoticeInForm(insp);
-this.renderMiteTimeline(hive);
+        // mites
+        el.miteTreatmentType.value = insp.miteTreatment?.type || "";
+        el.miteInstalled.value = insp.miteTreatment?.installed || "";
+        el.miteDue.value = insp.miteTreatment?.due || "";
+        this.updateMitesUI(hive, insp);
 
+        this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
 
-  // ✅ show the badge in the form immediately
-  this.renderMiteBadgeInForm(insp);
-
-  this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
-
-  this.renderFlagButtons(hive, insp);
-  this.renderHistory(hive);
-  this.renderPhotoGallery(hive, insp).catch(() => {});
-  this.renderFrameMap(hive, insp);
-},
-
+        this.renderFlagButtons(hive, insp);
+        this.renderHistory(hive);
+        this.renderPhotoGallery(hive, insp).catch(() => {});
+        this.renderFrameMap(hive, insp);
+      },
 
       renderHistory(hive) {
         el.history.innerHTML = "";
@@ -1335,6 +1320,8 @@ this.renderMiteTimeline(hive);
                 el.miteTreatmentType.value = "";
                 el.miteInstalled.value = "";
                 el.miteDue.value = "";
+                el.miteSection.classList.add("hidden");
+                el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
                 el.flagButtons.innerHTML = "";
                 el.photoGallery.innerHTML = "";
                 el.frameLegend.innerHTML = "";
@@ -1685,11 +1672,6 @@ this.renderMiteTimeline(hive);
         insp.queenPresent = el.queen.checked;
         insp.notes = el.notes.value;
 
-        // ✅ mites
-        insp.miteTreatment.type = el.miteTreatmentType.value || "";
-        insp.miteTreatment.installed = el.miteInstalled.value || "";
-        insp.miteTreatment.due = el.miteDue.value || "";
-
         State.currentInspectionId = insp.id;
 
         hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -1722,42 +1704,6 @@ this.renderMiteTimeline(hive);
     // =========================================================
     // Wiring (events)
     // =========================================================
-
-    function saveMiteTreatmentFromForm() {
-  if (!State.currentHiveId || !State.currentInspectionId) return;
-
-  const hives = Storage.loadHives();
-  const hive = hives[State.currentHiveId];
-  if (!hive) return;
-
-  const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
-  if (!insp) return;
-
-  UI.ensureInspectionDefaults(insp);
-
-  insp.miteTreatment = {
-    type: (el.miteTreatmentType.value || "").trim(),
-    installed: el.miteInstalled.value || "",
-    due: el.miteDue.value || ""
-  };
-
-  const res = Storage.saveHives(hives);
-  if (!res.ok) {
-    UI.status("Save failed (storage full?) — export ZIP backup!");
-    return;
-  }
-
-  UI.renderMiteBadgeInForm(insp);
-  UI.renderHistory(hive);
-      UI.renderMiteNoticeInForm(insp);
-UI.renderMiteTimeline(hive);
-
-}
-    el.miteTreatmentType.addEventListener("change", saveMiteTreatmentFromForm);
-el.miteInstalled.addEventListener("change", saveMiteTreatmentFromForm);
-el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
-
-
 
     Storage.migrateIfNeeded();
 
@@ -1836,11 +1782,6 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
     el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
-
-    // ✅ mites save events
-    el.miteTreatmentType.addEventListener("change", () => App.saveCurrentHiveAndInspection());
-    el.miteInstalled.addEventListener("change", () => App.saveCurrentHiveAndInspection());
-    el.miteDue.addEventListener("change", () => App.saveCurrentHiveAndInspection());
 
     // Frames count changes
     el.framesCount.addEventListener("change", () => {
@@ -1928,6 +1869,86 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
         alert("Photo error: " + (err.message || err));
         UI.status("Ready");
       }
+    });
+
+    // ---------------- Mites (single, non-duplicated save path) ----------------
+    function saveMiteTreatmentFromForm() {
+      if (!State.currentHiveId || !State.currentInspectionId) return;
+
+      const hives = Storage.loadHives();
+      const hive = hives[State.currentHiveId];
+      if (!hive) return;
+
+      const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
+      if (!insp) return;
+
+      UI.ensureInspectionDefaults(insp);
+
+      insp.miteTreatment = {
+        type: (el.miteTreatmentType.value || "").trim(),
+        installed: el.miteInstalled.value || "",
+        due: el.miteDue.value || ""
+      };
+
+      const res = Storage.saveHives(hives);
+      if (!res.ok) {
+        UI.status("Save failed (storage full?) — export ZIP backup!");
+        return;
+      }
+
+      UI.updateMitesUI(hive, insp);
+      UI.renderHistory(hive);
+    }
+
+    el.miteTreatmentType.addEventListener("change", saveMiteTreatmentFromForm);
+    el.miteInstalled.addEventListener("change", saveMiteTreatmentFromForm);
+    el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
+
+    el.miteToggleBtn.addEventListener("click", () => {
+      if (!State.currentHiveId || !State.currentInspectionId) return;
+
+      const hives = Storage.loadHives();
+      const hive = hives[State.currentHiveId];
+      if (!hive) return;
+
+      const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
+      if (!insp) return;
+
+      UI.ensureInspectionDefaults(insp);
+
+      const hidden = el.miteSection.classList.contains("hidden");
+      if (hidden) {
+        el.miteSection.classList.remove("hidden");
+        el.miteToggleBtn.textContent = "🐜 Mite Treatment (editing) — Hide";
+        // helpful focus
+        setTimeout(() => { try { el.miteTreatmentType.focus(); } catch (_) {} }, 50);
+        UI.renderMiteBadgeInForm(insp);
+        UI.renderMiteNoticeInForm(insp);
+        UI.renderMiteTimeline(hive);
+        return;
+      }
+
+      // if visible: only allow hiding when not in use
+      if (UI.miteIsInUse(insp)) {
+        alert("This hive has an active/recorded mite treatment. Use “Clear Treatment” to remove it, or leave this section open.");
+        return;
+      }
+
+      el.miteSection.classList.add("hidden");
+      el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+    });
+
+    el.miteClearBtn.addEventListener("click", () => {
+      if (!confirm("Clear mite treatment for this inspection?")) return;
+
+      el.miteTreatmentType.value = "";
+      el.miteInstalled.value = "";
+      el.miteDue.value = "";
+      saveMiteTreatmentFromForm(); // persists + updates UI + collapses if unused
+
+      // collapse after clearing
+      el.miteSection.classList.add("hidden");
+      el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
     });
 
     function shouldFilterToCurrentYard() {
@@ -2085,7 +2106,7 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
       }
     });
 
-    // ZIP import (restore JSON + photos) with OVERWRITE or MERGE
+    // ZIP import (restore JSON + photos)
     el.importZipBtn.addEventListener("click", async () => {
       const ok = await ensureJSZipReady();
       if (!ok || !window.JSZip) {
@@ -2208,6 +2229,11 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
       el.miteTreatmentType.value = "";
       el.miteInstalled.value = "";
       el.miteDue.value = "";
+      el.miteSection.classList.add("hidden");
+      el.miteToggleBtn.textContent = "➕ Add Mite Treatment";
+      el.miteBadgeCurrent.innerHTML = "";
+      el.miteNotice.textContent = "";
+      el.miteTimeline.innerHTML = "";
 
       el.photoGallery.innerHTML = "";
       el.flagButtons.innerHTML = "";
@@ -2322,4 +2348,3 @@ el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
   </script>
 </body>
 </html>
-
