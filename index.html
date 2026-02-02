@@ -19,6 +19,7 @@
     .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-top: 0.75rem; }
     input[type="checkbox"] { width: 28px; height: 28px; }
     #status { margin: 0.75rem 0 1rem; }
+
     .card {
       background: #fff;
       border: 1px solid #ddd;
@@ -35,6 +36,7 @@
     }
     .row > .grow { flex: 1; }
     .small { font-size: 0.9rem; opacity: 0.85; }
+
     .btn {
       font-size: 1.1rem;
       padding: 0.75rem;
@@ -57,6 +59,7 @@
       border-color: #999;
       color: #222;
     }
+
     .history-item {
       padding: 0.6rem;
       border-bottom: 1px solid #eee;
@@ -69,6 +72,7 @@
     .history-left { flex: 1; cursor: pointer; }
     .selected { background: #eef; border-radius: 8px; }
     a { color: #0645AD; }
+
     .badge {
       display: inline-block;
       padding: 0.12rem 0.5rem;
@@ -83,6 +87,7 @@
       background: #111;
       color: #fff;
     }
+
     .flag-row { margin-top: 0.5rem; }
     .flag-btn {
       width: auto;
@@ -114,9 +119,7 @@
       border: 1px solid #ddd;
       background: #f2f2f2;
     }
-    .thumb-wrap {
-      position: relative;
-    }
+    .thumb-wrap { position: relative; }
     .thumb-del {
       position: absolute;
       top: 6px;
@@ -163,7 +166,7 @@
     /* Frame map */
     .frame-map {
       display: grid;
-      gap: 0.4rem;
+      gap: 0.6rem;
       margin-top: 0.6rem;
       align-items: end;
     }
@@ -172,42 +175,27 @@
       border-radius: 10px;
       overflow: hidden;
       background: #fafafa;
+      --intensity: 0; /* 0..1 set by JS */
+      box-shadow: 0 0 0 2px rgba(0,0,0,var(--intensity));
     }
     .frame-col-title {
       text-align: center;
       font-size: 0.85rem;
       padding: 0.25rem 0.1rem;
       border-bottom: 1px solid #eee;
+      background: rgba(0,0,0, calc(var(--intensity) * 0.12));
     }
 
-    /* Visual intensity per frame (based on filled segments) */
-.frame-col {
-  --intensity: 0; /* 0..1 set by JS */
-  box-shadow: 0 0 0 2px rgba(0,0,0,var(--intensity));
-}
-
-.frame-col-title {
-  background: rgba(0,0,0, calc(var(--intensity) * 0.12));
-}
-
-   .frame-seg {
-  height: 36px;
-  margin: 2px 0;
-  border-radius: 4px;
-  touch-action: none;
-  user-select: none;
-}
-
+    .frame-seg {
+      height: 36px;
+      margin: 2px 0;
+      border-radius: 4px;
+      touch-action: none; /* enables reliable pointer events on touch */
+      user-select: none;
+    }
     .frame-seg:active {
-  outline: 2px solid rgba(0,0,0,0.15);
-}
-    .frame-map {
-  gap: 0.6rem;   /* was 0.4rem */
-}
-
-
-
-
+      outline: 2px solid rgba(0,0,0,0.15);
+    }
     .frame-seg:last-child { border-bottom: none; }
 
     .seg-none { background: #f6f6f6; }
@@ -216,42 +204,35 @@
     .seg-brood { background: #c9b3ff; }
 
     .legend {
-      display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.4rem;
+      display:flex;
+      gap:0.5rem;
+      flex-wrap:wrap;
+      margin-top:0.4rem;
     }
     .legend .swatch {
-      display:inline-block; width:14px; height:14px; border-radius:4px; border:1px solid #bbb; margin-right:0.3rem;
+      display:inline-block;
+      width:14px;
+      height:14px;
+      border-radius:4px;
+      border:1px solid #bbb;
+      margin-right:0.3rem;
       vertical-align: -2px;
     }
 
-    /* Mini fill meter under the frame number */
-.frame-meter {
-  height: 6px;
-  margin: 6px 10px 8px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-
     /* Mini "fill meter" under each frame number */
-.frame-meter {
-  height: 8px;
-  background: #e9e9e9;
-  border-top: 1px solid #ddd;
-}
-
-.frame-meter {
-  height: 6px;
-  margin: 6px 10px 8px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.08);
-  overflow: hidden;
-}
-.frame-meter-fill {
-  height: 100%;
-  width: 0%;
-  background: rgba(0,0,0,0.45);
-}
-
+    .frame-meter {
+      height: 6px;
+      margin: 6px 10px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.08);
+      overflow: hidden;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .frame-meter-fill {
+      height: 100%;
+      width: 0%;
+      background: rgba(0,0,0,0.45);
+    }
   </style>
 </head>
 
@@ -301,13 +282,12 @@
     <input id="framesCount" type="number" min="1" max="20" step="1" />
 
     <div class="small" style="margin-top:0.4rem;">
-      Tap a section to cycle: Empty → Pollen → Honey → Brood
+      Tap/drag a section to cycle: Empty → Honey → Brood → Pollen
     </div>
 
     <div id="frameLegend" class="legend"></div>
     <div id="frameMap" class="frame-map"></div>
     <div id="frameSummary" class="small" style="margin-top:0.4rem;"></div>
-
 
     <div class="card" style="margin-top:0.75rem;">
       <strong>Quick Flags</strong>
@@ -408,7 +388,7 @@
 
     // ---------------- Storage ----------------
     const Storage = {
-      VERSION: 3, // bumped for framesCount + frameMap
+      VERSION: 3,
 
       load(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -441,7 +421,6 @@
         for (const hive of Object.values(hives)) {
           if (!Array.isArray(hive.inspections)) hive.inspections = [];
           hive.inspections.forEach(insp => {
-            // flags
             if (!insp.flags) {
               insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
             } else {
@@ -452,10 +431,8 @@
               insp.flags.fed = !!insp.flags.fed;
             }
 
-            // photos
             if (!Array.isArray(insp.photos)) insp.photos = [];
 
-            // frames (new)
             if (typeof insp.framesCount !== "number") insp.framesCount = 10;
             if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           });
@@ -467,26 +444,25 @@
       },
 
       createInspection(hive, date) {
-  const prev = Array.isArray(hive.inspections) ? hive.inspections[0] : null;
+        const prev = Array.isArray(hive.inspections) ? hive.inspections[0] : null;
 
-  const insp = {
-    id: Utils.uuid(),
-    date: date || Utils.today(),
-    queenPresent: false,
-    notes: "",
-    flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
-    photos: [],
+        const insp = {
+          id: Utils.uuid(),
+          date: date || Utils.today(),
+          queenPresent: false,
+          notes: "",
+          flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
+          photos: [],
 
-    framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
-    frameMap: Array.isArray(prev?.frameMap)
-      ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
-      : []
-  };
+          framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
+          frameMap: Array.isArray(prev?.frameMap)
+            ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
+            : []
+        };
 
-  hive.inspections.unshift(insp);
-  return insp;
-},
-
+        hive.inspections.unshift(insp);
+        return insp;
+      },
 
       getOrCreateTodayInspection(hive) {
         const t = Utils.today();
@@ -568,17 +544,17 @@
 
     // ---------------- State ----------------
     const State = {
-  currentHiveId: null,
-  currentInspectionId: null,
-  scanning: false,
-  activeReader: null,
-  scanSession: 0,
-  lastPosition: null,
+      currentHiveId: null,
+      currentInspectionId: null,
+      scanning: false,
+      activeReader: null,
+      scanSession: 0,
+      lastPosition: null,
 
-  painting: false,
-  paintValue: null
-};
-
+      painting: false,
+      paintValue: null,
+      pointerId: null
+    };
 
     // ---------------- Elements ----------------
     const el = {
@@ -594,7 +570,6 @@
       frameLegend: document.getElementById("frameLegend"),
       frameMap: document.getElementById("frameMap"),
       frameSummary: document.getElementById("frameSummary"),
-
 
       queen: document.getElementById("queenPresent"),
       notes: document.getElementById("notes"),
@@ -660,53 +635,51 @@
       },
 
       renderFrameSummary(insp) {
-  if (!Array.isArray(insp.frameMap)) {
-    el.frameSummary.textContent = "";
-    return;
-  }
+        if (!Array.isArray(insp.frameMap)) {
+          el.frameSummary.textContent = "";
+          return;
+        }
 
-  let pollen = 0, honey = 0, brood = 0, empty = 0;
+        let pollen = 0, honey = 0, brood = 0, empty = 0;
 
-  for (const frame of insp.frameMap) {
-    for (const seg of (frame || [])) {
-      if (seg === "pollen") pollen++;
-      else if (seg === "honey") honey++;
-      else if (seg === "brood") brood++;
-      else empty++;
-    }
-  }
+        for (const frame of insp.frameMap) {
+          for (const seg of (frame || [])) {
+            if (seg === "pollen") pollen++;
+            else if (seg === "honey") honey++;
+            else if (seg === "brood") brood++;
+            else empty++;
+          }
+        }
 
-  const frames = Math.max(0, Number(insp.framesCount || insp.frameMap.length || 0));
-  const totalSections = frames * 4;
+        const frames = Math.max(0, Number(insp.framesCount || insp.frameMap.length || 0));
+        const totalSections = frames * 4;
 
-  const pct = (n) => {
-    if (!totalSections) return "0%";
-    return `${Math.round((n / totalSections) * 100)}%`;
-  };
+        const pct = (n) => {
+          if (!totalSections) return "0%";
+          return `${Math.round((n / totalSections) * 100)}%`;
+        };
 
-  // Optional “quick read” cue (based on how full brood is)
-  const broodPct = totalSections ? brood / totalSections : 0;
-  const cue =
-    broodPct >= 0.60 ? "🔥 Strong brood" :
-    broodPct >= 0.35 ? "✅ Good brood" :
-    broodPct > 0    ? "⚠️ Light brood" :
-                      "—";
+        const broodPct = totalSections ? brood / totalSections : 0;
+        const cue =
+          broodPct >= 0.60 ? "🔥 Strong brood" :
+          broodPct >= 0.35 ? "✅ Good brood" :
+          broodPct > 0    ? "⚠️ Light brood" :
+                            "—";
 
-  el.frameSummary.innerHTML =
-    `🟨 Pollen: <strong>${pollen}</strong> (${pct(pollen)}) &nbsp; ` +
-    `🍯 Honey: <strong>${honey}</strong> (${pct(honey)}) &nbsp; ` +
-    `🟪 Brood: <strong>${brood}</strong> (${pct(brood)})` +
-    `<br>` +
-    `🧮 Total sections: <strong>${totalSections}</strong> (${frames} frames) &nbsp; • &nbsp; ${cue}`;
-},
-
+        el.frameSummary.innerHTML =
+          `🟨 Pollen: <strong>${pollen}</strong> (${pct(pollen)}) &nbsp; ` +
+          `🍯 Honey: <strong>${honey}</strong> (${pct(honey)}) &nbsp; ` +
+          `🟪 Brood: <strong>${brood}</strong> (${pct(brood)})` +
+          `<br>` +
+          `🧮 Total sections: <strong>${totalSections}</strong> (${frames} frames) &nbsp; • &nbsp; ${cue}`;
+      },
 
       renderFrameLegend() {
         const items = [
           ["seg-none", "Empty"],
-          ["seg-pollen", "Pollen"],
           ["seg-honey", "Honey"],
           ["seg-brood", "Brood"],
+          ["seg-pollen", "Pollen"],
         ];
         el.frameLegend.innerHTML = items.map(([cls, label]) =>
           `<span><span class="swatch ${cls}"></span>${label}</span>`
@@ -731,83 +704,103 @@
         insp.frameMap = insp.frameMap.slice(0, frames);
       },
 
-    nextSegValue(v) {
-  const order = ["none", "honey", "brood", "pollen"]; // ✅ new cycle
-  const idx = Math.max(0, order.indexOf(v));
-  return order[(idx + 1) % order.length];
-},
-      applySegValue(hive, insp, f, s, value, segEl) {
-  if (!State.currentHiveId || !State.currentInspectionId) return;
-
-  const hives = Storage.loadHives();
-  const hive2 = hives[State.currentHiveId];
-  if (!hive2 || !Array.isArray(hive2.inspections)) return;
-
-  const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
-  if (!insp2) return;
-
-  UI.ensureInspectionDefaults(insp2);
-  UI.normalizeFrameMap(insp2);
-
-  insp2.frameMap[f][s] = value;
-
-  const res = Storage.saveHives(hives);
-  if (!res.ok) {
-    UI.status("Save failed (storage full?) — export ZIP backup!");
-    return;
-  }
-
-  // keep rendered insp in sync
-  insp.frameMap[f][s] = value;
-
-  // update segment class
-  if (segEl) segEl.className = `frame-seg seg-${value}`;
-
-  // update summary
-  UI.renderFrameSummary(insp2);
-
-  // update column intensity
-  const colEl = segEl?.closest(".frame-col");
-  if (colEl) {
-    const intensity = UI.frameIntensity(insp2.frameMap[f]);
-    colEl.style.setProperty("--intensity", String(intensity));
-  }
-
-  // update mini meter (if present in this column)
-  const meterFill = colEl?.querySelector(".frame-meter-fill");
-  if (meterFill) {
-    const filled = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
-      .filter(v => v && v !== "none").length;
-    meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
-  }
-},
-
-startPainting(value) {
-  State.painting = true;
-  State.paintValue = value;
-},
-
-stopPainting() {
-  State.painting = false;
-  State.paintValue = null;
-},
-
+      // ✅ New cycle: none -> honey -> brood -> pollen -> none
+      nextSegValue(v) {
+        const order = ["none", "honey", "brood", "pollen"];
+        const idx = Math.max(0, order.indexOf(v));
+        return order[(idx + 1) % order.length];
+      },
 
       frameIntensity(frameSegments) {
-  // frameSegments length is 4. Count how many are not "none".
-  const segs = Array.isArray(frameSegments) ? frameSegments : [];
-  const filled = segs.filter(v => v && v !== "none").length; // 0..4
-  // Map 0..4 -> 0..1 (clamped)
-  return Math.max(0, Math.min(1, filled / 4));
-},
+        const segs = Array.isArray(frameSegments) ? frameSegments : [];
+        const filled = segs.filter(v => v && v !== "none").length;
+        return Math.max(0, Math.min(1, filled / 4));
+      },
 
+      startPainting(value, pointerId) {
+        State.painting = true;
+        State.paintValue = value;
+        State.pointerId = pointerId ?? null;
+      },
+
+      stopPainting() {
+        State.painting = false;
+        State.paintValue = null;
+        State.pointerId = null;
+      },
+
+      applySegValue(hive, insp, f, s, value, segEl) {
+        if (!State.currentHiveId || !State.currentInspectionId) return;
+
+        const hives = Storage.loadHives();
+        const hive2 = hives[State.currentHiveId];
+        if (!hive2 || !Array.isArray(hive2.inspections)) return;
+
+        const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
+        if (!insp2) return;
+
+        UI.ensureInspectionDefaults(insp2);
+        UI.normalizeFrameMap(insp2);
+
+        if (!insp2.frameMap?.[f]) return;
+
+        insp2.frameMap[f][s] = value;
+
+        const res = Storage.saveHives(hives);
+        if (!res.ok) {
+          UI.status("Save failed (storage full?) — export ZIP backup!");
+          return;
+        }
+
+        // keep rendered insp in sync
+        insp.frameMap[f][s] = value;
+
+        // update segment class
+        if (segEl) segEl.className = `frame-seg seg-${value}`;
+
+        // update summary
+        UI.renderFrameSummary(insp2);
+
+        // update column intensity + meter
+        const colEl = segEl?.closest(".frame-col");
+        if (colEl) {
+          const intensity = UI.frameIntensity(insp2.frameMap[f]);
+          colEl.style.setProperty("--intensity", String(intensity));
+
+          const meterFill = colEl.querySelector(".frame-meter-fill");
+          if (meterFill) {
+            const filled = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
+              .filter(v => v && v !== "none").length;
+            meterFill.style.width = `${Math.round((filled / 4) * 100)}%`;
+          }
+        }
+      },
+
+      // Optional (but recommended): more reliable painting on touch
+      paintAtPointer(hive, insp, clientX, clientY) {
+        if (!State.painting || !State.paintValue) return;
+
+        const hit = document.elementFromPoint(clientX, clientY);
+        if (!hit) return;
+
+        const segEl = hit.closest?.(".frame-seg");
+        if (!segEl) return;
+
+        const f = Number(segEl.dataset.f);
+        const s = Number(segEl.dataset.s);
+        if (!Number.isFinite(f) || !Number.isFinite(s)) return;
+
+        const current = insp.frameMap?.[f]?.[s] || "none";
+        if (current === State.paintValue) return;
+
+        UI.applySegValue(hive, insp, f, s, State.paintValue, segEl);
+      },
 
       renderFrameMap(hive, insp) {
         this.ensureInspectionDefaults(insp);
         this.normalizeFrameMap(insp);
         this.renderFrameLegend();
         this.renderFrameSummary(insp);
-
 
         el.framesCount.value = insp.framesCount;
 
@@ -819,107 +812,56 @@ stopPainting() {
           col.className = "frame-col";
 
           const intensity = this.frameIntensity(insp.frameMap[f]);
-col.style.setProperty("--intensity", String(intensity));
-
+          col.style.setProperty("--intensity", String(intensity));
 
           const title = document.createElement("div");
-title.className = "frame-col-title";
-title.textContent = `${f + 1}`;
-col.appendChild(title);
+          title.className = "frame-col-title";
+          title.textContent = `${f + 1}`;
+          col.appendChild(title);
 
-/* 👇 Add meter (A) */
-const meter = document.createElement("div");
-meter.className = "frame-meter";
+          // Meter
+          const meter = document.createElement("div");
+          meter.className = "frame-meter";
+          const meterFill = document.createElement("div");
+          meterFill.className = "frame-meter-fill";
+          meter.appendChild(meterFill);
+          col.appendChild(meter);
 
-const meterFill = document.createElement("div");
-meterFill.className = "frame-meter-fill";
-meter.appendChild(meterFill);
-
-col.appendChild(meter);
-
-// Set initial meter width based on current saved values
-const filled0 = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : [])
-  .filter(v => v && v !== "none").length;
-
-meterFill.style.width = `${Math.round((filled0 / 4) * 100)}%`;
-
-
+          const filled0 = (Array.isArray(insp.frameMap[f]) ? insp.frameMap[f] : [])
+            .filter(v => v && v !== "none").length;
+          meterFill.style.width = `${Math.round((filled0 / 4) * 100)}%`;
 
           for (let s = 0; s < 4; s++) {
             const seg = document.createElement("div");
             const v = insp.frameMap[f][s] || "none";
             seg.className = `frame-seg seg-${v}`;
             seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
+            seg.dataset.f = String(f);
+            seg.dataset.s = String(s);
 
+            // Pointer-driven paint (tap to choose a brush = "next" for that first cell, then drag paints same value)
             seg.addEventListener("pointerdown", (ev) => {
-  ev.preventDefault();
-  seg.setPointerCapture(ev.pointerId);
+              ev.preventDefault();
 
-  // pick brush by cycling once
-  const current = insp.frameMap[f][s] || "none";
-  const next = UI.nextSegValue(current);
+              try { seg.setPointerCapture(ev.pointerId); } catch (_) {}
 
-  UI.startPainting(next);
-  UI.applySegValue(hive, insp, f, s, next, seg);
-});
+              const current = insp.frameMap[f][s] || "none";
+              const next = UI.nextSegValue(current);
 
-seg.addEventListener("pointerenter", () => {
-  if (!State.painting || !State.paintValue) return;
+              UI.startPainting(next, ev.pointerId);
+              UI.applySegValue(hive, insp, f, s, next, seg);
+            });
 
-  const current = insp.frameMap[f][s] || "none";
-  if (current === State.paintValue) return;
+            // Reliable drag painting for touch/mouse: paint wherever the pointer moves
+            seg.addEventListener("pointermove", (ev) => {
+              if (!State.painting) return;
+              if (State.pointerId != null && ev.pointerId !== State.pointerId) return;
+              UI.paintAtPointer(hive, insp, ev.clientX, ev.clientY);
+            });
 
-  UI.applySegValue(hive, insp, f, s, State.paintValue, seg);
-});
-
-seg.addEventListener("pointerup", () => UI.stopPainting());
-seg.addEventListener("pointercancel", () => UI.stopPainting());
-
-
-  // Load the real stored hive/inspection so the change persists
-  const hives = Storage.loadHives();
-  const hive2 = hives[State.currentHiveId];
-  if (!hive2 || !Array.isArray(hive2.inspections)) return;
-
-  const insp2 = hive2.inspections.find(i => i.id === State.currentInspectionId);
-  if (!insp2) return;
-
-  UI.ensureInspectionDefaults(insp2);
-  UI.normalizeFrameMap(insp2);
-
-  // Apply change to stored inspection
-  insp2.frameMap[f][s] = UI.nextSegValue(insp2.frameMap[f][s] || "none");
-
-  // Save
-  const res = Storage.saveHives(hives);
-  if (!res.ok) {
-    UI.status("Save failed (storage full?) — export ZIP backup!");
-    return;
-  }
-
-  // Keep the currently-rendered 'insp' in sync too (so UI feels instant)
-  insp.frameMap[f][s] = insp2.frameMap[f][s];
-
-  // Update just this segment visually
-  seg.className = `frame-seg seg-${insp.frameMap[f][s]}`;
-
-  // Update summary + intensity for this column
-  UI.renderFrameSummary(insp2);
-
-  const col = seg.closest(".frame-col");
-  if (col) {
-    const intensity = UI.frameIntensity(insp2.frameMap[f]);
-    col.style.setProperty("--intensity", String(intensity));
-  }
-
-            // Update mini meter for this column
-const filled2 = (Array.isArray(insp2.frameMap[f]) ? insp2.frameMap[f] : [])
-  .filter(v => v && v !== "none").length;
-
-meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
-
-});
-
+            seg.addEventListener("lostpointercapture", () => UI.stopPainting());
+            seg.addEventListener("pointerup", () => UI.stopPainting());
+            seg.addEventListener("pointercancel", () => UI.stopPainting());
 
             col.appendChild(seg);
           }
@@ -1385,11 +1327,11 @@ meterFill.style.width = `${Math.round((filled2 / 4) * 100)}%`;
     // =========================================================
     // Wiring (events)
     // =========================================================
-
     Storage.migrateIfNeeded();
-    document.addEventListener("pointerup", () => UI.stopPainting());
-document.addEventListener("pointercancel", () => UI.stopPainting());
 
+    // Extra safety: stop painting if pointer ends outside a segment
+    document.addEventListener("pointerup", () => UI.stopPainting());
+    document.addEventListener("pointercancel", () => UI.stopPainting());
 
     // Yard changes
     el.currentYard.addEventListener("input", () => {
@@ -1463,7 +1405,7 @@ document.addEventListener("pointercancel", () => UI.stopPainting());
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
 
-    // Frames count changes (IMPORTANT: only bind once here)
+    // Frames count changes
     el.framesCount.addEventListener("change", () => {
       const frames = Math.max(1, Math.min(20, Math.floor(Number(el.framesCount.value || 10))));
       if (!State.currentHiveId || !State.currentInspectionId) return;
@@ -1558,12 +1500,11 @@ document.addEventListener("pointercancel", () => UI.stopPainting());
 
       const rows = [];
       rows.push([
-  "yard_name","yard_lat","yard_lon","yard_accuracy_m",
-  "hive_id","hive_name","hive_location",
-  "inspection_id","inspection_date","queen_present","flags","photo_count","notes",
-  "frames_count","frame_map"
-]);
-
+        "yard_name","yard_lat","yard_lon","yard_accuracy_m",
+        "hive_id","hive_name","hive_location",
+        "inspection_id","inspection_date","queen_present","flags","photo_count","notes",
+        "frames_count","frame_map"
+      ]);
 
       for (const hive of Object.values(hives)) {
         const yardName = (hive.location || "").trim();
@@ -1581,28 +1522,26 @@ document.addEventListener("pointercancel", () => UI.stopPainting());
 
         const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
         if (insps.length === 0) {
-        rows.push([...base, "", "", "", "", "", "", "", ""]);
-
+          rows.push([...base, "", "", "", "", "", "", "", "", ""]);
         } else {
           for (const insp of insps) {
             const flags = insp.flags ? Object.entries(insp.flags).filter(([_, v]) => v).map(([k]) => k).join("|") : "";
             const photoCount = (insp.photos && insp.photos.length) ? insp.photos.length : 0;
 
             const framesCount = typeof insp.framesCount === "number" ? insp.framesCount : "";
-const frameMapStr = Array.isArray(insp.frameMap) ? JSON.stringify(insp.frameMap) : "";
+            const frameMapStr = Array.isArray(insp.frameMap) ? JSON.stringify(insp.frameMap) : "";
 
-rows.push([
-  ...base,
-  insp.id || "",
-  insp.date || "",
-  insp.queenPresent ? "yes" : "no",
-  flags,
-  photoCount,
-  insp.notes || "",
-  framesCount,
-  frameMapStr
-]);
-
+            rows.push([
+              ...base,
+              insp.id || "",
+              insp.date || "",
+              insp.queenPresent ? "yes" : "no",
+              flags,
+              photoCount,
+              insp.notes || "",
+              framesCount,
+              frameMapStr
+            ]);
           }
         }
       }
@@ -1645,10 +1584,10 @@ rows.push([
 
         zip.file("hive-tracker-backup.json", JSON.stringify(payload, null, 2));
 
-        const hives = payload.hives || {};
+        const hivesObj = payload.hives || {};
         const photoIds = new Set();
 
-        for (const hive of Object.values(hives)) {
+        for (const hive of Object.values(hivesObj)) {
           const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
           for (const insp of insps) {
             const ids = Array.isArray(insp.photos) ? insp.photos : [];
@@ -1917,12 +1856,3 @@ rows.push([
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
