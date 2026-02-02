@@ -12,14 +12,14 @@
       font-size: 18px;
     }
     h1 { font-size: 1.6rem; margin-top: 0; }
+    h2 { font-size: 1.25rem; margin: 1rem 0 0.5rem; }
     label { font-weight: bold; display: block; margin: 0.75rem 0 0.25rem; }
-    input, textarea, button { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
+    input, textarea, button, select { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
     textarea { min-height: 120px; }
     .hidden { display: none; }
     .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-top: 0.75rem; }
     input[type="checkbox"] { width: 28px; height: 28px; }
     #status { margin: 0.75rem 0 1rem; }
-
     .card {
       background: #fff;
       border: 1px solid #ddd;
@@ -36,7 +36,6 @@
     }
     .row > .grow { flex: 1; }
     .small { font-size: 0.9rem; opacity: 0.85; }
-
     .btn {
       font-size: 1.1rem;
       padding: 0.75rem;
@@ -59,7 +58,6 @@
       border-color: #999;
       color: #222;
     }
-
     .history-item {
       padding: 0.6rem;
       border-bottom: 1px solid #eee;
@@ -81,12 +79,24 @@
       font-size: 0.85rem;
       margin-right: 0.3rem;
       background: #fafafa;
+      white-space: nowrap;
     }
     .badge.on {
       border-color: #111;
       background: #111;
       color: #fff;
     }
+    .badge.warn {
+  border-color: #b00;
+  background: #b00;
+  color: #fff;
+}
+.badge.soon {
+  border-color: #c60;
+  background: #c60;
+  color: #fff;
+}
+
 
     .flag-row { margin-top: 0.5rem; }
     .flag-btn {
@@ -175,7 +185,8 @@
       border-radius: 10px;
       overflow: hidden;
       background: #fafafa;
-      --intensity: 0; /* 0..1 set by JS */
+
+      --intensity: 0;
       box-shadow: 0 0 0 2px rgba(0,0,0,var(--intensity));
     }
     .frame-col-title {
@@ -190,13 +201,12 @@
       height: 36px;
       margin: 2px 0;
       border-radius: 4px;
-      touch-action: none; /* enables reliable pointer events on touch */
+      touch-action: none;
       user-select: none;
     }
     .frame-seg:active {
       outline: 2px solid rgba(0,0,0,0.15);
     }
-    .frame-seg:last-child { border-bottom: none; }
 
     .seg-none { background: #f6f6f6; }
     .seg-pollen { background: #ffe59a; }
@@ -204,18 +214,10 @@
     .seg-brood { background: #c9b3ff; }
 
     .legend {
-      display:flex;
-      gap:0.5rem;
-      flex-wrap:wrap;
-      margin-top:0.4rem;
+      display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.4rem;
     }
     .legend .swatch {
-      display:inline-block;
-      width:14px;
-      height:14px;
-      border-radius:4px;
-      border:1px solid #bbb;
-      margin-right:0.3rem;
+      display:inline-block; width:14px; height:14px; border-radius:4px; border:1px solid #bbb; margin-right:0.3rem;
       vertical-align: -2px;
     }
 
@@ -226,12 +228,22 @@
       border-radius: 999px;
       background: rgba(0,0,0,0.08);
       overflow: hidden;
-      border-top: 1px solid rgba(0,0,0,0.06);
+      border-top: 1px solid #ddd;
     }
     .frame-meter-fill {
       height: 100%;
       width: 0%;
       background: rgba(0,0,0,0.45);
+    }
+
+    /* Inline form row helpers */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    @media (max-width: 520px) {
+      .two-col { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -251,6 +263,14 @@
   </div>
 
   <div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
+
+  <div class="card" style="margin-top:0.75rem;">
+    <label class="checkbox-label" style="margin:0;">
+      <input id="exportCurrentYardOnly" type="checkbox" />
+      Export only current yard
+    </label>
+    <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
+  </div>
 
   <div class="row" style="margin-top:0.75rem;">
     <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
@@ -282,7 +302,7 @@
     <input id="framesCount" type="number" min="1" max="20" step="1" />
 
     <div class="small" style="margin-top:0.4rem;">
-      Tap/drag a section to cycle: Empty → Honey → Brood → Pollen
+      Tap/drag to paint. Cycle order: Empty → Honey → Brood → Pollen
     </div>
 
     <div id="frameLegend" class="legend"></div>
@@ -300,6 +320,39 @@
       Queen Present
     </label>
 
+    <!-- ✅ NEW: Mite Treatments -->
+    <div class="card" style="margin-top:0.75rem;">
+      <strong>Mite Treatment</strong>
+      <div class="small">Saved on this inspection.</div>
+
+      <label for="miteTreatmentType">Treatment type</label>
+      <select id="miteTreatmentType">
+        <option value="">None / Not treated</option>
+        <option value="Apivar (amitraz)">Apivar (amitraz)</option>
+        <option value="Api-Bioxal (oxalic acid)">Api-Bioxal (oxalic acid)</option>
+        <option value="Oxalic acid vaporization">Oxalic acid vaporization</option>
+        <option value="Formic Pro (formic acid)">Formic Pro (formic acid)</option>
+        <option value="Mite Away Quick Strips (formic)">Mite Away Quick Strips (formic)</option>
+        <option value="Apiguard (thymol)">Apiguard (thymol)</option>
+        <option value="HopGuard III">HopGuard III</option>
+        <option value="Drone brood removal">Drone brood removal</option>
+        <option value="Powdered sugar dusting">Powdered sugar dusting</option>
+      </select>
+
+      <div class="two-col" style="margin-top:0.5rem;">
+        <div>
+          <label for="miteInstalled">Date installed</label>
+          <input id="miteInstalled" type="date" />
+        </div>
+        <div>
+          <label for="miteDue">Date to remove / reapply</label>
+          <input id="miteDue" type="date" />
+        </div>
+      </div>
+    </div>
+    <div id="miteBadgeCurrent" class="small" style="margin-top:0.5rem;"></div>
+
+
     <label for="notes">Notes</label>
     <textarea id="notes" rows="4" placeholder="What did you see?"></textarea>
 
@@ -313,7 +366,7 @@
       <div id="photoGallery" class="gallery"></div>
     </div>
 
-    <h2 style="margin: 1rem 0 0.5rem;">Inspection History</h2>
+    <h2>Inspection History</h2>
     <div id="history" class="card" style="margin:0;"></div>
   </div>
 
@@ -322,10 +375,44 @@
     <img id="viewerImg" alt="Photo" />
   </div>
 
+  <!-- Load JSZip normally; offline fallback will cache it after first online load -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
   <script>
   document.addEventListener("DOMContentLoaded", () => {
+
+    // ---------------- Offline-friendly JSZip fallback ----------------
+    // Caches JSZip code in localStorage after first online load,
+    // and restores it later if you’re offline.
+    async function ensureJSZipReady() {
+      if (window.JSZip) return true;
+
+      const CACHE_KEY = "jszip_cache_v1";
+      const cached = localStorage.getItem(CACHE_KEY);
+
+      if (cached) {
+        try {
+          // eslint-disable-next-line no-eval
+          eval(cached);
+          if (window.JSZip) return true;
+        } catch (_) {}
+      }
+
+      // Try to fetch it (requires being online at least once)
+      try {
+        const url = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+        const res = await fetch(url, { cache: "force-cache" });
+        if (!res.ok) throw new Error("JSZip fetch failed");
+        const code = await res.text();
+        localStorage.setItem(CACHE_KEY, code);
+        // eslint-disable-next-line no-eval
+        eval(code);
+        return !!window.JSZip;
+      } catch (err) {
+        return false;
+      }
+    }
+
     // ---------------- Utils ----------------
     const Utils = {
       today() { return new Date().toISOString().split("T")[0]; },
@@ -347,6 +434,14 @@
       mapsLink(lat, lon) {
         const q = `${lat},${lon}`;
         return `https://www.google.com/maps?q=${encodeURIComponent(q)}`;
+      },
+      fmtDateTime(ts) {
+        if (!ts) return "";
+        try {
+          return new Date(ts).toLocaleString();
+        } catch (_) {
+          return "";
+        }
       },
       csvEscape(v) {
         const s = (v ?? "").toString();
@@ -388,7 +483,7 @@
 
     // ---------------- Storage ----------------
     const Storage = {
-      VERSION: 3,
+      VERSION: 4, // bumped for mite treatment fields + JSZip caching is no-schema
 
       load(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -421,6 +516,7 @@
         for (const hive of Object.values(hives)) {
           if (!Array.isArray(hive.inspections)) hive.inspections = [];
           hive.inspections.forEach(insp => {
+            // flags
             if (!insp.flags) {
               insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
             } else {
@@ -431,10 +527,21 @@
               insp.flags.fed = !!insp.flags.fed;
             }
 
+            // photos
             if (!Array.isArray(insp.photos)) insp.photos = [];
 
+            // frames
             if (typeof insp.framesCount !== "number") insp.framesCount = 10;
             if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+
+            // ✅ mite treatment
+            if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
+              insp.miteTreatment = { type:"", installed:"", due:"" };
+            } else {
+              insp.miteTreatment.type = (insp.miteTreatment.type || "");
+              insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
+              insp.miteTreatment.due = (insp.miteTreatment.due || "");
+            }
           });
         }
 
@@ -457,7 +564,10 @@
           framesCount: typeof prev?.framesCount === "number" ? prev.framesCount : 10,
           frameMap: Array.isArray(prev?.frameMap)
             ? prev.frameMap.map(frame => Array.isArray(frame) ? [...frame] : [])
-            : []
+            : [],
+
+          // ✅ new mite treatment fields (start blank)
+          miteTreatment: { type:"", installed:"", due:"" }
         };
 
         hive.inspections.unshift(insp);
@@ -552,8 +662,7 @@
       lastPosition: null,
 
       painting: false,
-      paintValue: null,
-      pointerId: null
+      paintValue: null
     };
 
     // ---------------- Elements ----------------
@@ -589,6 +698,8 @@
       importZipBtn: document.getElementById("importZipBtn"),
       importZipInput: document.getElementById("importZipInput"),
 
+      exportCurrentYardOnly: document.getElementById("exportCurrentYardOnly"),
+
       hiveYardGps: document.getElementById("hiveYardGps"),
 
       flagButtons: document.getElementById("flagButtons"),
@@ -600,6 +711,12 @@
       viewer: document.getElementById("viewer"),
       viewerImg: document.getElementById("viewerImg"),
       viewerClose: document.getElementById("viewerClose"),
+
+      miteTreatmentType: document.getElementById("miteTreatmentType"),
+      miteInstalled: document.getElementById("miteInstalled"),
+      miteDue: document.getElementById("miteDue"),
+      miteBadgeCurrent: document.getElementById("miteBadgeCurrent"),
+
     };
 
     for (const [k, v] of Object.entries(el)) {
@@ -612,12 +729,32 @@
     // ---------------- UI ----------------
     const UI = {
       status(text) { el.status.textContent = text || ""; },
+      renderMiteBadgeInForm(insp) {
+  if (!el.miteBadgeCurrent) return;
+
+  const html = this.renderMiteBadge(insp?.miteTreatment);
+
+  if (!html) {
+    el.miteBadgeCurrent.innerHTML = `<em>No mite treatment set for this inspection.</em>`;
+    return;
+  }
+
+  el.miteBadgeCurrent.innerHTML = `Treatment status: ${html}`;
+},
+
 
       ensureInspectionDefaults(insp) {
         if (!insp.flags) insp.flags = { strong:false, weak:false, queenless:false, followUp:false, fed:false };
         if (!Array.isArray(insp.photos)) insp.photos = [];
         if (typeof insp.framesCount !== "number") insp.framesCount = 10;
         if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
+        if (!insp.miteTreatment || typeof insp.miteTreatment !== "object") {
+          insp.miteTreatment = { type:"", installed:"", due:"" };
+        } else {
+          insp.miteTreatment.type = (insp.miteTreatment.type || "");
+          insp.miteTreatment.installed = (insp.miteTreatment.installed || "");
+          insp.miteTreatment.due = (insp.miteTreatment.due || "");
+        }
       },
 
       renderBadgesFromFlags(flags) {
@@ -633,6 +770,30 @@
           .map(([_, label]) => `<span class="badge on">${label}</span>`)
           .join("");
       },
+
+      renderMiteBadge(miteTreatment) {
+  const t = miteTreatment?.type || "";
+  if (!t) return "";
+
+  const dueStr = (miteTreatment?.due || "").trim();
+  const todayStr = Utils.today(); // YYYY-MM-DD
+
+  let cls = "badge on";
+  if (dueStr) {
+    // Parse as local date (avoid timezone issues)
+    const due = new Date(dueStr + "T00:00:00");
+    const today = new Date(todayStr + "T00:00:00");
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const days = Math.round((due - today) / msPerDay);
+
+    if (days <= 0) cls = "badge warn";      // due today or overdue
+    else if (days <= 7) cls = "badge soon"; // due within a week
+  }
+
+  const dueText = dueStr ? ` • due ${dueStr}` : "";
+  return `<span class="${cls}">🐜 ${t}${dueText}</span>`;
+},
+
 
       renderFrameSummary(insp) {
         if (!Array.isArray(insp.frameMap)) {
@@ -704,29 +865,16 @@
         insp.frameMap = insp.frameMap.slice(0, frames);
       },
 
-      // ✅ New cycle: none -> honey -> brood -> pollen -> none
       nextSegValue(v) {
-        const order = ["none", "honey", "brood", "pollen"];
+        const order = ["none", "honey", "brood", "pollen"]; // ✅ cycle
         const idx = Math.max(0, order.indexOf(v));
         return order[(idx + 1) % order.length];
       },
 
       frameIntensity(frameSegments) {
         const segs = Array.isArray(frameSegments) ? frameSegments : [];
-        const filled = segs.filter(v => v && v !== "none").length;
+        const filled = segs.filter(v => v && v !== "none").length; // 0..4
         return Math.max(0, Math.min(1, filled / 4));
-      },
-
-      startPainting(value, pointerId) {
-        State.painting = true;
-        State.paintValue = value;
-        State.pointerId = pointerId ?? null;
-      },
-
-      stopPainting() {
-        State.painting = false;
-        State.paintValue = null;
-        State.pointerId = null;
       },
 
       applySegValue(hive, insp, f, s, value, segEl) {
@@ -741,8 +889,6 @@
 
         UI.ensureInspectionDefaults(insp2);
         UI.normalizeFrameMap(insp2);
-
-        if (!insp2.frameMap?.[f]) return;
 
         insp2.frameMap[f][s] = value;
 
@@ -776,24 +922,14 @@
         }
       },
 
-      // Optional (but recommended): more reliable painting on touch
-      paintAtPointer(hive, insp, clientX, clientY) {
-        if (!State.painting || !State.paintValue) return;
+      startPainting(value) {
+        State.painting = true;
+        State.paintValue = value;
+      },
 
-        const hit = document.elementFromPoint(clientX, clientY);
-        if (!hit) return;
-
-        const segEl = hit.closest?.(".frame-seg");
-        if (!segEl) return;
-
-        const f = Number(segEl.dataset.f);
-        const s = Number(segEl.dataset.s);
-        if (!Number.isFinite(f) || !Number.isFinite(s)) return;
-
-        const current = insp.frameMap?.[f]?.[s] || "none";
-        if (current === State.paintValue) return;
-
-        UI.applySegValue(hive, insp, f, s, State.paintValue, segEl);
+      stopPainting() {
+        State.painting = false;
+        State.paintValue = null;
       },
 
       renderFrameMap(hive, insp) {
@@ -803,7 +939,6 @@
         this.renderFrameSummary(insp);
 
         el.framesCount.value = insp.framesCount;
-
         el.frameMap.style.gridTemplateColumns = `repeat(${insp.framesCount}, minmax(0, 1fr))`;
         el.frameMap.innerHTML = "";
 
@@ -819,7 +954,7 @@
           title.textContent = `${f + 1}`;
           col.appendChild(title);
 
-          // Meter
+          // meter
           const meter = document.createElement("div");
           meter.className = "frame-meter";
           const meterFill = document.createElement("div");
@@ -836,30 +971,25 @@
             const v = insp.frameMap[f][s] || "none";
             seg.className = `frame-seg seg-${v}`;
             seg.title = `Frame ${f+1} • Section ${s+1} • ${v}`;
-            seg.dataset.f = String(f);
-            seg.dataset.s = String(s);
 
-            // Pointer-driven paint (tap to choose a brush = "next" for that first cell, then drag paints same value)
             seg.addEventListener("pointerdown", (ev) => {
               ev.preventDefault();
-
-              try { seg.setPointerCapture(ev.pointerId); } catch (_) {}
+              seg.setPointerCapture(ev.pointerId);
 
               const current = insp.frameMap[f][s] || "none";
               const next = UI.nextSegValue(current);
 
-              UI.startPainting(next, ev.pointerId);
+              UI.startPainting(next);
               UI.applySegValue(hive, insp, f, s, next, seg);
             });
 
-            // Reliable drag painting for touch/mouse: paint wherever the pointer moves
-            seg.addEventListener("pointermove", (ev) => {
-              if (!State.painting) return;
-              if (State.pointerId != null && ev.pointerId !== State.pointerId) return;
-              UI.paintAtPointer(hive, insp, ev.clientX, ev.clientY);
+            seg.addEventListener("pointerenter", () => {
+              if (!State.painting || !State.paintValue) return;
+              const current = insp.frameMap[f][s] || "none";
+              if (current === State.paintValue) return;
+              UI.applySegValue(hive, insp, f, s, State.paintValue, seg);
             });
 
-            seg.addEventListener("lostpointercapture", () => UI.stopPainting());
             seg.addEventListener("pointerup", () => UI.stopPainting());
             seg.addEventListener("pointercancel", () => UI.stopPainting());
 
@@ -871,23 +1001,33 @@
       },
 
       loadInspectionIntoForm(hive, inspectionId) {
-        const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
-        if (!insp) return;
+  const insp = hive.inspections.find(i => i.id === inspectionId) || hive.inspections[0];
+  if (!insp) return;
 
-        this.ensureInspectionDefaults(insp);
+  this.ensureInspectionDefaults(insp);
 
-        State.currentInspectionId = insp.id;
-        el.date.value = insp.date || Utils.today();
-        el.framesCount.value = insp.framesCount || 10;
-        el.queen.checked = !!insp.queenPresent;
-        el.notes.value = insp.notes || "";
-        this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
+  State.currentInspectionId = insp.id;
+  el.date.value = insp.date || Utils.today();
+  el.framesCount.value = insp.framesCount || 10;
+  el.queen.checked = !!insp.queenPresent;
+  el.notes.value = insp.notes || "";
 
-        this.renderFlagButtons(hive, insp);
-        this.renderHistory(hive);
-        this.renderPhotoGallery(hive, insp).catch(() => {});
-        this.renderFrameMap(hive, insp);
-      },
+  // ✅ mites (populate form fields from saved inspection)
+  el.miteTreatmentType.value = insp.miteTreatment?.type || "";
+  el.miteInstalled.value = insp.miteTreatment?.installed || "";
+  el.miteDue.value = insp.miteTreatment?.due || "";
+
+  // ✅ show the badge in the form immediately
+  this.renderMiteBadgeInForm(insp);
+
+  this.status(`Loaded inspection: ${insp.date || "(no date)"}`);
+
+  this.renderFlagButtons(hive, insp);
+  this.renderHistory(hive);
+  this.renderPhotoGallery(hive, insp).catch(() => {});
+  this.renderFrameMap(hive, insp);
+},
+
 
       renderHistory(hive) {
         el.history.innerHTML = "";
@@ -911,6 +1051,7 @@
           const queenText = insp.queenPresent ? "Queen: Yes" : "Queen: No";
           const notesPreview = (insp.notes || "").trim().slice(0, 60);
           const badges = this.renderBadgesFromFlags(insp.flags);
+          const miteBadge = this.renderMiteBadge(insp.miteTreatment);
           const photoCount = (insp.photos?.length || 0);
 
           left.innerHTML = `
@@ -918,6 +1059,7 @@
             <div class="small">
               ${queenText}
               ${badges ? " • " + badges : ""}
+              ${miteBadge ? " • " + miteBadge : ""}
               ${photoCount ? ` • 📷 ${photoCount}` : ""}
               ${notesPreview ? " • " + notesPreview : ""}
             </div>
@@ -949,6 +1091,9 @@
                 el.framesCount.value = 10;
                 el.queen.checked = false;
                 el.notes.value = "";
+                el.miteTreatmentType.value = "";
+                el.miteInstalled.value = "";
+                el.miteDue.value = "";
                 el.flagButtons.innerHTML = "";
                 el.photoGallery.innerHTML = "";
                 el.frameLegend.innerHTML = "";
@@ -1032,9 +1177,11 @@
           distText = ` • Distance: ${Math.round(d)} m`;
         }
 
+        const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+
         el.yardGps.innerHTML =
           `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
-          `${distText} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+          `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
       },
 
       renderHiveYardGps() {
@@ -1057,9 +1204,11 @@
           distText = ` • Distance: ${Math.round(d)} m`;
         }
 
+        const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+
         el.hiveYardGps.innerHTML =
           `📍 ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)} (±${Math.round(y.accuracy)}m)` +
-          `${distText} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
+          `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
       },
 
       renderFlagButtons(hive, insp) {
@@ -1295,6 +1444,11 @@
         insp.queenPresent = el.queen.checked;
         insp.notes = el.notes.value;
 
+        // ✅ mites
+        insp.miteTreatment.type = el.miteTreatmentType.value || "";
+        insp.miteTreatment.installed = el.miteInstalled.value || "";
+        insp.miteTreatment.due = el.miteDue.value || "";
+
         State.currentInspectionId = insp.id;
 
         hive.inspections.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -1327,9 +1481,43 @@
     // =========================================================
     // Wiring (events)
     // =========================================================
+
+    function saveMiteTreatmentFromForm() {
+  if (!State.currentHiveId || !State.currentInspectionId) return;
+
+  const hives = Storage.loadHives();
+  const hive = hives[State.currentHiveId];
+  if (!hive) return;
+
+  const insp = hive.inspections.find(i => i.id === State.currentInspectionId);
+  if (!insp) return;
+
+  UI.ensureInspectionDefaults(insp);
+
+  insp.miteTreatment = {
+    type: (el.miteTreatmentType.value || "").trim(),
+    installed: el.miteInstalled.value || "",
+    due: el.miteDue.value || ""
+  };
+
+  const res = Storage.saveHives(hives);
+  if (!res.ok) {
+    UI.status("Save failed (storage full?) — export ZIP backup!");
+    return;
+  }
+
+  UI.renderMiteBadgeInForm(insp);
+  UI.renderHistory(hive);
+}
+    el.miteTreatmentType.addEventListener("change", saveMiteTreatmentFromForm);
+el.miteInstalled.addEventListener("change", saveMiteTreatmentFromForm);
+el.miteDue.addEventListener("change", saveMiteTreatmentFromForm);
+
+
+
     Storage.migrateIfNeeded();
 
-    // Extra safety: stop painting if pointer ends outside a segment
+    // Safety: stop painting anywhere when pointer ends
     document.addEventListener("pointerup", () => UI.stopPainting());
     document.addEventListener("pointercancel", () => UI.stopPainting());
 
@@ -1404,6 +1592,11 @@
     el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
+
+    // ✅ mites save events
+    el.miteTreatmentType.addEventListener("change", () => App.saveCurrentHiveAndInspection());
+    el.miteInstalled.addEventListener("change", () => App.saveCurrentHiveAndInspection());
+    el.miteDue.addEventListener("change", () => App.saveCurrentHiveAndInspection());
 
     // Frames count changes
     el.framesCount.addEventListener("change", () => {
@@ -1493,16 +1686,32 @@
       }
     });
 
+    function shouldFilterToCurrentYard() {
+      return !!el.exportCurrentYardOnly.checked && (el.currentYard.value || "").trim();
+    }
+
+    function filteredHivesByCurrentYard(hives) {
+      if (!shouldFilterToCurrentYard()) return hives;
+      const yard = (el.currentYard.value || "").trim();
+      const out = {};
+      for (const [id, hive] of Object.entries(hives || {})) {
+        if ((hive?.location || "").trim() === yard) out[id] = hive;
+      }
+      return out;
+    }
+
     // CSV export
     el.exportCsv.addEventListener("click", () => {
-      const hives = Storage.loadHives();
+      const hivesAll = Storage.loadHives();
+      const hives = filteredHivesByCurrentYard(hivesAll);
       const yards = Storage.loadYards();
 
       const rows = [];
       rows.push([
-        "yard_name","yard_lat","yard_lon","yard_accuracy_m",
+        "yard_name","yard_lat","yard_lon","yard_accuracy_m","yard_captured_at",
         "hive_id","hive_name","hive_location",
         "inspection_id","inspection_date","queen_present","flags","photo_count","notes",
+        "mite_treatment_type","mite_date_installed","mite_date_due",
         "frames_count","frame_map"
       ]);
 
@@ -1515,6 +1724,7 @@
           y ? y.lat : "",
           y ? y.lon : "",
           y ? Math.round(y.accuracy) : "",
+          y?.timestamp ? new Date(y.timestamp).toISOString() : "",
           hive.id || "",
           hive.name || "",
           hive.location || ""
@@ -1522,7 +1732,7 @@
 
         const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
         if (insps.length === 0) {
-          rows.push([...base, "", "", "", "", "", "", "", "", ""]);
+          rows.push([...base, "", "", "", "", "", "", "", "", "", "", "", "", ""]);
         } else {
           for (const insp of insps) {
             const flags = insp.flags ? Object.entries(insp.flags).filter(([_, v]) => v).map(([k]) => k).join("|") : "";
@@ -1531,6 +1741,7 @@
             const framesCount = typeof insp.framesCount === "number" ? insp.framesCount : "";
             const frameMapStr = Array.isArray(insp.frameMap) ? JSON.stringify(insp.frameMap) : "";
 
+            const mt = insp.miteTreatment || {};
             rows.push([
               ...base,
               insp.id || "",
@@ -1539,6 +1750,9 @@
               flags,
               photoCount,
               insp.notes || "",
+              mt.type || "",
+              mt.installed || "",
+              mt.due || "",
               framesCount,
               frameMapStr
             ]);
@@ -1552,7 +1766,7 @@
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `hive-tracker-export-${Utils.today()}.csv`;
+      a.download = `hive-tracker-export-${Utils.today()}${shouldFilterToCurrentYard() ? "-current-yard" : ""}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1563,8 +1777,9 @@
     // ZIP export (JSON + photos)
     el.exportZip.addEventListener("click", async () => {
       try {
-        if (!window.JSZip) {
-          alert("ZIP export needs JSZip. If you're offline, open this page once while online so the library can load, then try again.");
+        const ok = await ensureJSZipReady();
+        if (!ok || !window.JSZip) {
+          alert("ZIP export needs JSZip.\n\nGo online once to cache the ZIP library, then it will work offline afterward.");
           return;
         }
 
@@ -1578,16 +1793,17 @@
           exportedAt: new Date().toISOString(),
           meta: Storage.loadMeta(),
           yards: Storage.loadYards(),
-          hives: Storage.loadHives(),
-          photos: { note: "Photos are included in this ZIP under /photos as JPEG files." }
+          hives: filteredHivesByCurrentYard(Storage.loadHives()),
+          photos: { note: "Photos are included in this ZIP under /photos as JPEG files." },
+          exportFilter: shouldFilterToCurrentYard() ? { yard: (el.currentYard.value || "").trim() } : null
         };
 
         zip.file("hive-tracker-backup.json", JSON.stringify(payload, null, 2));
 
-        const hivesObj = payload.hives || {};
+        const hives = payload.hives || {};
         const photoIds = new Set();
 
-        for (const hive of Object.values(hivesObj)) {
+        for (const hive of Object.values(hives)) {
           const insps = Array.isArray(hive.inspections) ? hive.inspections : [];
           for (const insp of insps) {
             const ids = Array.isArray(insp.photos) ? insp.photos : [];
@@ -1612,7 +1828,7 @@
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `hive-tracker-backup-${Utils.today()}.zip`;
+        a.download = `hive-tracker-backup-${Utils.today()}${shouldFilterToCurrentYard() ? "-current-yard" : ""}.zip`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1626,9 +1842,10 @@
     });
 
     // ZIP import (restore JSON + photos) with OVERWRITE or MERGE
-    el.importZipBtn.addEventListener("click", () => {
-      if (!window.JSZip) {
-        alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
+    el.importZipBtn.addEventListener("click", async () => {
+      const ok = await ensureJSZipReady();
+      if (!ok || !window.JSZip) {
+        alert("ZIP import needs JSZip.\n\nGo online once to cache the ZIP library, then it will work offline afterward.");
         return;
       }
       el.importZipInput.value = "";
@@ -1651,7 +1868,8 @@
           flags: { strong:false, weak:false, queenless:false, followUp:false, fed:false },
           photos: [],
           framesCount: 10,
-          frameMap: []
+          frameMap: [],
+          miteTreatment: { type:"", installed:"", due:"" }
         };
       }
       if (!i.id) i.id = Utils.uuid();
@@ -1660,6 +1878,10 @@
       if (!Array.isArray(i.photos)) i.photos = [];
       if (typeof i.framesCount !== "number") i.framesCount = 10;
       if (!Array.isArray(i.frameMap)) i.frameMap = [];
+      if (!i.miteTreatment || typeof i.miteTreatment !== "object") i.miteTreatment = { type:"", installed:"", due:"" };
+      i.miteTreatment.type = (i.miteTreatment.type || "");
+      i.miteTreatment.installed = (i.miteTreatment.installed || "");
+      i.miteTreatment.due = (i.miteTreatment.due || "");
       return i;
     }
 
@@ -1738,6 +1960,11 @@
       el.framesCount.value = 10;
       el.notes.value = "";
       el.queen.checked = false;
+
+      el.miteTreatmentType.value = "";
+      el.miteInstalled.value = "";
+      el.miteDue.value = "";
+
       el.photoGallery.innerHTML = "";
       el.flagButtons.innerHTML = "";
       el.history.innerHTML = "";
@@ -1754,11 +1981,6 @@
       if (!file) return;
 
       try {
-        if (!window.JSZip) {
-          alert("ZIP import needs JSZip. Open this page once while online so the library can load, then try again.");
-          return;
-        }
-
         const overwrite = confirm(
           "Import mode:\n\n" +
           "OK = OVERWRITE this device (replace all hives/yards)\n" +
