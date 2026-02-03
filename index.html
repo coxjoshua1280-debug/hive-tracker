@@ -388,15 +388,8 @@
     }
 
   </style>
-
-  <!-- PWA: Manifest + theme color -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#111111">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Hive Tracker">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#111111" />
 </head>
 
 <body>
@@ -3146,22 +3139,12 @@ async function handleImportZipFromFile(file) {
 
 
 <script>
-// =====================
-// PWA: Service Worker
-// =====================
-(function() {
-  if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("load", async () => {
-    try {
-      const reg = await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
-      // Optional: log once
-      // console.log("Service worker registered:", reg.scope);
-    } catch (err) {
-      // Swallow errors so the app never breaks
-      console.warn("Service worker registration failed:", err);
-    }
-  });
-})();
+  // PWA: register service worker (safe no-op on unsupported browsers)
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
 </script>
 
 </body>
