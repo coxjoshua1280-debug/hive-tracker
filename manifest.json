@@ -1,0 +1,24 @@
+{
+  "name": "Hive Tracker",
+  "short_name": "Hive Tracker",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f8f8",
+  "theme_color": "#111111",
+  "description": "Offline-first hive inspection tracker with photos, GPS and NFC.",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
