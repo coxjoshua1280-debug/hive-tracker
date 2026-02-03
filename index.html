@@ -920,15 +920,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Listener safety (prevents double-binding)
     listenersBound: false
   };
-      console.warn = (...args) => {
-        origWarn(...args);
-        if (this.isOn()) this.appendLine("warn", args);
-      };
-      console.error = (...args) => {
-        origErr(...args);
-        if (this.isOn()) this.appendLine("err", args);
-      };
-    },
+      
 
     approxLocalStorageBytes() {
       try {
