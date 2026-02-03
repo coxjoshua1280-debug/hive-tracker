@@ -561,6 +561,13 @@
         <button id="queenLostBtn" type="button" class="btn grow">⚠️ Mark Lost</button>
         <button id="queenArchiveBtn" type="button" class="btn grow">📜 Past Queens</button>
       </div>
+      <div class="row" style="margin-top:0.5rem;">
+        <button id="queenTabActiveBtn" type="button" class="btn btn-muted grow">👑 Active</button>
+        <button id="queenTabArchiveBtn" type="button" class="btn btn-muted grow">🗂 Past</button>
+        <button id="queenTabInventoryBtn" type="button" class="btn btn-muted grow">📦 Inventory</button>
+        <button id="queenTabBankedBtn" type="button" class="btn btn-muted grow">🏦 Banked</button>
+      </div>
+
 
       <div id="queenEditor" class="card hidden" style="margin-top:0.6rem; background:#fafafa;">
         <strong id="queenEditorTitle">New Queen</strong>
@@ -589,10 +596,49 @@
       </div>
 
       <div id="queenArchive" class="card hidden" style="margin-top:0.6rem; background:#fafafa;"></div>
+    
+      <div id="queenInventory" class="hidden card" style="margin-top:0.5rem;">
+        <strong>📦 Queen Inventory</strong>
+        <div class="small">Queens you have on hand (not installed). Derived from queens marked “inventory” across all hives.</div>
+        <div id="queenInventoryList" style="margin-top:0.5rem;"></div>
+      </div>
+
+      <div id="queenBanked" class="hidden card" style="margin-top:0.5rem;">
+        <strong>🏦 Banked Queens</strong>
+        <div class="small">Queens currently banked and where they are (hive + box).</div>
+        <div id="queenBankedList" style="margin-top:0.5rem;"></div>
+      </div>
+</div>
+
+
+    
+    <!-- Queen Rearing (collapsible) -->
+    <button id="rearingToggleBtn" type="button" class="btn btn-muted" style="margin-top:0.75rem;">
+      ➕ Queen Rearing
+    </button>
+
+    <div id="rearingSection" class="card hidden" style="margin-top:0.5rem;">
+      <strong>👑 Queen Rearing</strong>
+      <div class="small">Track cell raisers, graft batches, mating nuc installs, genetics, and temperament.</div>
+
+      <div class="row" style="margin-top:0.6rem;">
+        <button id="newGraftBtn" type="button" class="btn grow">🪡 New Graft Batch</button>
+        <button id="newCellRaiserBtn" type="button" class="btn grow">📦 Cell Raiser Setup</button>
+        <button id="newMatingNucBtn" type="button" class="btn grow">🧰 Mating Nuc Install</button>
+      </div>
+
+      <div id="rearingList" style="margin-top:0.75rem;"></div>
+
+      <div id="rearingEditor" class="card hidden" style="margin-top:0.75rem;"></div>
+
+      <div class="card" style="margin-top:0.75rem;">
+        <strong>📅 Rearing Calendar</strong>
+        <div class="small">Upcoming key dates computed from your entries.</div>
+        <div id="rearingCalendar" style="margin-top:0.5rem;"></div>
+      </div>
     </div>
 
-
-    <label class="checkbox-label">
+<label class="checkbox-label">
       <input id="queenPresent" type="checkbox" />
       Queen Observed This Inspection
     </label>
@@ -896,6 +942,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
     loadTeams() { return this.load("teams", { teams: [] }); },
     saveTeams(teams) { return this.save("teams", teams); },
+    // Queen rearing is stored inside hives so it syncs with Cloud Option A.
+    loadRearing() {
+      const hives = this.loadHives();
+      const out = { cellRaisers: [], graftBatches: [], matingNucs: [] };
+      for (const [hid, hive] of Object.entries(hives || {})) {
+        const r = hive?.rearing || {};
+        const cr = Array.isArray(r.cellRaisers) ? r.cellRaisers : [];
+        const gb = Array.isArray(r.graftBatches) ? r.graftBatches : [];
+        const mn = Array.isArray(r.matingNucs) ? r.matingNucs : [];
+        for (const x of cr) out.cellRaisers.push({ ...x, hiveId: x.hiveId || hid });
+        for (const x of gb) out.graftBatches.push({ ...x, hiveId: x.hiveId || hid });
+        for (const x of mn) out.matingNucs.push({ ...x, hiveId: x.hiveId || hid });
+      }
+      return out;
+    },
+    saveRearing(rearing) {
+      const hives = this.loadHives();
+      for (const [hid, hive] of Object.entries(hives || {})) {
+        hive.rearing = hive.rearing || { cellRaisers: [], graftBatches: [], matingNucs: [] };
+        hive.rearing.cellRaisers = (rearing?.cellRaisers || []).filter(x => (x.hiveId || hid) === hid).map(x => ({ ...x, hiveId: hid }));
+        hive.rearing.graftBatches = (rearing?.graftBatches || []).filter(x => (x.hiveId || hid) === hid).map(x => ({ ...x, hiveId: hid }));
+        hive.rearing.matingNucs = (rearing?.matingNucs || []).filter(x => (x.hiveId || hid) === hid).map(x => ({ ...x, hiveId: hid }));
+      }
+      return this.saveHives(hives);
+    },
+
 
     loadMeta() { return this.load("meta", { version: 1 }); },
     saveMeta(meta) { return this.save("meta", meta); },
@@ -961,6 +1033,24 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
 
+
+      // Migrate legacy top-level "rearing" storage into per-hive storage (Cloud A friendly)
+      try {
+        const legacyRaw = localStorage.getItem("rearing");
+        if (legacyRaw) {
+          const legacy = JSON.parse(legacyRaw);
+          if (legacy && (legacy.cellRaisers || legacy.graftBatches || legacy.matingNucs)) {
+            for (const [hid, hive] of Object.entries(hives || {})) {
+              hive.rearing = hive.rearing || { cellRaisers: [], graftBatches: [], matingNucs: [] };
+              const add = (arr) => (Array.isArray(arr) ? arr : []).filter(x => (x?.hiveId || hid) === hid);
+              hive.rearing.cellRaisers = [...hive.rearing.cellRaisers, ...add(legacy.cellRaisers)];
+              hive.rearing.graftBatches = [...hive.rearing.graftBatches, ...add(legacy.graftBatches)];
+              hive.rearing.matingNucs = [...hive.rearing.matingNucs, ...add(legacy.matingNucs)];
+            }
+            localStorage.removeItem("rearing");
+          }
+        }
+      } catch (_) {}
       this.saveHives(hives);
       meta.version = this.VERSION;
       this.saveMeta(meta);
@@ -1103,7 +1193,32 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Sort: overdue first, then soonest
+
+      // Queen rearing calendar -> reminders (next ~60 days)
+      try {
+        const r = Storage.loadRearing();
+        const cal = Rearing.buildCalendar(r);
+        const today = Utils.today();
+        const horizon = Rearing.isoAddDays(today, 60);
+        const toDays = (a, b) => {
+          const da = new Date(a + "T00:00:00");
+          const db = new Date(b + "T00:00:00");
+          return Math.round((db - da) / 86400000);
+        };
+        for (const ev of (cal || [])) {
+          const when = (ev?.date || "").trim();
+          if (!when) continue;
+          if (when < today || when > horizon) continue;
+          out.push({
+            kind: "rearing",
+            title: ev.title,
+            when,
+            days: toDays(today, when),
+            label: "Upcoming"
+          });
+        }
+      } catch (_) {}
+// Sort: overdue first, then soonest
       out.sort((a,b) => (a.days - b.days));
       return out;
     },
@@ -1275,6 +1390,9 @@ document.addEventListener("DOMContentLoaded", () => {
     paintValue: null,
 
     // Listener safety (prevents double-binding)
+    // Queen rearing selection
+    rearingSelected: { kind: null, id: null },
+
     listenersBound: false,
 
     // UI prefs
@@ -1327,6 +1445,10 @@ document.addEventListener("DOMContentLoaded", () => {
     queenNewBtn: document.getElementById("queenNewBtn"),
     queenLostBtn: document.getElementById("queenLostBtn"),
     queenArchiveBtn: document.getElementById("queenArchiveBtn"),
+    queenTabActiveBtn: document.getElementById("queenTabActiveBtn"),
+    queenTabArchiveBtn: document.getElementById("queenTabArchiveBtn"),
+    queenTabInventoryBtn: document.getElementById("queenTabInventoryBtn"),
+    queenTabBankedBtn: document.getElementById("queenTabBankedBtn"),
     queenEditor: document.getElementById("queenEditor"),
     queenEditorTitle: document.getElementById("queenEditorTitle"),
     queenTag: document.getElementById("queenTag"),
@@ -1337,6 +1459,10 @@ document.addEventListener("DOMContentLoaded", () => {
     queenSaveBtn: document.getElementById("queenSaveBtn"),
     queenCancelBtn: document.getElementById("queenCancelBtn"),
     queenArchive: document.getElementById("queenArchive"),
+    queenInventory: document.getElementById("queenInventory"),
+    queenInventoryList: document.getElementById("queenInventoryList"),
+    queenBanked: document.getElementById("queenBanked"),
+    queenBankedList: document.getElementById("queenBankedList"),
     history: document.getElementById("history"),
 
     currentYard: document.getElementById("currentYard"),
@@ -1414,6 +1540,16 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     oxalicPlanSeriesBtn: document.getElementById("oxalicPlanSeriesBtn"),
     oxalicClearSeriesBtn: document.getElementById("oxalicClearSeriesBtn"),
     oxalicSeriesOut: document.getElementById("oxalicSeriesOut"),
+    // queen rearing
+    rearingToggleBtn: document.getElementById("rearingToggleBtn"),
+    rearingSection: document.getElementById("rearingSection"),
+    newGraftBtn: document.getElementById("newGraftBtn"),
+    newCellRaiserBtn: document.getElementById("newCellRaiserBtn"),
+    newMatingNucBtn: document.getElementById("newMatingNucBtn"),
+    rearingList: document.getElementById("rearingList"),
+    rearingEditor: document.getElementById("rearingEditor"),
+    rearingCalendar: document.getElementById("rearingCalendar"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -2937,7 +3073,924 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
 
   };
 
+  
   // =========================================================
+  // 6D) QUEEN REARING (Cell raisers / grafting / mating nucs)
+  // =========================================================
+
+  const Rearing = {
+    uid(prefix) { return `${prefix}_${Utils.uuid()}`; },
+
+    load() {
+      const r = Storage.loadRearing();
+      r.graftBatches = Array.isArray(r.graftBatches) ? r.graftBatches : [];
+      r.cellRaisers = Array.isArray(r.cellRaisers) ? r.cellRaisers : [];
+      r.matingNucs  = Array.isArray(r.matingNucs) ? r.matingNucs  : [];
+      return r;
+    },
+
+    save(r) {
+      const res = Storage.saveRearing(r);
+      if (!res.ok) UI.status("Save failed (storage full?) — export ZIP backup!");
+      return res.ok;
+    },
+
+    isoAddDays(iso, days) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso + "T00:00:00");
+        d.setDate(d.getDate() + days);
+        return d.toISOString().slice(0,10);
+      } catch (_) { return ""; }
+    },
+
+    temperamentLabel(n) {
+      const v = Number(n || 0);
+      if (!v) return "";
+      if (v <= 2) return "Hot 😤";
+      if (v === 3) return "Average 🙂";
+      return "Gentle 😌";
+    },
+
+    // ---- Create items ----
+    addGraftBatch() {
+      const r = this.load();
+      const item = {
+        id: this.uid("graft"),
+        name: `Graft Batch (${Utils.today()})`,
+        graftDate: Utils.today(),
+        sourceQueenId: "",     // optional: link to a queen id from your queen system
+        geneticsNotes: "",     // free text
+        cellRaiserHiveId: State.currentHiveId || "",
+        graftCount: 0,
+          insertedAt: "",
+          cellRaiserId: "",
+        acceptedCount: 0,
+        temperament: 0,        // 1-5 overall batch impression
+        notes: ""
+      };
+      r.graftBatches.unshift(item);
+      this.save(r);
+      State.rearingSelected = { kind: "graft", id: item.id };
+      this.renderAll();
+    },
+
+    addCellRaiser() {
+      const r = this.load();
+      const item = {
+        id: this.uid("raiser"),
+        name: `Cell Raiser (${Utils.today()})`,
+        hiveId: State.currentHiveId || "",
+        yard: (el.location?.value || el.currentYard?.value || "").trim(),
+        startDate: Utils.today(),
+        endDate: "",
+        style: "starter/finisher",
+        notes: ""
+      };
+      r.cellRaisers.unshift(item);
+      this.save(r);
+      State.rearingSelected = { kind: "raiser", id: item.id };
+      this.renderAll();
+    },
+
+    addMatingNuc() {
+      const r = this.load();
+      const item = {
+        id: this.uid("mating"),
+        name: `Mating Nuc (${Utils.today()})`,
+        installDate: Utils.today(),
+        yard: (el.location?.value || el.currentYard?.value || "").trim(),
+        hiveId: "",
+        graftBatchId: "",
+        queenId: "",
+        temperament: 0,
+        notes: ""
+      };
+      r.matingNucs.unshift(item);
+      this.save(r);
+      State.rearingSelected = { kind: "mating", id: item.id };
+      this.renderAll();
+    },
+
+    // ---- Find / update helpers ----
+    findSelected(r) {
+      const { kind, id } = State.rearingSelected || {};
+      if (!kind || !id) return { kind: null, item: null };
+      if (kind === "graft") return { kind, item: r.graftBatches.find(x => x.id === id) || null };
+      if (kind === "raiser") return { kind, item: r.cellRaisers.find(x => x.id === id) || null };
+      if (kind === "mating") return { kind, item: r.matingNucs.find(x => x.id === id) || null };
+      return { kind: null, item: null };
+    },
+
+
+    ensureDaughtersForGraft(graftItem) {
+      // Returns updated daughterQueenIds array.
+      const accepted = Math.max(0, Math.floor(Number(graftItem?.acceptedCount || 0)));
+      const sourceId = (graftItem?.sourceQueenId || "").trim();
+      if (!accepted || !sourceId) return (graftItem.daughterQueenIds || []);
+
+      graftItem.daughterQueenIds = Array.isArray(graftItem.daughterQueenIds) ? graftItem.daughterQueenIds : [];
+
+      // Find source queen + target hive
+      const hives = Storage.loadHives();
+      const targetHive = hives[graftItem.hiveId];
+      if (!targetHive) return graftItem.daughterQueenIds;
+
+      // Build an index of all queens by id
+      let sourceQueen = null;
+      for (const hive of Object.values(hives || {})) {
+        const qs = Array.isArray(hive?.queens) ? hive.queens : [];
+        const found = qs.find(q => q.id === sourceId);
+        if (found) { sourceQueen = found; break; }
+      }
+      if (!sourceQueen) return graftItem.daughterQueenIds;
+
+      targetHive.queens = Array.isArray(targetHive.queens) ? targetHive.queens : [];
+
+      // Create missing daughters up to accepted count
+      const existingIds = new Set(targetHive.queens.map(q => q.id));
+      while (graftItem.daughterQueenIds.length < accepted) {
+        const n = graftItem.daughterQueenIds.length + 1;
+        const tagBase = (sourceQueen.tag || "Source").trim();
+        const q = {
+          id: Utils.uuid(),
+          tag: `Daughter of ${tagBase} #${n}`,
+          started: Utils.today(),
+          ended: "",
+          genetics: sourceQueen.genetics || "",
+          temperament: "",
+          status: "inventory",
+          motherQueenId: sourceQueen.id,
+          createdFrom: { kind: "graft", graftId: graftItem.id },
+          notes: ""
+        };
+        // Ensure no collision
+        if (!existingIds.has(q.id)) {
+          targetHive.queens.push(q);
+          graftItem.daughterQueenIds.push(q.id);
+          existingIds.add(q.id);
+        }
+      }
+
+      // Persist daughter list back onto the stored graft batch
+      try {
+        targetHive.rearing = targetHive.rearing || { cellRaisers: [], graftBatches: [], matingNucs: [] };
+        const batches = Array.isArray(targetHive.rearing.graftBatches) ? targetHive.rearing.graftBatches : [];
+        const stored = batches.find(b => b.id === graftItem.id);
+        if (stored) stored.daughterQueenIds = [...graftItem.daughterQueenIds];
+      } catch (_) {}
+
+      // Save hives (so daughters persist + sync)
+      Storage.saveHives(hives);
+      return graftItem.daughterQueenIds;
+    },
+
+    deleteSelected() {
+      const r = this.load();
+      const { kind, id } = State.rearingSelected || {};
+      if (!kind || !id) return;
+
+      if (!confirm("Delete this queen rearing entry?")) return;
+
+      if (kind === "graft") r.graftBatches = r.graftBatches.filter(x => x.id !== id);
+      if (kind === "raiser") r.cellRaisers = r.cellRaisers.filter(x => x.id !== id);
+      if (kind === "mating") r.matingNucs  = r.matingNucs.filter(x => x.id !== id);
+
+      State.rearingSelected = { kind: null, id: null };
+      this.save(r);
+      this.renderAll();
+    },
+
+    select(kind, id) {
+      State.rearingSelected = { kind, id };
+      this.renderAll();
+    },
+
+    // ---- Calendar computation ----
+    graftMilestones(item) {
+      const g = item?.graftDate || "";
+      if (!g) return [];
+      return [
+        { date: g, title: "Graft day", detail: item.name },
+        { date: this.isoAddDays(g, 1), title: "Check acceptance (24h)", detail: item.name },
+        { date: this.isoAddDays(g, 5), title: "Likely capped (approx.)", detail: item.name },
+        { date: this.isoAddDays(g, 10), title: "Cage cells (before emergence)", detail: item.name },
+        { date: this.isoAddDays(g, 11), title: "Emergence window starts", detail: item.name },
+        { date: this.isoAddDays(g, 14), title: "Install in mating nuc (if not already)", detail: item.name },
+        { date: this.isoAddDays(g, 21), title: "Check for eggs / laying", detail: item.name },
+      ].filter(x => x.date);
+    },
+
+    buildCalendar(r) {
+      const items = [];
+
+      for (const g of (r.graftBatches || [])) {
+        for (const m of this.graftMilestones(g)) items.push({ ...m, kind: "graft", refId: g.id });
+      }
+      for (const c of (r.cellRaisers || [])) {
+        if (c.startDate) items.push({ date: c.startDate, title: "Cell raiser started", detail: c.name, kind:"raiser", refId:c.id });
+        if (c.endDate) items.push({ date: c.endDate, title: "Cell raiser ended", detail: c.name, kind:"raiser", refId:c.id });
+
+        // Keep brood frames coming (default every 7 days)
+        const interval = Math.max(1, Math.min(30, Math.floor(Number(c.broodIntervalDays || 7))));
+        const base = (c.lastBroodAddDate || c.startDate || "").trim();
+        const end = (c.endDate || this.isoAddDays(c.startDate || base, 28)).trim(); // fallback: 4 weeks window
+        if (base) {
+          let next = this.isoAddDays(base, interval);
+          let guard = 0;
+          while (next && (!end || next <= end) && guard++ < 20) {
+            items.push({ date: next, title: "Add brood to cell raiser", detail: c.name, kind:"raiser", refId:c.id });
+            next = this.isoAddDays(next, interval);
+          }
+        }
+      }
+      for (const m of (r.matingNucs || [])) {
+        if (m.installDate) items.push({ date: m.installDate, title: "Mating nuc installed", detail: m.name, kind:"mating", refId:m.id });
+      }
+
+      // only show upcoming + recent 14 days
+      const today = Utils.today();
+      const cutoffPast = this.isoAddDays(today, -14);
+
+      const within = items.filter(x => x.date >= cutoffPast);
+      within.sort((a,b) => (a.date||"").localeCompare(b.date||""));
+      return within;
+    },
+
+    // ---- Rendering ----
+    renderList() {
+      const r = this.load();
+      const sel = State.rearingSelected || {};
+
+      const sections = [
+        { title: "Graft Batches", kind:"graft", arr: r.graftBatches },
+        { title: "Cell Raisers", kind:"raiser", arr: r.cellRaisers },
+        { title: "Mating Nucs", kind:"mating", arr: r.matingNucs },
+      ];
+
+      const wrap = document.createElement("div");
+      sections.forEach(sec => {
+        const h = document.createElement("div");
+        h.className = "small";
+        h.style.marginTop = "0.6rem";
+        h.innerHTML = `<strong>${sec.title}</strong>`;
+        wrap.appendChild(h);
+
+        if (!sec.arr || sec.arr.length === 0) {
+          const e = document.createElement("div");
+          e.className = "small";
+          e.innerHTML = `<em>None yet.</em>`;
+          wrap.appendChild(e);
+          return;
+        }
+
+        sec.arr.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "history-item" + (sel.kind === sec.kind && sel.id === item.id ? " selected" : "");
+          row.style.borderBottom = "1px solid #eee";
+
+          const left = document.createElement("div");
+          left.className = "history-left";
+          left.innerHTML = `
+            <div><strong>${item.name || "(untitled)"}</strong></div>
+            <div class="small">
+              ${sec.kind === "graft" ? `Graft: ${item.graftDate || "—"} • Grafted: ${item.graftCount||0} • Accepted: ${item.acceptedCount||0}` : ""}
+              ${sec.kind === "raiser" ? `Start: ${item.startDate || "—"}${item.endDate ? " • End: " + item.endDate : ""}` : ""}
+              ${sec.kind === "mating" ? `Install: ${item.installDate || "—"}${item.graftBatchId ? " • From batch" : ""}` : ""}
+            </div>
+          `;
+          left.addEventListener("click", () => this.select(sec.kind, item.id));
+
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn btn-danger";
+          btn.style.width = "auto";
+          btn.style.padding = "0.4rem 0.6rem";
+          btn.textContent = "Delete";
+          btn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            this.select(sec.kind, item.id);
+            this.deleteSelected();
+          });
+
+          row.appendChild(left);
+          row.appendChild(btn);
+          wrap.appendChild(row);
+        });
+      });
+
+      el.rearingList.innerHTML = "";
+      el.rearingList.appendChild(wrap);
+    },
+
+    renderEditor() {
+      const r = this.load();
+      const { kind, item } = this.findSelected(r);
+      const raiserOptionsHtml = (r.entries || [])
+        .filter(e => e.kind === "cellRaiser")
+        .map(e => {
+          const label = (e.name || "Cell Raiser") + " • " + (hives[e.hiveId]?.name || e.hiveId || "");
+          const sel = (item.cellRaiserEntryId && item.cellRaiserEntryId === e.id) ? " selected" : "";
+          return '<option value="' + e.id + '"' + sel + ">" + label + "</option>";
+        })
+        .join("");
+
+
+      if (!kind || !item) {
+        el.rearingEditor.classList.add("hidden");
+        el.rearingEditor.innerHTML = "";
+        return;
+      }
+
+      el.rearingEditor.classList.remove("hidden");
+
+      // Build editor HTML
+      const title =
+        kind === "graft" ? "Edit Graft Batch" :
+        kind === "raiser" ? "Edit Cell Raiser" :
+        "Edit Mating Nuc";
+
+      const delHint = `<div class="small" style="margin-top:0.25rem;"><em>Tip: Delete is on the right side of each row above.</em></div>`;
+
+      el.rearingEditor.innerHTML = `
+        <strong>${title}</strong>
+        ${delHint}
+        <label style="margin-top:0.6rem;">Name</label>
+        <input id="rearing_name" type="text" value="${(item.name || "").replace(/"/g,"&quot;")}" />
+
+        ${kind === "graft" ? `
+          <div class="two-col" style="margin-top:0.5rem;">
+            <div>
+              <label>Graft date</label>
+              <input id="rearing_graftDate" type="date" value="${item.graftDate || ""}" />
+            </div>
+            <div>
+              <label>Cell raiser hive (tag ID)</label>
+              <input id="rearing_cellRaiserHiveId" type="text" value="${(item.cellRaiserHiveId || "").replace(/"/g,"&quot;")}" placeholder="e.g. scan tag then copy ID" />
+            </div>
+          </div>
+
+          <div class="two-col" style="margin-top:0.5rem;">
+            <div>
+              <label># grafted</label>
+              <input id="rearing_graftCount" type="number" min="0" max="40" step="1" value="${Number(item.graftCount||0)}" />
+        <div class="small">Max 40 graft cells per batch.</div>
+
+        <label for="rearing_insertedAt" style="margin-top:0.6rem;">Inserted At (optional)</label>
+        <input id="rearing_insertedAt" type="datetime-local" value="${item.insertedAt || ""}" />
+
+        <label for="rearing_cellRaiserEntryId" style="margin-top:0.6rem;">Cell Raiser Project (optional)</label>
+        <select id="rearing_cellRaiserEntryId">
+          <option value="">— None —</option>
+          ${raiserOptionsHtml}
+        </select>
+
+            </div>
+            <div>
+              <label># accepted</label>
+              <input id="rearing_acceptedCount" type="number" min="0" step="1" value="${Number(item.acceptedCount||0)}" />
+            </div>
+          </div>
+
+          <label style="margin-top:0.6rem;">Source queen (optional)</label>
+          <select id="rearing_sourceQueenId"></select>
+          <div class="small" id="rearing_sourceQueenHint"></div>
+
+          <div id="rearing_daughtersBox" style="margin-top:0.6rem; padding:0.55rem; border:1px solid #ddd; border-radius:10px; background:#fff;">
+            <div><strong>Daughter queens</strong> <span class="small" id="rearing_daughtersMeta"></span></div>
+            <button id="rearing_generateDaughters" type="button" style="margin-top:0.35rem;">✨ Generate / update daughters</button>
+            <div class="small" style="margin-top:0.35rem;">Creates inventory queens in this hive linked to the source queen + this graft batch (doesn’t change the active queen).</div>
+          </div>
+
+          <label style="margin-top:0.6rem;">Genetics / lineage notes</label>
+          <textarea id="rearing_geneticsNotes" rows="3" placeholder="e.g. VSH line, survivor stock, breeder, drone saturation…">${(item.geneticsNotes || "")}</textarea>
+
+          <label style="margin-top:0.6rem;">Temperament (1–5)</label>
+          <input id="rearing_temperament" type="range" min="1" max="5" step="1" value="${Number(item.temperament||3)||3}" />
+          <div class="small" id="rearing_tempLabel"></div>
+
+          <label style="margin-top:0.6rem;">Notes</label>
+          <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
+        ` : ""}
+
+        ${kind === "raiser" ? `
+          <div class="two-col" style="margin-top:0.5rem;">
+            <div>
+              <label>Start date</label>
+              <input id="rearing_startDate" type="date" value="${item.startDate || ""}" />
+            </div>
+            <div>
+              <label>End date</label>
+              <input id="rearing_endDate" type="date" value="${item.endDate || ""}" />
+            </div>
+          </div>
+
+          <div class="two-col" style="margin-top:0.6rem;">
+            <div>
+              <label>Add brood interval (days)</label>
+              <input id="rearing_broodIntervalDays" type="number" min="1" max="30" value="${item.broodIntervalDays || 7}" />
+            </div>
+            <div>
+              <label>Last brood added</label>
+              <input id="rearing_lastBroodAddDate" type="date" value="${item.lastBroodAddDate || ""}" />
+            </div>
+          </div>
+          <button id="rearing_markBroodAdded" type="button" style="margin-top:0.35rem;">🧬 Mark brood added today</button>
+          <div class="small" id="rearing_nextBroodAddHint"></div>
+
+          <label style="margin-top:0.6rem;">Hive tag ID (optional)</label>
+          <input id="rearing_hiveId" type="text" value="${(item.hiveId || "").replace(/"/g,"&quot;")}" />
+
+          <label style="margin-top:0.6rem;">Yard</label>
+          <input id="rearing_yard" type="text" value="${(item.yard || "").replace(/"/g,"&quot;")}" />
+
+          <label style="margin-top:0.6rem;">Style</label>
+          <select id="rearing_style">
+            <option value="starter/finisher">starter/finisher</option>
+            <option value="starter only">starter only</option>
+            <option value="finisher only">finisher only</option>
+          </select>
+
+          <label style="margin-top:0.6rem;">Notes</label>
+          <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
+        ` : ""}
+
+        ${kind === "mating" ? `
+          <div class="two-col" style="margin-top:0.5rem;">
+            <div>
+              <label>Install date</label>
+              <input id="rearing_installDate" type="date" value="${item.installDate || ""}" />
+            </div>
+            <div>
+              <label>Yard</label>
+              <input id="rearing_yard" type="text" value="${(item.yard || "").replace(/"/g,"&quot;")}" />
+            </div>
+          </div>
+
+          <label style="margin-top:0.6rem;">Hive tag ID (optional)</label>
+          <input id="rearing_hiveId" type="text" value="${(item.hiveId || "").replace(/"/g,"&quot;")}" />
+
+          <label style="margin-top:0.6rem;">From graft batch ID (optional)</label>
+          <input id="rearing_graftBatchId" type="text" value="${(item.graftBatchId || "").replace(/"/g,"&quot;")}" />
+
+          <label style="margin-top:0.6rem;">Queen ID (optional)</label>
+          <input id="rearing_queenId" type="text" value="${(item.queenId || "").replace(/"/g,"&quot;")}" />
+
+          <label style="margin-top:0.6rem;">Temperament (1–5)</label>
+          <input id="rearing_temperament" type="range" min="1" max="5" step="1" value="${Number(item.temperament||3)||3}" />
+          <div class="small" id="rearing_tempLabel"></div>
+
+          <label style="margin-top:0.6rem;">Notes</label>
+          <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
+        ` : ""}
+
+        <div class="row" style="margin-top:0.75rem;">
+          <button id="rearing_saveBtn" type="button" class="btn btn-primary grow">Save</button>
+          <button id="rearing_closeBtn" type="button" class="btn grow">Close</button>
+        </div>
+      `;
+
+
+      // Populate source queen dropdown + daughters UI
+      if (kind === "graft") {
+        const sel = document.getElementById("rearing_sourceQueenId");
+        const hint = document.getElementById("rearing_sourceQueenHint");
+        const meta = document.getElementById("rearing_daughtersMeta");
+        const genBtn = document.getElementById("rearing_generateDaughters");
+
+        // Build queen options from ALL hives (active + archived + inventory)
+        const hives = Storage.loadHives();
+        const opts = [{ value: "", label: "— none —" }];
+        for (const [hid, hive] of Object.entries(hives || {})) {
+          const qs = Array.isArray(hive?.queens) ? hive.queens : [];
+          for (const q of qs) {
+            const tag = (q.tag || q.id || "").trim();
+            const g = (q.genetics || "").trim();
+            const status = (q.status || "").trim();
+            const label = `${hive.name || "Hive"} • ${tag}${g ? " • " + g : ""}${status ? " • " + status : ""}`;
+            opts.push({ value: q.id, label });
+          }
+        }
+
+        if (sel) {
+                    sel.innerHTML = "";
+          for (const o of opts) {
+            const opt = document.createElement("option");
+            opt.value = o.value;
+            opt.textContent = o.label;
+            sel.appendChild(opt);
+          }
+          sel.value = item.sourceQueenId || "";
+          sel.addEventListener("change", () => {
+            // Just re-render editor so meta/hint stays in sync
+            item.sourceQueenId = (sel.value || "").trim();
+            if (hint) hint.textContent = item.sourceQueenId ? "Linked: genetics + lineage will reference this queen." : "";
+          });
+          if (hint) hint.textContent = item.sourceQueenId ? "Linked: genetics + lineage will reference this queen." : "";
+        }
+
+        const updateDaughterMeta = () => {
+          const n = (item.daughterQueenIds || []).length;
+          meta.textContent = n ? `(${n} created)` : "(none yet)";
+          if (!item.sourceQueenId) {
+            if (genBtn) genBtn.disabled = true;
+            if (meta) meta.textContent = "— select a source queen to generate daughters —";
+          } else if ((item.acceptedCount || 0) <= 0) {
+            if (genBtn) genBtn.disabled = true;
+            if (meta) meta.textContent = "— set Accepted Cells to generate daughters —";
+          } else {
+            if (genBtn) genBtn.disabled = false;
+          }
+        };
+        updateDaughterMeta();
+
+        if (genBtn) {
+          genBtn.addEventListener("click", () => {
+            try {
+              const created = Rearing.ensureDaughtersForGraft(item);
+              item.daughterQueenIds = created;
+              updateDaughterMeta();
+              UI.status(`Daughter queens: ${created.length}`);
+            } catch (e) {
+              alert("Could not generate daughters: " + (e.message || e));
+            }
+          });
+        }
+      }
+
+
+      if (kind === "raiser") {
+        const intervalEl = document.getElementById("rearing_broodIntervalDays");
+        const lastEl = document.getElementById("rearing_lastBroodAddDate");
+        const btn = document.getElementById("rearing_markBroodAdded");
+        const hint = document.getElementById("rearing_nextBroodAddHint");
+
+        const updateHint = () => {
+          const interval = Math.max(1, Math.min(30, Math.floor(Number(intervalEl?.value || item.broodIntervalDays || 7))));
+          const last = (lastEl?.value || item.lastBroodAddDate || "").trim();
+          const base = last || (item.startDate || "").trim();
+          if (!base) { if (hint) hint.textContent = "Tip: set a start date so the app can suggest when to add brood."; return; }
+          const next = Rearing.isoAddDays(base, interval);
+          if (hint) hint.textContent = `Next brood add: ${next}`;
+        };
+        updateHint();
+
+        intervalEl?.addEventListener("change", updateHint);
+        lastEl?.addEventListener("change", updateHint);
+        btn?.addEventListener("click", () => {
+          if (lastEl) lastEl.value = Utils.today();
+          updateHint();
+        });
+      }
+
+      // Set select values
+      if (kind === "raiser") {
+        const sel = el.rearingEditor.querySelector("#rearing_style");
+        if (sel) sel.value = item.style || "starter/finisher";
+      }
+
+      const temp = el.rearingEditor.querySelector("#rearing_temperament");
+      const tempLabel = el.rearingEditor.querySelector("#rearing_tempLabel");
+      const refreshTemp = () => {
+        if (!temp || !tempLabel) return;
+        tempLabel.textContent = `Temperament: ${temp.value} / 5 • ${this.temperamentLabel(temp.value)}`;
+      };
+      if (temp) temp.addEventListener("input", refreshTemp);
+      refreshTemp();
+
+      const btnSave = el.rearingEditor.querySelector("#rearing_saveBtn");
+      const btnClose = el.rearingEditor.querySelector("#rearing_closeBtn");
+      if (btnClose) btnClose.addEventListener("click", () => {
+        State.rearingSelected = { kind: null, id: null };
+        this.renderAll();
+      });
+
+      if (btnSave) btnSave.addEventListener("click", () => {
+        const r2 = this.load();
+        const { kind: k2, item: it2 } = this.findSelected(r2);
+        if (!k2 || !it2) return;
+
+        const $ = (id) => el.rearingEditor.querySelector(id);
+
+        it2.name = ($(`#rearing_name`)?.value || "").trim() || it2.name;
+
+        if (k2 === "graft") {
+          it2.graftDate = $(`#rearing_graftDate`)?.value || "";
+          it2.cellRaiserHiveId = ($(`#rearing_cellRaiserHiveId`)?.value || "").trim();
+          it2.graftCount = Number($(`#rearing_graftCount`)?.value || 0);
+          it2.graftCount = Math.max(0, Math.min(40, Math.floor(it2.graftCount)));
+          it2.insertedAt = ($(`#rearing_insertedAt`)?.value || "").trim();
+          it2.cellRaiserEntryId = ($(`#rearing_cellRaiserEntryId`)?.value || "").trim();
+          if (it2.cellRaiserEntryId) {
+            const cr = (r.entries || []).find(e => e.id === it2.cellRaiserEntryId);
+            if (cr) it2.cellRaiserHiveId = cr.hiveId || it2.cellRaiserHiveId;
+          }
+
+          it2.acceptedCount = Number($(`#rearing_acceptedCount`)?.value || 0);
+          it2.sourceQueenId = ($(`#rearing_sourceQueenId`)?.value || "").trim();
+          this.ensureDaughtersForGraft(it2);
+          it2.geneticsNotes = ($(`#rearing_geneticsNotes`)?.value || "").trim();
+          it2.temperament = Number($(`#rearing_temperament`)?.value || 0);
+          it2.notes = ($(`#rearing_notes`)?.value || "").trim();
+        } else if (k2 === "raiser") {
+          it2.startDate = $(`#rearing_startDate`)?.value || "";
+          it2.endDate = $(`#rearing_endDate`)?.value || "";
+          it2.hiveId = ($(`#rearing_hiveId`)?.value || "").trim();
+          it2.yard = ($(`#rearing_yard`)?.value || "").trim();
+          it2.style = ($(`#rearing_style`)?.value || "starter/finisher");
+          it2.notes = ($(`#rearing_notes`)?.value || "").trim();
+        } else if (k2 === "mating") {
+          it2.installDate = $(`#rearing_installDate`)?.value || "";
+          it2.yard = ($(`#rearing_yard`)?.value || "").trim();
+          it2.hiveId = ($(`#rearing_hiveId`)?.value || "").trim();
+          it2.graftBatchId = ($(`#rearing_graftBatchId`)?.value || "").trim();
+          it2.queenId = ($(`#rearing_queenId`)?.value || "").trim();
+          it2.temperament = Number($(`#rearing_temperament`)?.value || 0);
+          it2.notes = ($(`#rearing_notes`)?.value || "").trim();
+        }
+
+        this.save(r2);
+        UI.status("Saved queen rearing entry");
+        this.renderAll();
+      });
+    },
+
+    renderCalendar() {
+      const r = this.load();
+      const cal = this.buildCalendar(r);
+
+      if (!cal.length) {
+        el.rearingCalendar.innerHTML = `<em class="small">No calendar items yet. Add a graft batch or cell raiser to see dates.</em>`;
+        return;
+      }
+
+      const now = Utils.today();
+      const rows = cal.slice(0, 40);
+
+      el.rearingCalendar.innerHTML = "";
+      rows.forEach(entry => {
+        const wrap = document.createElement("div");
+        wrap.className = "timeline-row";
+
+        const dot = document.createElement("div");
+        dot.className = "timeline-dot " + (entry.date < now ? "warn" : "good");
+
+        const main = document.createElement("div");
+        main.className = "timeline-main";
+
+        const t = document.createElement("div");
+        t.className = "timeline-title";
+        t.textContent = `${entry.title}`;
+
+        const meta = document.createElement("div");
+        meta.className = "timeline-meta";
+        meta.textContent = `${entry.date} • ${entry.detail || ""}`;
+
+        const actions = document.createElement("div");
+        actions.className = "timeline-actions";
+
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "timeline-btn";
+        b.textContent = "Open";
+        b.addEventListener("click", () => this.select(entry.kind, entry.refId));
+
+        actions.appendChild(b);
+
+        main.appendChild(t);
+        main.appendChild(meta);
+        main.appendChild(actions);
+
+        wrap.appendChild(dot);
+        wrap.appendChild(main);
+
+        el.rearingCalendar.appendChild(wrap);
+      });
+    },
+
+    renderAll() {
+      this.renderList();
+      this.renderEditor();
+      this.renderCalendar();
+    },
+
+    setVisible(open) {
+      if (open) {
+        el.rearingSection.classList.remove("hidden");
+        el.rearingToggleBtn.textContent = "👑 
+    // ---------- Queen Inventory + Banking (global across hives) ----------
+    getAllQueensAcrossHives() {
+      const hives = Storage.loadHives();
+      const out = [];
+      for (const hive of Object.values(hives || {})) {
+        const qs = Array.isArray(hive && hive.queens) ? hive.queens : [];
+        for (const q of qs) out.push({ hiveId: hive.id, hiveName: hive.name || hive.id, queen: q });
+      }
+      return out;
+    },
+
+    setQueenTab(tab) {
+      const t = tab || "active";
+
+      const setOn = (btn, on) => {
+        if (!btn) return;
+        btn.classList.toggle("btn-primary", on);
+        btn.classList.toggle("btn-muted", !on);
+      };
+
+      setOn(el.queenTabActiveBtn, t === "active");
+      setOn(el.queenTabArchiveBtn, t === "archive");
+      setOn(el.queenTabInventoryBtn, t === "inventory");
+      setOn(el.queenTabBankedBtn, t === "banked");
+
+      if (el.queenArchive) el.queenArchive.classList.toggle("hidden", t !== "archive");
+      if (el.queenInventory) el.queenInventory.classList.toggle("hidden", t !== "inventory");
+      if (el.queenBanked) el.queenBanked.classList.toggle("hidden", t !== "banked");
+
+      if (t === "inventory") this.renderQueenInventory();
+      if (t === "banked") this.renderQueenBanked();
+    },
+
+    renderQueenInventory() {
+      if (!el.queenInventoryList) return;
+      const all = this.getAllQueensAcrossHives().filter(x => (x.queen && x.queen.status) === "inventory");
+
+      if (all.length === 0) {
+        el.queenInventoryList.innerHTML = "<em>No inventory queens yet.</em>";
+        return;
+      }
+
+      el.queenInventoryList.innerHTML = "";
+      all.forEach(({ hiveId, hiveName, queen }) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.margin = "0.5rem 0";
+
+        const genetics = (queen.genetics || "").trim();
+        const temperament = (queen.temperament || "").trim();
+
+        const top = document.createElement("div");
+        top.innerHTML = "<strong>" + (queen.name || "Inventory Queen") + "</strong>";
+        card.appendChild(top);
+
+        const meta = document.createElement("div");
+        meta.className = "small";
+        meta.textContent = "From hive: " + hiveName +
+          (genetics ? " • Genetics: " + genetics : "") +
+          (temperament ? " • Temperament: " + temperament : "");
+        card.appendChild(meta);
+
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.5rem";
+
+        const installBtn = document.createElement("button");
+        installBtn.type = "button";
+        installBtn.className = "btn btn-primary grow";
+        installBtn.textContent = "Install to current hive";
+        installBtn.addEventListener("click", () => {
+          if (!State.currentHiveId) { alert("Load a hive first."); return; }
+
+          const hives = Storage.loadHives();
+          const cur = hives[State.currentHiveId];
+          if (!cur) return;
+
+          if (!Array.isArray(cur.queens)) cur.queens = [];
+          const from = hives[hiveId];
+          if (from && Array.isArray(from.queens)) {
+            from.queens = from.queens.filter(q => q.id !== queen.id);
+          }
+
+          cur.queens.push(queen);
+          queen.status = "active";
+          cur.currentQueenId = queen.id;
+
+          Storage.saveHives(hives);
+
+          if (State.currentHiveId === cur.id) this.renderQueenSection(cur);
+          this.renderQueenInventory();
+          alert("Queen installed and set active.");
+        });
+
+        const bankBtn = document.createElement("button");
+        bankBtn.type = "button";
+        bankBtn.className = "btn grow";
+        bankBtn.textContent = "Move to banked…";
+        bankBtn.addEventListener("click", () => {
+          const hives = Storage.loadHives();
+          const from = hives[hiveId];
+          if (!from) return;
+          const q = (from.queens || []).find(x => x.id === queen.id);
+          if (!q) return;
+
+          const bankHiveId = prompt("Banked in which hive ID?", State.currentHiveId || "");
+          if (!bankHiveId) return;
+          const box = prompt("Which box / position? (e.g. 'Deep 1', 'Nuc 3')", (q.bankLocation && q.bankLocation.box) || "");
+
+          q.status = "banked";
+          q.bankLocation = { hiveId: bankHiveId, box: box || "" };
+
+          Storage.saveHives(hives);
+          this.renderQueenInventory();
+          this.renderQueenBanked();
+        });
+
+        row.appendChild(installBtn);
+        row.appendChild(bankBtn);
+        card.appendChild(row);
+
+        el.queenInventoryList.appendChild(card);
+      });
+    },
+
+    renderQueenBanked() {
+      if (!el.queenBankedList) return;
+      const all = this.getAllQueensAcrossHives().filter(x => (x.queen && x.queen.status) === "banked");
+
+      if (all.length === 0) {
+        el.queenBankedList.innerHTML = "<em>No banked queens yet.</em>";
+        return;
+      }
+
+      el.queenBankedList.innerHTML = "";
+      all.forEach(({ hiveId, hiveName, queen }) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.style.margin = "0.5rem 0";
+
+        const locHive = (queen.bankLocation && queen.bankLocation.hiveId) || "";
+        const locBox = (queen.bankLocation && queen.bankLocation.box) || "";
+
+        const top = document.createElement("div");
+        top.innerHTML = "<strong>" + (queen.name || "Banked Queen") + "</strong>";
+        card.appendChild(top);
+
+        const meta1 = document.createElement("div");
+        meta1.className = "small";
+        meta1.textContent = "Source hive: " + hiveName;
+        card.appendChild(meta1);
+
+        const meta2 = document.createElement("div");
+        meta2.className = "small";
+        meta2.textContent = "Banked at: " + (locHive || "?") + (locBox ? " • " + locBox : "");
+        card.appendChild(meta2);
+
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.5rem";
+
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "btn grow";
+        edit.textContent = "Edit location…";
+        edit.addEventListener("click", () => {
+          const hives = Storage.loadHives();
+          const from = hives[hiveId];
+          const q = (from && from.queens || []).find(x => x.id === queen.id);
+          if (!q) return;
+          const bankHiveId = prompt("Banked in which hive ID?", (q.bankLocation && q.bankLocation.hiveId) || "");
+          if (!bankHiveId) return;
+          const box = prompt("Which box / position?", (q.bankLocation && q.bankLocation.box) || "");
+          q.bankLocation = { hiveId: bankHiveId, box: box || "" };
+          Storage.saveHives(hives);
+          this.renderQueenBanked();
+        });
+
+        const unbank = document.createElement("button");
+        unbank.type = "button";
+        unbank.className = "btn btn-danger grow";
+        unbank.textContent = "Move back to inventory";
+        unbank.addEventListener("click", () => {
+          const hives = Storage.loadHives();
+          const from = hives[hiveId];
+          const q = (from && from.queens || []).find(x => x.id === queen.id);
+          if (!q) return;
+          q.status = "inventory";
+          q.bankLocation = null;
+          Storage.saveHives(hives);
+          this.renderQueenBanked();
+          this.renderQueenInventory();
+        });
+
+        row.appendChild(edit);
+        row.appendChild(unbank);
+        card.appendChild(row);
+
+        el.queenBankedList.appendChild(card);
+      });
+    },
+
+Queen Rearing — Hide";
+        this.renderAll();
+      } else {
+        el.rearingSection.classList.add("hidden");
+        el.rearingToggleBtn.textContent = "➕ Queen Rearing";
+      }
+    }
+  };
+
+
+// =========================================================
   // 7) GPS (Device API)
   // =========================================================
 
@@ -3401,6 +4454,38 @@ async function handleImportZipFromFile(file) {
     res = Storage.saveMeta(mergedMeta);
     if (!res.ok) throw new Error("Could not save meta (storage full?)");
 
+    // Merge queen rearing
+    const curR = Storage.loadRearing();
+    const incR = parsed.rearing || {};
+    const byId = (arr) => {
+      const m = new Map();
+      (Array.isArray(arr) ? arr : []).forEach(x => { if (x && x.id) m.set(x.id, x); });
+      return m;
+    };
+    const mg = byId(curR.graftBatches); (Array.isArray(incR.graftBatches) ? incR.graftBatches : []).forEach(x => { if (x && x.id && !mg.has(x.id)) mg.set(x.id, x); });
+    const mc = byId(curR.cellRaisers); (Array.isArray(incR.cellRaisers) ? incR.cellRaisers : []).forEach(x => { if (x && x.id && !mc.has(x.id)) mc.set(x.id, x); });
+    const mm = byId(curR.matingNucs); (Array.isArray(incR.matingNucs) ? incR.matingNucs : []).forEach(x => { if (x && x.id && !mm.has(x.id)) mm.set(x.id, x); });
+
+    res = Storage.saveRearing({ graftBatches: Array.from(mg.values()), cellRaisers: Array.from(mc.values()), matingNucs: Array.from(mm.values()) });
+    if (!res.ok) throw new Error("Could not save queen rearing (storage full?)");
+
+    // Optionally restore teams/auth if missing (safe merge)
+    const curTeams = Storage.loadTeams();
+    const incTeams = parsed.teams || {};
+    if (Array.isArray(incTeams.teams)) {
+      const tmap = new Map((curTeams.teams || []).map(t => [t.id, t]));
+      incTeams.teams.forEach(t => { if (t && t.id && !tmap.has(t.id)) tmap.set(t.id, t); });
+      res = Storage.saveTeams({ teams: Array.from(tmap.values()) });
+      if (!res.ok) throw new Error("Could not save teams (storage full?)");
+    }
+    const curAuth = Storage.loadAuth();
+    if (parsed.auth && !curAuth?.activeUserId && parsed.auth?.activeUserId) {
+      res = Storage.saveAuth(parsed.auth);
+      if (!res.ok) throw new Error("Could not save auth (storage full?)");
+    }
+
+
+
     // Ensure schema is up to date
     Storage.migrateIfNeeded();
 
@@ -3859,26 +4944,29 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     });
 
     el.queenArchiveBtn.addEventListener("click", () => {
+      UI.setQueenTab("archive");
       if (!State.currentHiveId) return;
       const hives = Storage.loadHives();
       const hive = hives[State.currentHiveId];
       if (!hive) return;
-
       UI.ensureHiveQueens(hive);
-
-      const hidden = el.queenArchive.classList.contains("hidden");
-      if (hidden) {
-        el.queenArchive.classList.remove("hidden");
-        UI.renderQueenArchive(hive);
-        el.queenArchiveBtn.textContent = "📜 Past Queens (Hide)";
-      } else {
-        el.queenArchive.classList.add("hidden");
-        el.queenArchiveBtn.textContent = "📜 Past Queens";
-      }
+      UI.renderQueenArchive(hive);
     });
 
+    // Queen view tabs
+    el.queenTabActiveBtn.addEventListener("click", () => UI.setQueenTab("active"));
+    el.queenTabArchiveBtn.addEventListener("click", () => {
+      UI.setQueenTab("archive");
+      if (!State.currentHiveId) return;
+      const hive = Storage.loadHives()[State.currentHiveId];
+      if (!hive) return;
+      UI.ensureHiveQueens(hive);
+      UI.renderQueenArchive(hive);
+    });
+    el.queenTabInventoryBtn.addEventListener("click", () => UI.setQueenTab("inventory"));
+    el.queenTabBankedBtn.addEventListener("click", () => UI.setQueenTab("banked"));
 
-    // Frames count change -> normalize and rerender
+// Frames count change -> normalize and rerender
     el.framesCount.addEventListener("change", () => {
       const frames = Math.max(1, Math.min(20, Math.floor(Number(el.framesCount.value || 10))));
       if (!State.currentHiveId || !State.currentInspectionId) return;
@@ -4164,7 +5252,18 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
       UI.clearMiteUI();
     });
 
-    // Mite clear button
+    
+    // Queen rearing toggle + actions
+    el.rearingToggleBtn.addEventListener("click", () => {
+      const hidden = el.rearingSection.classList.contains("hidden");
+      Rearing.setVisible(hidden);
+    });
+
+    el.newGraftBtn.addEventListener("click", () => Rearing.addGraftBatch());
+    el.newCellRaiserBtn.addEventListener("click", () => Rearing.addCellRaiser());
+    el.newMatingNucBtn.addEventListener("click", () => Rearing.addMatingNuc());
+
+// Mite clear button
     el.miteClearBtn.addEventListener("click", () => {
       if (!confirm("Clear mite treatment for this inspection?")) return;
 
@@ -4247,6 +5346,7 @@ el.importZipInput.addEventListener("change", async () => {
       UI.refreshYardUI();
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
+    Rearing.setVisible(false);
       Reminders.render();
     }
 
@@ -4265,6 +5365,7 @@ el.importZipInput.addEventListener("change", async () => {
     UI.refreshYardUI();
     UI.renderYardGps((el.currentYard.value || "").trim());
     UI.renderHiveYardGps();
+    Rearing.setVisible(false);
     Reminders.render();
 
     // Wire profile switch
