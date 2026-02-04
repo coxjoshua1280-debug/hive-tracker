@@ -5,11 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hive Tracker</title>
   <style>
+    :root{
+      --bg: #FFF7DA;           /* warm comb wax */
+      --card: #FFFFFF;
+      --text: #1F1A12;         /* dark propolis */
+      --muted: #5A5346;
+      --border: rgba(31,26,18,.14);
+
+      --honey: #F2B705;        /* honey gold */
+      --amber: #E08A00;        /* deeper amber */
+      --pollen: #FFD166;       /* soft pollen */
+      --comb: rgba(242,183,5,.14);
+
+      --ok: #1B5E20;
+      --warn: #8A4B00;
+      --danger: #B00020;
+      --info: #0D47A1;
+
+      --shadow: 0 6px 16px rgba(0,0,0,.08);
+      --radius: 16px;
+    }
+
+
     body {
       font-family: Arial, sans-serif;
       padding: 1rem;
-      background: #f8f8f8;
+      background: var(--bg);
+      color: var(--text);
       font-size: 18px;
+
+      /* subtle honeycomb texture (bright-sun friendly) */
+      background-image:
+        linear-gradient(30deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
+        linear-gradient(150deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
+        linear-gradient(90deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
+        linear-gradient(var(--bg), var(--bg));
+      background-size: 46px 80px;
+      background-position: 0 0, 0 0, 23px 40px, 0 0;
     }
     h1 { font-size: 1.6rem; margin-top: 0; }
     h2 { font-size: 1.25rem; margin: 1rem 0 0.5rem; }
@@ -21,11 +53,11 @@
     input[type="checkbox"] { width: 28px; height: 28px; }
     #status { margin: 0.75rem 0 1rem; }
     .card {
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       padding: 0.75rem;
-      margin: 0.5rem 0;
+      box-shadow: var(--shadow);
     }
     .row {
       display: flex;
@@ -37,11 +69,13 @@
     .row > .grow { flex: 1; }
     .small { font-size: 0.9rem; opacity: 0.85; }
     .btn {
-      font-size: 1.1rem;
-      padding: 0.75rem;
-      border: 1px solid #222;
-      border-radius: 10px;
-      background: #fff;
+      background: var(--honey);
+      color: var(--text);
+      border: 1px solid rgba(31,26,18,.18);
+      border-radius: 14px;
+      padding: 0.65rem 0.8rem;
+      font-weight: 700;
+      box-shadow: 0 4px 10px rgba(0,0,0,.10);
     }
     .btn-primary {
       background: #111;
@@ -387,10 +421,31 @@
       outline-offset: 2px;
     }
 
-  </style>
+  
+    .btn:active { transform: translateY(1px); }
+    .btn.secondary { background: #FFFFFF; }
+    .btn.danger { background: #FFE3E8; border-color: rgba(176,0,32,.25); }
+    .btn.ghost { background: transparent; border-color: var(--border); box-shadow: none; }
+
+    input, textarea, select {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.6rem 0.65rem;
+      background: rgba(255,255,255,.95);
+      color: var(--text);
+    }
+    input:focus, textarea:focus, select:focus, button:focus {
+      outline: 3px solid rgba(242,183,5,.35);
+      outline-offset: 2px;
+    }
+
+    .small { color: var(--muted); }
+
+    .drop-hint { outline: 3px dashed rgba(242,183,5,.55); outline-offset: 2px; }
+</style>
 
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#111111" />
+  <meta name="theme-color" content="#F2B705" />
 
 </head>
 
@@ -1210,6 +1265,51 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
 
+
+
+      // Queen milestones (simple, practical check-ins)
+      // Uses the active queen's "introduced" date if present.
+      try {
+        const todayIso = Utils.today();
+        const horizon = Rearing.isoAddDays(todayIso, 60);
+        const toDaysIso = (a, b) => {
+          const da = new Date(a + "T00:00:00");
+          const db = new Date(b + "T00:00:00");
+          return Math.round((db - da) / 86400000);
+        };
+
+        for (const hive of Object.values(hives || {})) {
+          const qid = hive?.currentQueenId;
+          const qs = Array.isArray(hive?.queens) ? hive.queens : [];
+          const q = qid ? qs.find(x => x.id === qid) : null;
+          const intro = (q?.introduced || "").trim(); // ISO yyyy-mm-dd
+          if (!intro) continue;
+
+          const milestones = [
+            { d: 7,  title: "Queen acceptance check" },
+            { d: 30, title: "Brood pattern check" },
+            { d: 90, title: "Temperament / productivity check" },
+            { d: 180, title: "Mid-season performance check" },
+            { d: 365, title: "Annual requeen consideration" }
+          ];
+
+          for (const ms of milestones) {
+            const when = Rearing.isoAddDays(intro, ms.d);
+            if (when < todayIso || when > horizon) continue;
+            out.push({
+              kind: "queen",
+              hiveId: hive.id,
+              hiveName: hive.name || hive.id,
+              yard: hive.location || "",
+              title: ms.title,
+              when,
+              days: toDaysIso(todayIso, when),
+              label: "Upcoming"
+            });
+          }
+        }
+      } catch (_) {}
+
       // Queen rearing calendar -> reminders (next ~60 days)
       try {
         const r = Storage.loadRearing();
@@ -1244,7 +1344,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const items = this.build();
 
       if (!items.length) {
-        el.reminderList.innerHTML = `<em class="small">No upcoming reminders yet. Add a mite treatment and a due date (or oxalic series) on an inspection.</em>`;
+        el.reminderList.innerHTML = `<em class="small">No upcoming reminders yet. Add a mite treatment due date, introduce a queen, or add a queen rearing batch.</em>`;
         return;
       }
 
@@ -1254,9 +1354,18 @@ document.addEventListener("DOMContentLoaded", () => {
         row.className = "history-item";
         const left = document.createElement("div");
         left.className = "history-left";
-        left.innerHTML = `<div class="timeline-title">${r.kind === "nextDose" ? "🧪 Next dose" : "🐜 Remove / reapply"}</div>
-          <div class="small"><strong>${r.label}</strong> • ${r.when} • ${Utils.csvEscape(r.type)} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}</div>`;
-        left.addEventListener("click", () => App.handleHiveLoad(r.hiveId));
+        left.innerHTML = `<div class="timeline-title">${
+            r.kind === "rearing" ? "🐣 Queen rearing" :
+            r.kind === "queen"  ? "👑 Queen check" :
+            r.kind === "nextDose" ? "🐜 Mite: next dose" :
+            "🐜 Mite: remove / reapply"
+          }</div>
+          <div class="small"><strong>${r.label}</strong> • ${r.when} • ${
+            r.kind === "rearing" ? Utils.csvEscape(r.title || "") :
+            r.kind === "queen" ? `${Utils.csvEscape(r.title || "")} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}` :
+            `${Utils.csvEscape(r.type)} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}`
+          }</div>`;
+        if (r.hiveId) { left.addEventListener("click", () => App.handleHiveLoad(r.hiveId)); left.style.cursor = "pointer"; }
         row.appendChild(left);
         el.reminderList.appendChild(row);
       });
@@ -1297,7 +1406,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       try {
         new Notification("Hive Tracker reminders", {
-          body: dueNow.map(d => `${d.kind === "nextDose" ? "Next dose" : "Remove"}: ${d.hiveName} (${d.when})`).join("\n"),
+          body: dueNow.map(d => {
+          if (d.kind === "rearing") return `Rearing: ${d.title} (${d.when})`;
+          if (d.kind === "queen") return `Queen: ${d.hiveName} — ${d.title} (${d.when})`;
+          if (d.kind === "nextDose") return `Mite dose: ${d.hiveName} (${d.when})`;
+          return `Remove: ${d.hiveName} (${d.when})`;
+        }).join("\n"),
           silent: true
         });
       } catch (_) {}
@@ -2118,17 +2232,31 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           id: Utils.uuid(),
           type: "deep",
           framesCount: legacyFrames,
-          frameMap: Array.isArray(insp.frameMap) ? insp.frameMap : []
+          frameMap: Array.isArray(insp.frameMap) ? insp.frameMap : [],
+          sortKey: 10
         });
       }
 
-      // Normalize each box
-      insp.boxes.forEach((b) => {
+      // Normalize each box + assign stable ordering key
+      insp.boxes.forEach((b, idx) => {
         if (!b.id) b.id = Utils.uuid();
         if (b.type !== "deep" && b.type !== "super") b.type = "deep";
         if (typeof b.framesCount !== "number") b.framesCount = 10;
         if (!Array.isArray(b.frameMap)) b.frameMap = [];
+        if (typeof b.sortKey !== "number" || !isFinite(b.sortKey)) b.sortKey = (idx + 1) * 10;
       });
+
+      // Always keep boxes sorted (bottom → top) by sortKey
+      insp.boxes.sort((a,b) => (a.sortKey || 0) - (b.sortKey || 0));
+
+      // If keys are duplicated or out of whack, renumber to nice gaps (10,20,30...)
+      let needsRenumber = false;
+      for (let i = 1; i < insp.boxes.length; i++) {
+        if (insp.boxes[i].sortKey <= insp.boxes[i-1].sortKey) { needsRenumber = true; break; }
+      }
+      if (needsRenumber) {
+        insp.boxes.forEach((b, i) => { b.sortKey = (i + 1) * 10; });
+      }
 
       if (!State.activeBoxId || !insp.boxes.some(b => b.id === State.activeBoxId)) {
         State.activeBoxId = insp.boxes[0]?.id || null;
@@ -2246,6 +2374,9 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
 
           const [moved] = insp.boxes.splice(fromIdx, 1);
           insp.boxes.splice(toIdx, 0, moved);
+
+          // Update stable ordering keys
+          insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
 
           // Persist
           App.saveCurrentHiveAndInspection();
@@ -5391,6 +5522,8 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
 
       const idx = Math.max(0, insp.boxes.findIndex(b => b.id === State.activeBoxId));
       insp.boxes.splice(idx + 1, 0, newBox);
+      // Keep stable ordering keys in sync with the visual stack
+      insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
       State.activeBoxId = newBox.id;
 
       const res = Storage.saveHives(hives);
@@ -5423,6 +5556,8 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
 
       const idx = Math.max(0, insp.boxes.findIndex(b => b.id === State.activeBoxId));
       insp.boxes.splice(idx + 1, 0, newBox);
+      // Keep stable ordering keys in sync with the visual stack
+      insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
       State.activeBoxId = newBox.id;
 
       const res = Storage.saveHives(hives);
