@@ -609,6 +609,19 @@
       </div>
 
 
+
+
+<div id="mapPanel" class="card hidden" style="margin-top:0.5rem;">
+        <div class="row">
+          <div class="grow"><strong>🗺️ Yard Map</strong></div>
+          <button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
+        </div>
+        <div id="mapStatus" class="small" style="margin:0.5rem 0;"></div>
+        <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
+        <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
+      </div>
+
+
 <div id="exportPanel" class="hidden" style="margin-top:0.6rem;">
       <div class="card" style="margin:0;">
         <label class="checkbox-label" style="margin:0;">
@@ -619,16 +632,7 @@
       </div>
 
       
-      <div id="mapPanel" class="card hidden" style="margin-top:0.5rem;">
-        <div class="row">
-          <div class="grow"><strong>🗺️ Yard Map</strong></div>
-          <button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
-        </div>
-        <div id="mapStatus" class="small" style="margin:0.5rem 0;"></div>
-        <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
-        <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
-      </div>
-<div class="row" style="margin-top:0.75rem;">
+      <div class="row" style="margin-top:0.75rem;">
         <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
         <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
                 <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
@@ -1466,6 +1470,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const Lock = {
     ttlMinutes: 10,
 
+    isDesktop() {
+      try { return window.matchMedia && window.matchMedia("(min-width: 900px)").matches; }
+      catch (_) { return true; }
+    },
+
+
     keyUnlockedUntil() { return "editUnlockedUntil"; },
 
     getUnlockedUntil() {
@@ -1536,6 +1546,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     requireUnlocked() {
+      if (!this.isDesktop()) return true;
       if (this.isUnlocked()) return true;
       alert("Editing is locked. Click 🔒 Locked and enter your PIN to unlock editing.");
       return false;
@@ -1543,7 +1554,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     applyUI() {
       if (!el || !el.lockBtn) return;
-      const unlocked = this.isUnlocked();
+      const desktop = this.isDesktop();
+      el.lockBtn.style.display = desktop ? "" : "none";
+      const unlocked = desktop ? this.isUnlocked() : true;
+
       el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
       el.lockBtn.classList.toggle("btn-danger", unlocked);
       el.lockBtn.classList.toggle("btn-muted", !unlocked);
