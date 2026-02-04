@@ -560,7 +560,45 @@
     <div class="card" style="margin-top:0.75rem;">
     <button id="exportPanelToggle" type="button" class="btn btn-muted">⬇️ Export / Backup / Import</button>
 
-    <div id="exportPanel" class="hidden" style="margin-top:0.6rem;">
+    
+      <div id="lookupPanel" class="card hidden" style="margin-top:0.5rem;">
+        <div class="row" style="align-items:flex-end;">
+          <div class="grow">
+            <strong>🔎 Lookup / Database</strong>
+            <div class="small">Desktop-friendly search. Paste a tag serial number to open a hive instantly.</div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
+          <div class="grow" style="min-width:220px;">
+            <label for="lookupSearch" style="margin-top:0;">Search</label>
+            <input id="lookupSearch" type="text" placeholder="Hive name, yard, notes, tag serial…" />
+          </div>
+          <div style="min-width:180px;">
+            <label for="lookupYard" style="margin-top:0;">Yard</label>
+            <select id="lookupYard"></select>
+          </div>
+          <div style="min-width:200px;">
+            <label for="lookupPurpose" style="margin-top:0;">Purpose</label>
+            <select id="lookupPurpose">
+              <option value="">All purposes</option>
+              <option value="standard">Standard</option>
+              <option value="queen">Queen rearing / mating</option>
+              <option value="split">Nuc / split growing</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="gap:0.5rem; margin-top:0.5rem;">
+          <button id="lookupOpenTagBtn" type="button" class="btn btn-primary">Open by tag serial</button>
+          <button id="lookupClearBtn" type="button" class="btn btn-muted">Clear</button>
+        </div>
+
+        <div id="lookupResults" style="margin-top:0.75rem;"></div>
+      </div>
+
+
+<div id="exportPanel" class="hidden" style="margin-top:0.6rem;">
       <div class="card" style="margin:0;">
         <label class="checkbox-label" style="margin:0;">
           <input id="exportCurrentYardOnly" type="checkbox" />
@@ -571,6 +609,7 @@
 
       <div class="row" style="margin-top:0.75rem;">
         <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
+        <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
         <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
       </div>
 
@@ -2052,6 +2091,198 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
 
+  // =========================================================
+  // 4B) LOOKUP / DATABASE (Desktop-friendly)
+  // =========================================================
+
+  const Lookup = {
+    _wired: false,
+
+    _getHiveLastDate(hive) {
+      try {
+        const ins = Array.isArray(hive.inspections) ? hive.inspections : [];
+        let best = "";
+        for (const i of ins) {
+          if (i && typeof i.date === "string" && i.date > best) best = i.date;
+        }
+        return best;
+      } catch (_) { return ""; }
+    },
+
+    _yardPurpose(yardName) {
+      const y = (yardName || "").trim();
+      if (!y) return "standard";
+      try { return (YardMeta.get(y)?.purpose || "standard"); } catch (_) { return "standard"; }
+    },
+
+    _purposeLabel(p) {
+      if (p === "queen") return "Queen";
+      if (p === "split") return "Split";
+      return "Standard";
+    },
+
+    _normalize(s) {
+      return String(s || "").toLowerCase();
+    },
+
+    _buildSearchBlob(hive) {
+      const id = hive?.id || "";
+      const name = hive?.name || "";
+      const yard = hive?.location || "";
+      const team = hive?.teamId || "";
+      const notes = hive?.notes || "";
+      // Pull in last inspection notes if present
+      let lastNotes = "";
+      try {
+        const ins = Array.isArray(hive.inspections) ? hive.inspections : [];
+        const last = ins.reduce((best, cur) => (!best || (cur?.date || "") > (best?.date || "")) ? cur : best, null);
+        lastNotes = last?.notes || last?.generalNotes || "";
+      } catch (_) {}
+      return this._normalize([id, name, yard, team, notes, lastNotes].join(" | "));
+    },
+
+    _ensureWired() {
+      if (this._wired) return;
+      this._wired = true;
+
+      const rerender = () => this.render();
+
+      if (el.lookupSearch) el.lookupSearch.addEventListener("input", () => this.render());
+      if (el.lookupYard) el.lookupYard.addEventListener("change", () => this.render());
+      if (el.lookupPurpose) el.lookupPurpose.addEventListener("change", () => this.render());
+
+      if (el.lookupClearBtn) {
+        el.lookupClearBtn.addEventListener("click", () => {
+          el.lookupSearch.value = "";
+          if (el.lookupYard) el.lookupYard.value = "";
+          if (el.lookupPurpose) el.lookupPurpose.value = "";
+          this.render();
+        });
+      }
+
+      if (el.lookupOpenTagBtn) {
+        el.lookupOpenTagBtn.addEventListener("click", () => {
+          const raw = (el.lookupSearch?.value || "").trim();
+          if (!raw) { alert("Paste/type a tag serial number (or hive ID) into Search first."); return; }
+          const hives = Storage.loadHives();
+          if (hives[raw]) {
+            App.handleHiveLoad(raw);
+            el.lookupPanel.classList.add("hidden");
+            return;
+          }
+          alert("No hive found with that tag/ID. Try searching by name/yard/notes instead.");
+        });
+      }
+    },
+
+    _renderFilters(hives) {
+      // Populate yard dropdown
+      if (!el.lookupYard) return;
+      const current = el.lookupYard.value || "";
+      const yards = Array.from(new Set(Object.values(hives).map(h => (h.location || "").trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b));
+      el.lookupYard.innerHTML = `<option value="">All yards</option>` + yards.map(y => `<option value="${Utils.escapeHtml(y)}">${Utils.escapeHtml(y)}</option>`).join("");
+      if (yards.includes(current)) el.lookupYard.value = current;
+      else el.lookupYard.value = "";
+    },
+
+    render() {
+      if (!el.lookupPanel || el.lookupPanel.classList.contains("hidden")) return;
+
+      this._ensureWired();
+
+      const hivesObj = Storage.loadHives();
+      const hives = Object.values(hivesObj || {});
+      this._renderFilters(hivesObj || {});
+
+      const q = this._normalize((el.lookupSearch?.value || "").trim());
+      const yardFilter = (el.lookupYard?.value || "").trim();
+      const purposeFilter = (el.lookupPurpose?.value || "").trim();
+
+      const rows = [];
+      for (const hive of hives) {
+        const yard = (hive.location || "").trim();
+        const purpose = this._yardPurpose(yard);
+
+        if (yardFilter && yard !== yardFilter) continue;
+        if (purposeFilter && purpose !== purposeFilter) continue;
+
+        const blob = this._buildSearchBlob(hive);
+        if (q && !blob.includes(q)) continue;
+
+        rows.push({
+          id: hive.id,
+          name: hive.name || "",
+          yard,
+          purpose,
+          last: this._getHiveLastDate(hive)
+        });
+      }
+
+      // Sort: most recently inspected first, then name/id
+      rows.sort((a,b) => {
+        if (a.last !== b.last) return (b.last || "").localeCompare(a.last || "");
+        return (a.name || a.id).localeCompare(b.name || b.id);
+      });
+
+      // Render
+      if (!el.lookupResults) return;
+
+      if (!rows.length) {
+        el.lookupResults.innerHTML = `<em>No matches.</em>`;
+        return;
+      }
+
+      const head = `
+        <div class="small" style="margin-bottom:0.35rem;">Showing <strong>${rows.length}</strong> hive(s)</div>
+        <div class="card" style="margin:0;">
+          <div class="row" style="font-weight:bold;">
+            <div class="grow">Hive</div>
+            <div style="min-width:160px;">Yard</div>
+            <div style="min-width:110px;">Purpose</div>
+            <div style="min-width:140px;">Last insp.</div>
+          </div>
+        </div>
+      `;
+
+      const body = rows.slice(0, 250).map(r => {
+        const title = Utils.escapeHtml(r.name ? `${r.name} (${r.id})` : r.id);
+        const yard = Utils.escapeHtml(r.yard || "");
+        const pur = Utils.escapeHtml(this._purposeLabel(r.purpose));
+        const last = Utils.escapeHtml(r.last || "");
+        return `
+          <div class="card" style="margin:0.35rem 0 0 0;">
+            <button type="button" class="btn" style="width:100%; text-align:left;" data-hive-id="${Utils.escapeHtml(r.id)}">
+              <div class="row" style="gap:0.5rem; align-items:flex-start;">
+                <div class="grow">
+                  <div><strong>${title}</strong></div>
+                  <div class="small">Tag serial: ${Utils.escapeHtml(r.id)}</div>
+                </div>
+                <div style="min-width:160px;">${yard || "&nbsp;"}</div>
+                <div style="min-width:110px;">${pur}</div>
+                <div style="min-width:140px;">${last || "&nbsp;"}</div>
+              </div>
+            </button>
+          </div>
+        `;
+      }).join("");
+
+      el.lookupResults.innerHTML = head + body;
+
+      // Wire row clicks
+      Array.from(el.lookupResults.querySelectorAll("button[data-hive-id]")).forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-hive-id");
+          if (!id) return;
+          App.handleHiveLoad(id);
+          el.lookupPanel.classList.add("hidden");
+        });
+      });
+    }
+  };
+
+
+
+
 // =========================================================
   // 5) ELEMENT MAP (ALL getElementById goes here)
   // =========================================================
@@ -2177,6 +2408,14 @@ document.addEventListener("DOMContentLoaded", () => {
     syncStatus: document.getElementById("syncStatus"),
 
     remindersBtn: document.getElementById("remindersBtn"),
+    lookupBtn: document.getElementById("lookupBtn"),
+    lookupPanel: document.getElementById("lookupPanel"),
+    lookupSearch: document.getElementById("lookupSearch"),
+    lookupYard: document.getElementById("lookupYard"),
+    lookupPurpose: document.getElementById("lookupPurpose"),
+    lookupResults: document.getElementById("lookupResults"),
+    lookupOpenTagBtn: document.getElementById("lookupOpenTagBtn"),
+    lookupClearBtn: document.getElementById("lookupClearBtn"),
     remindersPanel: document.getElementById("remindersPanel"),
     enableNotifBtn: document.getElementById("enableNotifBtn"),
     reminderList: document.getElementById("reminderList"),
@@ -6846,11 +7085,19 @@ Type a new team name to add, or leave blank to cancel:`);
     el.exportMenuBtn.addEventListener("click", () => {
       el.exportPanel.classList.toggle("hidden");
       el.remindersPanel.classList.add("hidden");
+      el.lookupPanel.classList.add("hidden");
     });
     el.remindersBtn.addEventListener("click", () => {
       el.remindersPanel.classList.toggle("hidden");
       el.exportPanel.classList.add("hidden");
+      el.lookupPanel.classList.add("hidden");
       Reminders.render();
+    });
+    el.lookupBtn.addEventListener("click", () => {
+      el.lookupPanel.classList.toggle("hidden");
+      el.exportPanel.classList.add("hidden");
+      el.remindersPanel.classList.add("hidden");
+      Lookup.render();
     });
     el.enableNotifBtn.addEventListener("click", async () => {
       await Notifier.enable();
