@@ -16,6 +16,11 @@
       --accent2:#2f2a1f; /* charcoal */
       --muted:#fff1b8;
       --danger:#b42318;
+    
+      --purpose-standard:#f4b400;
+      --purpose-queen:#7c3aed;
+      --purpose-split:#16a34a;
+      --purpose-unknown:#64748b;
     }
 
     body {
@@ -2889,13 +2894,115 @@ hiveYardGps: document.getElementById("hiveYardGps"),
         }
       });
 
-      if (!pts.length) {
+      
+// Render missing GPS yards list (desktop-friendly)
+const missing = yardNames.filter(name => {
+  const y = yards[name];
+  return !(y && typeof y.lat === "number" && typeof y.lon === "number");
+});
+
+if (el.mapMissingGps) {
+  if (!missing.length) {
+    el.mapMissingGps.textContent = "";
+  } else {
+    const unlocked = Lock.isUnlocked();
+    const rows = missing.map(name => {
+      const c = counts[name] || 0;
+      const ymeta = YardMeta.get(name) || {};
+      const purpose = (ymeta.purpose || "standard");
+      const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
+      const btnLabel = unlocked ? "Set location" : "Unlock to set";
+      const dis = unlocked ? "" : "disabled";
+      return `
+        <div class="card" style="margin:0.35rem 0; padding:0.65rem;">
+          <div class="row" style="align-items:center;">
+            <div class="grow">
+              <div><strong>${Utils.escapeHtml(name)}</strong></div>
+              <div class="small">${purposeLabel} • ${c} hive(s)</div>
+            </div>
+            <button type="button" class="btn btn-muted" style="width:auto;" data-setgps="${encodeURIComponent(name)}" ${dis}>${btnLabel}</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+    el.mapMissingGps.innerHTML = `
+      <div style="margin-top:0.25rem;"><strong>Missing yard GPS</strong> <span class="small">(home point)</span></div>
+      <div class="small">These yards won’t appear on the map until a home point is saved.</div>
+      ${rows}
+    `;
+
+    // Wire buttons
+    el.mapMissingGps.querySelectorAll("button[data-setgps]").forEach(btn => {
+      btn.onclick = () => {
+        const yn = decodeURIComponent(btn.getAttribute("data-setgps") || "");
+        if (!yn) return;
+        if (!Lock.requireUnlocked()) return;
+
+        const pick = prompt(
+          `Set yard home point for "${yn}"\n\n1 = Use my current location\n2 = Enter coordinates\n\nType 1 or 2:`,
+          "1"
+        );
+        if (pick === null) return;
+
+        const setCoords = (lat, lon) => {
+          const yards2 = Storage.loadYards() || {};
+          yards2[yn] = yards2[yn] || {};
+          yards2[yn].lat = lat;
+          yards2[yn].lon = lon;
+          Storage.saveYards(yards2);
+          UI.status("Yard GPS saved");
+          this.render();
+        };
+
+        if (String(pick).trim() === "1") {
+          if (!navigator.geolocation) {
+            alert("Geolocation not available on this device/browser. Choose option 2 to enter coordinates.");
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos?.coords?.latitude;
+              const lon = pos?.coords?.longitude;
+              if (typeof lat !== "number" || typeof lon !== "number") {
+                alert("Could not read location.");
+                return;
+              }
+              setCoords(lat, lon);
+            },
+            (err) => {
+              alert("Location error: " + (err && err.message ? err.message : err));
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+          );
+          return;
+        }
+
+        // Option 2: manual entry
+        const raw = prompt("Enter coordinates as: lat, lon", "");
+        if (raw === null) return;
+        const parts = String(raw).split(",").map(s => s.trim()).filter(Boolean);
+        if (parts.length < 2) { alert("Please enter in the format: lat, lon"); return; }
+        const lat = parseFloat(parts[0]);
+        const lon = parseFloat(parts[1]);
+        if (!isFinite(lat) || !isFinite(lon)) { alert("Invalid coordinates."); return; }
+        setCoords(lat, lon);
+      };
+    });
+  }
+}
+
+if (!pts.length) {
         el.mapStatus.innerHTML = "<em>No yard GPS points saved yet. Use the Yard GPS capture on mobile to save a yard home point.</em>";
         el.yardMap.innerHTML = "";
         return;
       }
 
-      el.mapStatus.textContent = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard`;
+      el.mapStatus.innerHTML = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard` +
+        ` <span style="margin-left:10px; display:inline-flex; gap:10px; align-items:center; flex-wrap:wrap;">`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-standard);display:inline-block;"></span><span class="small">Standard</span></span>`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-queen);display:inline-block;"></span><span class="small">Queen</span></span>`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-split);display:inline-block;"></span><span class="small">Split</span></span>`
+        + `</span>`;
 
       // Init map once
       if (!this.map) {
@@ -2921,11 +3028,22 @@ hiveYardGps: document.getElementById("hiveYardGps"),
         const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
 
         const radius = Math.max(6, Math.min(18, 6 + Math.round(Math.sqrt(c) * 3)));
+
+        const css = getComputedStyle(document.documentElement);
+        const purposeColor = (
+          purpose === "queen" ? (css.getPropertyValue("--purpose-queen") || "").trim() :
+          purpose === "split" ? (css.getPropertyValue("--purpose-split") || "").trim() :
+          purpose === "standard" ? (css.getPropertyValue("--purpose-standard") || "").trim() :
+          (css.getPropertyValue("--purpose-unknown") || "").trim()
+        ) || "#f4b400";
+
         const marker = L.circleMarker([lat, lon], {
           radius,
+          color: purposeColor,
+          fillColor: purposeColor,
           weight: 2,
-          opacity: 0.9,
-          fillOpacity: 0.5
+          opacity: 0.95,
+          fillOpacity: 0.55
         });
 
         const popup = `
