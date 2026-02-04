@@ -5,43 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hive Tracker</title>
   <style>
-    :root{
-      --bg: #FFF7DA;           /* warm comb wax */
-      --card: #FFFFFF;
-      --text: #1F1A12;         /* dark propolis */
-      --muted: #5A5346;
-      --border: rgba(31,26,18,.14);
-
-      --honey: #F2B705;        /* honey gold */
-      --amber: #E08A00;        /* deeper amber */
-      --pollen: #FFD166;       /* soft pollen */
-      --comb: rgba(242,183,5,.14);
-
-      --ok: #1B5E20;
-      --warn: #8A4B00;
-      --danger: #B00020;
-      --info: #0D47A1;
-
-      --shadow: 0 6px 16px rgba(0,0,0,.08);
-      --radius: 16px;
-    }
-
-
     body {
       font-family: Arial, sans-serif;
       padding: 1rem;
-      background: var(--bg);
-      color: var(--text);
+      background: #f8f8f8;
       font-size: 18px;
-
-      /* subtle honeycomb texture (bright-sun friendly) */
-      background-image:
-        linear-gradient(30deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
-        linear-gradient(150deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
-        linear-gradient(90deg, var(--comb) 12%, transparent 12.5%, transparent 87%, var(--comb) 87.5%, var(--comb)),
-        linear-gradient(var(--bg), var(--bg));
-      background-size: 46px 80px;
-      background-position: 0 0, 0 0, 23px 40px, 0 0;
     }
     h1 { font-size: 1.6rem; margin-top: 0; }
     h2 { font-size: 1.25rem; margin: 1rem 0 0.5rem; }
@@ -53,11 +21,11 @@
     input[type="checkbox"] { width: 28px; height: 28px; }
     #status { margin: 0.75rem 0 1rem; }
     .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
       padding: 0.75rem;
-      box-shadow: var(--shadow);
+      margin: 0.5rem 0;
     }
     .row {
       display: flex;
@@ -69,13 +37,11 @@
     .row > .grow { flex: 1; }
     .small { font-size: 0.9rem; opacity: 0.85; }
     .btn {
-      background: var(--honey);
-      color: var(--text);
-      border: 1px solid rgba(31,26,18,.18);
-      border-radius: 14px;
-      padding: 0.65rem 0.8rem;
-      font-weight: 700;
-      box-shadow: 0 4px 10px rgba(0,0,0,.10);
+      font-size: 1.1rem;
+      padding: 0.75rem;
+      border: 1px solid #222;
+      border-radius: 10px;
+      background: #fff;
     }
     .btn-primary {
       background: #111;
@@ -206,7 +172,25 @@
       font-size: 1rem;
     }
 
-    /* Frame map */
+    
+    /* Yard overrides modal (full-screen overlay) */
+    #yardOverridesModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 9998;
+      padding: 1rem;
+      overflow: auto;
+    }
+    #yardOverridesModal.show { display: flex; }
+    #yardOverridesCard {
+      width: min(760px, 100%);
+      margin-top: 1rem;
+    }
+/* Frame map */
     .frame-map {
       display: grid;
       gap: 0.6rem;
@@ -420,32 +404,14 @@
       outline: 2px dashed rgba(0,0,0,0.18);
       outline-offset: 2px;
     }
+    .drop-hint-top { border-top: 4px solid rgba(0,0,0,0.25); }
+    .drop-hint-bottom { border-bottom: 4px solid rgba(0,0,0,0.25); }
+    .dragging { opacity: 0.85; }
 
-  
-    .btn:active { transform: translateY(1px); }
-    .btn.secondary { background: #FFFFFF; }
-    .btn.danger { background: #FFE3E8; border-color: rgba(176,0,32,.25); }
-    .btn.ghost { background: transparent; border-color: var(--border); box-shadow: none; }
-
-    input, textarea, select {
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 0.6rem 0.65rem;
-      background: rgba(255,255,255,.95);
-      color: var(--text);
-    }
-    input:focus, textarea:focus, select:focus, button:focus {
-      outline: 3px solid rgba(242,183,5,.35);
-      outline-offset: 2px;
-    }
-
-    .small { color: var(--muted); }
-
-    .drop-hint { outline: 3px dashed rgba(242,183,5,.55); outline-offset: 2px; }
-</style>
+  </style>
 
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#F2B705" />
+  <meta name="theme-color" content="#111111" />
 
 </head>
 
@@ -479,6 +445,73 @@
 
   <div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
 
+  <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
+    <button id="yardOverridesBtn" type="button" class="btn grow">⚙️ Yard overrides</button>
+  </div>
+
+  <div id="yardOverridesModal" class="hidden">
+    <div id="yardOverridesCard" class="card">
+      <div class="row" style="margin:0 0 0.25rem 0;">
+        <div class="grow"><strong>⚙️ Yard overrides</strong><div class="small" id="yardOverridesTitle"></div></div>
+        <button id="yardOverridesClose" type="button" class="btn">✕</button>
+      </div>
+
+      <div class="small" id="yardOverridesHint" style="margin-top:0.25rem;"></div>
+
+      <div class="card" style="margin-top:0.6rem;">
+        <div class="row" style="margin:0;">
+          <div class="grow"><strong>👑 Queen milestones</strong></div>
+        </div>
+
+        <label class="checkbox-label" style="margin-top:0.5rem;">
+          <input id="yardMilestonesOverrideToggle" type="checkbox" />
+          Override global milestones for this yard
+        </label>
+
+        <div id="yardMilestoneEditor" class="hidden" style="margin-top:0.6rem;">
+          <div class="small" style="margin-bottom:0.35rem; opacity:0.9;">Customize reminder windows (days after queen introduction).</div>
+
+          <div class="row" style="gap:0.6rem; align-items:flex-end;">
+            <div class="grow">
+              <label>Acceptance check (start)</label>
+              <input id="yard_ms_accept_start" type="number" min="0" step="1" />
+            </div>
+            <div class="grow">
+              <label>Acceptance check (end)</label>
+              <input id="yard_ms_accept_end" type="number" min="0" step="1" />
+            </div>
+          </div>
+
+          <div class="row" style="gap:0.6rem; align-items:flex-end;">
+            <div class="grow">
+              <label>Eggs check (start)</label>
+              <input id="yard_ms_eggs_start" type="number" min="0" step="1" />
+            </div>
+            <div class="grow">
+              <label>Eggs check (end)</label>
+              <input id="yard_ms_eggs_end" type="number" min="0" step="1" />
+            </div>
+          </div>
+
+          <div class="row" style="gap:0.6rem; align-items:flex-end;">
+            <div class="grow">
+              <label>Brood pattern (start)</label>
+              <input id="yard_ms_pattern_start" type="number" min="0" step="1" />
+            </div>
+            <div class="grow">
+              <label>Brood pattern (end)</label>
+              <input id="yard_ms_pattern_end" type="number" min="0" step="1" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:0.6rem; gap:0.5rem;">
+            <button id="yardMilestonesResetToGlobal" type="button" class="btn grow">Use global settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
     <div class="card" style="margin-top:0.75rem;">
     <button id="exportPanelToggle" type="button" class="btn btn-muted">⬇️ Export / Backup / Import</button>
 
@@ -503,6 +536,68 @@
         </div>
         <div class="small">Works offline. Notifications show while the app is open; on some devices, background reminders may be limited by the browser.</div>
         <div id="reminderList" style="margin-top:0.6rem;"></div>
+
+        <div id="milestonesPanel" class="card" style="margin-top:0.75rem;">
+          <div class="row" style="margin:0;">
+            <div class="grow"><strong>👑 Queen milestones</strong></div>
+          </div>
+          <label class="checkbox-label" style="margin-top:0.5rem;">
+            <input id="advMilestonesToggle" type="checkbox" />
+            Advanced milestones (custom)
+          </label>
+          <div class="small" id="milestonesHint" style="margin-top:0.25rem;">Standard milestones are used unless advanced mode is enabled.</div>
+
+          <div id="milestoneEditor" class="hidden" style="margin-top:0.6rem;">
+            <div class="small" style="margin-bottom:0.35rem; opacity:0.9;">Customize reminder windows (days after queen introduction). Uses a start → end range.</div>
+
+            <div class="card" style="margin:0;">
+              <div class="small" style="margin-bottom:0.35rem;"><strong>Release / Acceptance check</strong> (cage empty, calm cluster)</div>
+              <div class="row" style="gap:0.5rem;">
+                <div class="grow">
+                  <label>Start day</label>
+                  <input id="ms_accept_start" type="number" min="0" step="1" />
+                </div>
+                <div class="grow">
+                  <label>End day</label>
+                  <input id="ms_accept_end" type="number" min="0" step="1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:0.5rem;">
+              <div class="small" style="margin-bottom:0.35rem;"><strong>Eggs / Laying check</strong> (eggs/young larvae)</div>
+              <div class="row" style="gap:0.5rem;">
+                <div class="grow">
+                  <label>Start day</label>
+                  <input id="ms_eggs_start" type="number" min="0" step="1" />
+                </div>
+                <div class="grow">
+                  <label>End day</label>
+                  <input id="ms_eggs_end" type="number" min="0" step="1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-top:0.5rem;">
+              <div class="small" style="margin-bottom:0.35rem;"><strong>Brood pattern check</strong> (pattern quality / performance)</div>
+              <div class="row" style="gap:0.5rem;">
+                <div class="grow">
+                  <label>Start day</label>
+                  <input id="ms_pattern_start" type="number" min="0" step="1" />
+                </div>
+                <div class="grow">
+                  <label>End day</label>
+                  <input id="ms_pattern_end" type="number" min="0" step="1" />
+                </div>
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:0.6rem; gap:0.5rem;">
+              <button id="ms_reset_btn" type="button" class="btn btn-muted grow">Reset to standard</button>
+              <button id="ms_close_btn" type="button" class="btn grow">Hide</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
@@ -545,6 +640,30 @@
       <option value="">— Personal —</option>
     </select>
     <div class="small">Teams are stored offline. With Cloud Option A, sharing is manual (export/import) so profiles stay independent by default.</div>
+    <div class="card" id="syncCard" style="margin-top:0.75rem;">
+      <div class="row">
+        <div class="grow">
+          <strong>☁️ Cloud Sync (Option A)</strong>
+          <div class="small">Skeleton only: local sync journal + settings. Backend wiring comes next.</div>
+        </div>
+      </div>
+
+      <label for="syncEmail">Account email</label>
+      <input id="syncEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+
+      <label class="checkbox-label" style="margin-top:0.5rem;">
+        <input id="syncEnabled" type="checkbox" />
+        Enable sync journal (beta)
+      </label>
+
+      <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
+        <button id="syncNowBtn" type="button" class="btn grow">Sync Now (skeleton)</button>
+        <button id="syncClearBtn" type="button" class="btn">Clear</button>
+      </div>
+
+      <div id="syncStatus" class="small" style="margin-top:0.5rem;"></div>
+    </div>
+
 
 
     <button id="newInspectionBtn" type="button" class="btn">New Inspection</button>
@@ -970,7 +1089,15 @@ document.addEventListener("DOMContentLoaded", () => {
       catch { return fallback; }
     },
     save(key, value) {
-      try { localStorage.setItem(User.key(key), JSON.stringify(value)); return { ok: true }; }
+      try {
+        localStorage.setItem(User.key(key), JSON.stringify(value));
+        try {
+          if (typeof Sync !== "undefined" && Sync && typeof Sync.onLocalWrite === "function") {
+            Sync.onLocalWrite(key, value);
+          }
+        } catch (_) {}
+        return { ok: true };
+      }
       catch (e) { return { ok: false, error: e }; }
     }
   };
@@ -993,7 +1120,77 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     load(key, fallback) {
-      try { return JSON.parse(localStorage.getItem(User.key(key)) || JSON.stringify(fallback)); }
+      try { return JSON.parse(localStorage.getItem(User.key(
+
+  // ==============================================
+  // Cloud Sync (Option A) — Skeleton (offline-first)
+  // - No network backend included in this ZIP.
+  // - This is the local "sync journal" + settings, so wiring a backend later is straightforward.
+  // ==============================================
+  const Sync = {
+    stateKey: "sync_state",
+    journalKey: "sync_journal",
+
+    getState() {
+      const s = Storage.load(this.stateKey, null);
+      if (s && typeof s === "object") return s;
+      // default: enabled false, stable user + device ids
+      const state = {
+        enabled: false,
+        userId: Storage.load("sync_user_id", "") || Utils.uuid(),
+        deviceId: Storage.load("sync_device_id", "") || Utils.uuid(),
+        email: "",
+        lastSyncAt: "",
+        lastSyncToken: ""
+      };
+      Storage.save("sync_user_id", state.userId);
+      Storage.save("sync_device_id", state.deviceId);
+      Storage.save(this.stateKey, state);
+      return state;
+    },
+
+    setState(patch) {
+      const s = this.getState();
+      const next = Object.assign({}, s, patch || {});
+      Storage.save(this.stateKey, next);
+      UI.renderSyncCard && UI.renderSyncCard();
+      return next;
+    },
+
+    isEnabled() { return !!this.getState().enabled; },
+
+    // Called whenever Storage.save writes (hives/teams/etc)
+    onLocalWrite(key, value) {
+      if (!this.isEnabled()) return;
+      // Only journal important keys (expand later)
+      if (key !== "hives" && key !== "teams" && key !== "yards") return;
+      this.appendJournal({ kind: "write", key, ts: Utils.nowISO(), size: JSON.stringify(value || {}).length });
+    },
+
+    appendJournal(entry) {
+      const j = Storage.load(this.journalKey, []);
+      j.push(Object.assign({ id: Utils.uuid() }, entry));
+      // keep journal bounded
+      while (j.length > 500) j.shift();
+      Storage.save(this.journalKey, j);
+      UI.renderSyncCard && UI.renderSyncCard();
+    },
+
+    clearJournal() {
+      Storage.save(this.journalKey, []);
+      UI.renderSyncCard && UI.renderSyncCard();
+    },
+
+    // Placeholder "sync now" (no backend in this build)
+    syncNow() {
+      const s = this.getState();
+      if (!s.enabled) { UI.status("Sync is disabled."); return; }
+      const j = Storage.load(this.journalKey, []);
+      UI.status(`Sync skeleton: ${j.length} local changes queued (backend not wired yet).`);
+      this.setState({ lastSyncAt: Utils.nowISO() });
+    }
+  };
+key)) || JSON.stringify(fallback)); }
       catch { return fallback; }
     },
     save(key, value) {
@@ -1214,6 +1411,182 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // =========================================================
+  // 2C) MILESTONES (global settings)
+  // - Standard by default
+  // - Advanced = user-custom windows (global for now)
+  // - Per-yard overrides will hook into this later
+  // =========================================================
+  const Milestones = {
+    KEY: "milestones_v1",
+
+    defaults() {
+      return {
+        advanced: false,
+        queen: {
+          acceptance: { start: 5, end: 7 },
+          eggs: { start: 10, end: 14 },
+          pattern: { start: 21, end: 28 }
+        }
+      };
+    },
+
+    _clampInt(v, fallback) {
+      const n = Math.floor(Number(v));
+      return Number.isFinite(n) ? n : fallback;
+    },
+
+    _normalize(s) {
+      const d = this.defaults();
+      const out = Object.assign({}, d, (s && typeof s === "object") ? s : {});
+      out.advanced = !!out.advanced;
+      if (!out.queen || typeof out.queen !== "object") out.queen = d.queen;
+
+      const normWin = (win, defWin) => {
+        const start = this._clampInt(win?.start, defWin.start);
+        const end = this._clampInt(win?.end, defWin.end);
+        return { start: Math.max(0, start), end: Math.max(Math.max(0, start), end) };
+      };
+
+      out.queen.acceptance = normWin(out.queen.acceptance, d.queen.acceptance);
+      out.queen.eggs = normWin(out.queen.eggs, d.queen.eggs);
+      out.queen.pattern = normWin(out.queen.pattern, d.queen.pattern);
+      return out;
+    },
+
+    load() {
+      return this._normalize(Storage.load(this.KEY, null));
+    },
+
+    save(s) {
+      const clean = this._normalize(s);
+      Storage.save(this.KEY, clean);
+      return clean;
+    },
+
+    setAdvanced(flag) {
+      const s = this.load();
+      s.advanced = !!flag;
+      this.save(s);
+      this.renderUI();
+      Reminders.render();
+    },
+
+    resetToStandard() {
+      const s = this.defaults();
+      this.save(s);
+      this.renderUI();
+      Reminders.render();
+    },
+
+    setQueenWindow(which, start, end) {
+      const s = this.load();
+      if (!s.queen) s.queen = this.defaults().queen;
+      if (!s.queen[which]) s.queen[which] = { start: 0, end: 0 };
+      s.queen[which].start = this._clampInt(start, s.queen[which].start);
+      s.queen[which].end = this._clampInt(end, s.queen[which].end);
+      this.save(s);
+      this.renderUI();
+      Reminders.render();
+    },
+
+    getQueenWindows() {
+      const s = this.load();
+      // Standard milestones are used unless advanced mode is enabled.
+      if (!s.advanced) return this.defaults().queen;
+      return s.queen;
+    },
+
+    getQueenWindowsForYard(yardName) {
+      const s = this.load();
+      if (!s.advanced) return this.defaults().queen;
+      const ov = this.getYardQueenOverride(yardName);
+      return ov || s.queen;
+    },
+
+    getYardQueenOverride(yardName) {
+      const name = (yardName || "").trim();
+      if (!name) return null;
+      const yards = Storage.loadYards();
+      const y = yards ? yards[name] : null;
+      const q = y?.settings?.milestones?.queen;
+      if (!q || typeof q !== "object") return null;
+
+      // Normalize to ensure start/end are sane integers.
+      const def = this.defaults().queen;
+      const normWin = (win, defWin) => {
+        const start = this._clampInt(win?.start, defWin.start);
+        const end = this._clampInt(win?.end, defWin.end);
+        return { start: Math.max(0, start), end: Math.max(Math.max(0, start), end) };
+      };
+      return {
+        acceptance: normWin(q.acceptance, def.acceptance),
+        eggs: normWin(q.eggs, def.eggs),
+        pattern: normWin(q.pattern, def.pattern)
+      };
+    },
+
+    setYardQueenOverride(yardName, queenWindowsOrNull) {
+      const name = (yardName || "").trim();
+      if (!name) return;
+      const yards = Storage.loadYards();
+      const y = Object.assign({}, (yards[name] || {}));
+      y.settings = Object.assign({}, (y.settings || {}));
+      y.settings.milestones = Object.assign({}, (y.settings.milestones || {}));
+
+      if (!queenWindowsOrNull) {
+        // Remove override
+        if (y.settings.milestones) delete y.settings.milestones.queen;
+      } else {
+        y.settings.milestones.queen = queenWindowsOrNull;
+      }
+
+      yards[name] = y;
+      Storage.saveYards(yards);
+    },
+
+    // ISO yyyy-mm-dd + days
+    addDaysISO(iso, days) {
+      const base = new Date((iso || Utils.today()) + "T00:00:00");
+      const d = new Date(base.getTime() + (Number(days) * 86400000));
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const da = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${da}`;
+    },
+
+    renderUI() {
+      if (!el.advMilestonesToggle) return;
+      const s = this.load();
+      el.advMilestonesToggle.checked = !!s.advanced;
+
+      const setInputs = (w) => {
+        if (el.ms_accept_start) el.ms_accept_start.value = String(w.acceptance.start);
+        if (el.ms_accept_end) el.ms_accept_end.value = String(w.acceptance.end);
+        if (el.ms_eggs_start) el.ms_eggs_start.value = String(w.eggs.start);
+        if (el.ms_eggs_end) el.ms_eggs_end.value = String(w.eggs.end);
+        if (el.ms_pattern_start) el.ms_pattern_start.value = String(w.pattern.start);
+        if (el.ms_pattern_end) el.ms_pattern_end.value = String(w.pattern.end);
+      };
+
+      setInputs(s.queen);
+
+      if (el.milestonesHint) {
+        el.milestonesHint.textContent = s.advanced
+          ? "Advanced mode is ON. Edit windows below (days after queen introduction)."
+          : "Standard queen milestones are active (recommended).";
+      }
+
+      if (el.milestoneEditor) {
+        el.milestoneEditor.classList.toggle("hidden", !s.advanced);
+      }
+
+      // Disable inputs when not advanced
+      const inputs = [el.ms_accept_start, el.ms_accept_end, el.ms_eggs_start, el.ms_eggs_end, el.ms_pattern_start, el.ms_pattern_end].filter(Boolean);
+      inputs.forEach(i => i.disabled = !s.advanced);
+    }
+  };
+
+  // =========================================================
   // 2C) REMINDERS (offline)
   // =========================================================
   const Reminders = {
@@ -1264,51 +1637,57 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-
-
-
-      // Queen milestones (simple, practical check-ins)
-      // Uses the active queen's "introduced" date if present.
+      // Queen milestones (standard by default; customizable in Advanced milestones)
       try {
-        const todayIso = Utils.today();
-        const horizon = Rearing.isoAddDays(todayIso, 60);
-        const toDaysIso = (a, b) => {
-          const da = new Date(a + "T00:00:00");
-          const db = new Date(b + "T00:00:00");
-          return Math.round((db - da) / 86400000);
-        };
+        const q = (hive && hive.currentQueenId) ? UI.getQueenById(hive, hive.currentQueenId) : null;
+        const intro = (q?.introduced || "").trim();
+        if (intro) {
+          const w = Milestones.getQueenWindowsForYard(hive.location || "");
+          const addWindow = (which, title, emoji) => {
+            const start = Math.max(0, Number(w?.[which]?.start ?? 0));
+            const end = Math.max(start, Number(w?.[which]?.end ?? start));
+            const startISO = Milestones.addDaysISO(intro, start);
+            const endISO = Milestones.addDaysISO(intro, end);
 
-        for (const hive of Object.values(hives || {})) {
-          const qid = hive?.currentQueenId;
-          const qs = Array.isArray(hive?.queens) ? hive.queens : [];
-          const q = qid ? qs.find(x => x.id === qid) : null;
-          const intro = (q?.introduced || "").trim(); // ISO yyyy-mm-dd
-          if (!intro) continue;
+            const startDate = new Date(startISO + "T00:00:00");
+            const endDate = new Date(endISO + "T00:00:00");
 
-          const milestones = [
-            { d: 7,  title: "Queen acceptance check" },
-            { d: 30, title: "Brood pattern check" },
-            { d: 90, title: "Temperament / productivity check" },
-            { d: 180, title: "Mid-season performance check" },
-            { d: 365, title: "Annual requeen consideration" }
-          ];
+            let days;
+            let label;
+            if (today < startDate) {
+              days = Math.round((startDate - today) / 86400000);
+              label = `In ${days}d (Day ${start}–${end})`;
+            } else if (today >= startDate && today <= endDate) {
+              days = 0;
+              const left = Math.round((endDate - today) / 86400000);
+              label = left <= 0 ? `Due now (ends today)` : `Due now (ends in ${left}d)`;
+            } else {
+              // overdue since window ended
+              const overdue = Math.round((today - endDate) / 86400000);
+              days = -overdue;
+              label = `Overdue ${overdue}d (Day ${start}–${end})`;
+            }
 
-          for (const ms of milestones) {
-            const when = Rearing.isoAddDays(intro, ms.d);
-            if (when < todayIso || when > horizon) continue;
             out.push({
               kind: "queen",
+              subkind: which,
               hiveId: hive.id,
               hiveName: hive.name || hive.id,
               yard: hive.location || "",
-              title: ms.title,
-              when,
-              days: toDaysIso(todayIso, when),
-              label: "Upcoming"
+              when: startISO,
+              windowEnd: endISO,
+              days,
+              title: `${emoji} ${title}`,
+              label
             });
-          }
+          };
+
+          addWindow("acceptance", "Release / acceptance check", "🧷");
+          addWindow("eggs", "Eggs / laying check", "🥚");
+          addWindow("pattern", "Brood pattern check", "🧿");
         }
       } catch (_) {}
+
 
       // Queen rearing calendar -> reminders (next ~60 days)
       try {
@@ -1344,7 +1723,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const items = this.build();
 
       if (!items.length) {
-        el.reminderList.innerHTML = `<em class="small">No upcoming reminders yet. Add a mite treatment due date, introduce a queen, or add a queen rearing batch.</em>`;
+        el.reminderList.innerHTML = `<em class="small">No upcoming reminders yet. Add a mite treatment and a due date (or oxalic series) on an inspection.</em>`;
         return;
       }
 
@@ -1354,18 +1733,42 @@ document.addEventListener("DOMContentLoaded", () => {
         row.className = "history-item";
         const left = document.createElement("div");
         left.className = "history-left";
-        left.innerHTML = `<div class="timeline-title">${
-            r.kind === "rearing" ? "🐣 Queen rearing" :
-            r.kind === "queen"  ? "👑 Queen check" :
-            r.kind === "nextDose" ? "🐜 Mite: next dose" :
-            "🐜 Mite: remove / reapply"
-          }</div>
-          <div class="small"><strong>${r.label}</strong> • ${r.when} • ${
-            r.kind === "rearing" ? Utils.csvEscape(r.title || "") :
-            r.kind === "queen" ? `${Utils.csvEscape(r.title || "")} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}` :
-            `${Utils.csvEscape(r.type)} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}`
-          }</div>`;
-        if (r.hiveId) { left.addEventListener("click", () => App.handleHiveLoad(r.hiveId)); left.style.cursor = "pointer"; }
+
+        const title = (() => {
+          if (r.kind === "nextDose") return "🧪 Next dose";
+          if (r.kind === "remove") return "🐜 Remove / reapply";
+          if (r.kind === "queen") return r.title || "👑 Queen milestone";
+          if (r.kind === "rearing") return "🐣 " + (r.title || "Queen rearing");
+          return "🔔 Reminder";
+        })();
+
+        const detail = (() => {
+          if (r.kind === "nextDose" || r.kind === "remove") {
+            return `${r.when} • ${Utils.csvEscape(r.type)} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}`;
+          }
+          if (r.kind === "queen") {
+            return `${r.when}${r.windowEnd ? ` → ${r.windowEnd}` : ""} • ${Utils.csvEscape(r.hiveName)}${r.yard ? ` • ${Utils.csvEscape(r.yard)}` : ""}`;
+          }
+          if (r.kind === "rearing") {
+            return `${r.when}`;
+          }
+          return `${r.when || ""}`;
+        })();
+
+        left.innerHTML = `<div class="timeline-title">${title}</div>
+          <div class="small"><strong>${r.label}</strong> • ${detail}</div>`;
+
+        if (r.hiveId) {
+          left.addEventListener("click", () => App.handleHiveLoad(r.hiveId));
+        } else if (r.kind === "rearing") {
+          left.addEventListener("click", () => {
+            try {
+              Rearing.setVisible(true);
+              el.rearingSection?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+            } catch (_) {}
+          });
+        }
+
         row.appendChild(left);
         el.reminderList.appendChild(row);
       });
@@ -1407,11 +1810,12 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         new Notification("Hive Tracker reminders", {
           body: dueNow.map(d => {
-          if (d.kind === "rearing") return `Rearing: ${d.title} (${d.when})`;
-          if (d.kind === "queen") return `Queen: ${d.hiveName} — ${d.title} (${d.when})`;
-          if (d.kind === "nextDose") return `Mite dose: ${d.hiveName} (${d.when})`;
-          return `Remove: ${d.hiveName} (${d.when})`;
-        }).join("\n"),
+            if (d.kind === "nextDose") return `🧪 Next dose: ${d.hiveName || ""} (${d.when})`;
+            if (d.kind === "remove") return `🐜 Remove/reapply: ${d.hiveName || ""} (${d.when})`;
+            if (d.kind === "queen") return `👑 ${d.hiveName || ""}: ${d.title || "Queen milestone"} (${d.when}${d.windowEnd ? `→${d.windowEnd}` : ""})`;
+            if (d.kind === "rearing") return `🐣 Queen rearing: ${d.title || "Stage"} (${d.when})`;
+            return `${d.kind || "Reminder"}: ${(d.hiveName || "").trim()} (${d.when || ""})`;
+          }).join("\n"),
           silent: true
         });
       } catch (_) {}
@@ -1611,6 +2015,23 @@ document.addEventListener("DOMContentLoaded", () => {
     detectNearestYard: document.getElementById("detectNearestYard"),
     yardGps: document.getElementById("yardGps"),
 
+    yardOverridesBtn: document.getElementById("yardOverridesBtn"),
+    yardOverridesModal: document.getElementById("yardOverridesModal"),
+    yardOverridesCard: document.getElementById("yardOverridesCard"),
+    yardOverridesTitle: document.getElementById("yardOverridesTitle"),
+    yardOverridesHint: document.getElementById("yardOverridesHint"),
+    yardOverridesClose: document.getElementById("yardOverridesClose"),
+
+    yardMilestonesOverrideToggle: document.getElementById("yardMilestonesOverrideToggle"),
+    yardMilestoneEditor: document.getElementById("yardMilestoneEditor"),
+    yard_ms_accept_start: document.getElementById("yard_ms_accept_start"),
+    yard_ms_accept_end: document.getElementById("yard_ms_accept_end"),
+    yard_ms_eggs_start: document.getElementById("yard_ms_eggs_start"),
+    yard_ms_eggs_end: document.getElementById("yard_ms_eggs_end"),
+    yard_ms_pattern_start: document.getElementById("yard_ms_pattern_start"),
+    yard_ms_pattern_end: document.getElementById("yard_ms_pattern_end"),
+    yardMilestonesResetToGlobal: document.getElementById("yardMilestonesResetToGlobal"),
+
     exportCsv: document.getElementById("exportCsv"),
     exportZip: document.getElementById("exportZip"),
     importZipBtn: document.getElementById("importZipBtn"),
@@ -1626,10 +2047,30 @@ document.addEventListener("DOMContentLoaded", () => {
     manageTeamsBtn: document.getElementById("manageTeamsBtn"),
     teamSelect: document.getElementById("teamSelect"),
 
+    // Sync (Option A) skeleton controls
+    syncEmail: document.getElementById("syncEmail"),
+    syncEnabled: document.getElementById("syncEnabled"),
+    syncNowBtn: document.getElementById("syncNowBtn"),
+    syncClearBtn: document.getElementById("syncClearBtn"),
+    syncStatus: document.getElementById("syncStatus"),
+
     remindersBtn: document.getElementById("remindersBtn"),
     remindersPanel: document.getElementById("remindersPanel"),
     enableNotifBtn: document.getElementById("enableNotifBtn"),
     reminderList: document.getElementById("reminderList"),
+
+    // milestone settings (global; per-yard overrides can come later)
+    advMilestonesToggle: document.getElementById("advMilestonesToggle"),
+    milestonesHint: document.getElementById("milestonesHint"),
+    milestoneEditor: document.getElementById("milestoneEditor"),
+    ms_accept_start: document.getElementById("ms_accept_start"),
+    ms_accept_end: document.getElementById("ms_accept_end"),
+    ms_eggs_start: document.getElementById("ms_eggs_start"),
+    ms_eggs_end: document.getElementById("ms_eggs_end"),
+    ms_pattern_start: document.getElementById("ms_pattern_start"),
+    ms_pattern_end: document.getElementById("ms_pattern_end"),
+    ms_reset_btn: document.getElementById("ms_reset_btn"),
+    ms_close_btn: document.getElementById("ms_close_btn"),
 
     exportMenuBtn: document.getElementById("exportMenuBtn"),
     exportPanel: document.getElementById("exportPanel"),
@@ -1831,6 +2272,18 @@ hiveYardGps: document.getElementById("hiveYardGps"),
       // Keep debug stats fresh without spamming the console panel.
       if (typeof Debug !== "undefined" && Debug.isOn && Debug.isOn()) Debug.renderStats();
     },
+
+    renderSyncCard() {
+      if (!el.syncStatus || !el.syncEnabled || !el.syncEmail) return;
+      const s = Sync.getState();
+      el.syncEmail.value = s.email || "";
+      el.syncEnabled.checked = !!s.enabled;
+
+      const j = Storage.load(Sync.journalKey, []);
+      const last = s.lastSyncAt ? `Last sync: ${Utils.prettyDateTime(s.lastSyncAt)}` : "Not synced yet";
+      el.syncStatus.textContent = `${s.enabled ? "Enabled" : "Disabled"} • Queued changes: ${j.length} • ${last}`;
+    },
+
 
 
     updateColorModeHint() {
@@ -2237,7 +2690,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         });
       }
 
-      // Normalize each box + assign stable ordering key
+      // Normalize each box
       insp.boxes.forEach((b, idx) => {
         if (!b.id) b.id = Utils.uuid();
         if (b.type !== "deep" && b.type !== "super") b.type = "deep";
@@ -2246,22 +2699,50 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         if (typeof b.sortKey !== "number" || !isFinite(b.sortKey)) b.sortKey = (idx + 1) * 10;
       });
 
-      // Always keep boxes sorted (bottom → top) by sortKey
-      insp.boxes.sort((a,b) => (a.sortKey || 0) - (b.sortKey || 0));
+      // Sort bottom -> top by sortKey (stable for sync)
+      insp.boxes.sort((a,b) => (a.sortKey||0) - (b.sortKey||0));
 
-      // If keys are duplicated or out of whack, renumber to nice gaps (10,20,30...)
-      let needsRenumber = false;
-      for (let i = 1; i < insp.boxes.length; i++) {
-        if (insp.boxes[i].sortKey <= insp.boxes[i-1].sortKey) { needsRenumber = true; break; }
-      }
-      if (needsRenumber) {
-        insp.boxes.forEach((b, i) => { b.sortKey = (i + 1) * 10; });
-      }
+      // Ensure unique, increasing sortKeys (no duplicates)
+      this.resequenceBoxes(insp);
 
       if (!State.activeBoxId || !insp.boxes.some(b => b.id === State.activeBoxId)) {
         State.activeBoxId = insp.boxes[0]?.id || null;
       }
     },
+
+    resequenceBoxes(insp) {
+      if (!insp || !Array.isArray(insp.boxes)) return;
+      // sort first (in case caller mutated array order)
+      insp.boxes.sort((a,b) => (a.sortKey||0) - (b.sortKey||0));
+      let key = 10;
+      for (const b of insp.boxes) {
+        b.sortKey = key;
+        key += 10;
+      }
+    },
+
+    moveBoxById(insp, fromId, toId, placeAfter=false) {
+      if (!insp || !Array.isArray(insp.boxes)) return false;
+      this.ensureBoxes(insp);
+
+      const fromIdx = insp.boxes.findIndex(b => b.id === fromId);
+      const toIdx0 = insp.boxes.findIndex(b => b.id === toId);
+      if (fromIdx < 0 || toIdx0 < 0) return false;
+
+      const [moved] = insp.boxes.splice(fromIdx, 1);
+
+      let toIdx = toIdx0;
+      // if removing an earlier item shifts the target left
+      if (fromIdx < toIdx) toIdx -= 1;
+      if (placeAfter) toIdx += 1;
+
+      toIdx = Math.max(0, Math.min(insp.boxes.length, toIdx));
+      insp.boxes.splice(toIdx, 0, moved);
+
+      this.resequenceBoxes(insp);
+      return true;
+    },
+
 
     getActiveBox(insp) {
       this.ensureBoxes(insp);
@@ -2313,9 +2794,9 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         opt.textContent = name;
         if (b.id === State.activeBoxId) opt.selected = true;
         el.activeBoxSelect.appendChild(opt);
-      
+      });
+
       this.renderBoxList(insp);
-    });
     },
 
 
@@ -2348,6 +2829,65 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         item.appendChild(label);
         item.appendChild(grip);
 
+        // Touch-friendly drag (works on mobile where HTML5 DnD is unreliable)
+        grip.style.touchAction = "none";
+        grip.addEventListener("pointerdown", (e) => {
+          if (!State.currentHiveId || !State.currentInspectionId) return;
+          e.preventDefault();
+          item.classList.add("dragging");
+          grip.setPointerCapture(e.pointerId);
+
+          const dragState = { fromId: b.id, overId: null, placeAfter: false };
+
+          const clearHints = () => {
+            [...el.boxList.querySelectorAll(".drop-hint")].forEach(n => n.classList.remove("drop-hint"));
+            [...el.boxList.querySelectorAll(".drop-hint-top")].forEach(n => n.classList.remove("drop-hint-top"));
+            [...el.boxList.querySelectorAll(".drop-hint-bottom")].forEach(n => n.classList.remove("drop-hint-bottom"));
+          };
+
+          const onMove = (ev) => {
+            const elAt = document.elementFromPoint(ev.clientX, ev.clientY);
+            const card = elAt ? elAt.closest("[data-box-id]") : null;
+            clearHints();
+            if (!card) return;
+            const toId = card.dataset.boxId;
+            if (!toId || toId === dragState.fromId) return;
+
+            const rect = card.getBoundingClientRect();
+            const after = (ev.clientY - rect.top) > (rect.height / 2);
+
+            card.classList.add("drop-hint");
+            card.classList.add(after ? "drop-hint-bottom" : "drop-hint-top");
+
+            dragState.overId = toId;
+            dragState.placeAfter = after;
+          };
+
+          const onUp = () => {
+            try { grip.releasePointerCapture(e.pointerId); } catch(_) {}
+            item.classList.remove("dragging");
+            clearHints();
+
+            if (dragState.overId) {
+              if (UI.moveBoxById(insp, dragState.fromId, dragState.overId, dragState.placeAfter)) {
+                App.saveCurrentHiveAndInspection();
+                const hives = Storage.loadHives();
+                const hive = hives[State.currentHiveId];
+                const insp2 = hive?.inspections?.find(i => i.id === State.currentInspectionId) || hive?.inspections?.[0];
+                if (hive && insp2) { UI.renderFrameMap(hive, insp2); UI.renderHistory(hive); }
+              }
+            }
+
+            grip.removeEventListener("pointermove", onMove);
+            grip.removeEventListener("pointerup", onUp);
+            grip.removeEventListener("pointercancel", onUp);
+          };
+
+          grip.addEventListener("pointermove", onMove);
+          grip.addEventListener("pointerup", onUp);
+          grip.addEventListener("pointercancel", onUp);
+        });
+
         item.addEventListener("dragstart", (ev) => {
           ev.dataTransfer.setData("text/plain", b.id);
           ev.dataTransfer.effectAllowed = "move";
@@ -2368,18 +2908,14 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           const toId = item.dataset.boxId;
           if (!fromId || !toId || fromId === toId) return;
 
-          const fromIdx = insp.boxes.findIndex(x => x.id === fromId);
-          const toIdx = insp.boxes.findIndex(x => x.id === toId);
-          if (fromIdx < 0 || toIdx < 0) return;
+          const rect = item.getBoundingClientRect();
+          const placeAfter = (ev.clientY - rect.top) > (rect.height / 2);
 
-          const [moved] = insp.boxes.splice(fromIdx, 1);
-          insp.boxes.splice(toIdx, 0, moved);
-
-          // Update stable ordering keys
-          insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
+          if (!UI.moveBoxById(insp, fromId, toId, placeAfter)) return;
 
           // Persist
           App.saveCurrentHiveAndInspection();
+
           // Rerender selects + list + map
           const hives = Storage.loadHives();
           const hive = hives[State.currentHiveId];
@@ -2950,6 +3486,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       });
 
       const selected = (el.currentYard.value || "").trim();
+      if (el.yardOverridesBtn) el.yardOverridesBtn.disabled = !selected;
       if (!selected) {
         el.yardHives.innerHTML = "<em>Enter a yard name to list its hives.</em>";
         return;
@@ -5207,6 +5744,160 @@ function saveMiteTreatmentFromForm() {
       UI.renderHiveYardGps();
     });
 
+    // Yard overrides modal (per-yard milestone overrides)
+    const openYardOverrides = () => {
+      const yardName = (el.currentYard.value || "").trim();
+      if (!yardName) { alert("Enter a yard name first."); return; }
+
+      // Ensure the yard exists in Storage so settings have a home (even if GPS not captured yet)
+      const yards = Storage.loadYards();
+      if (!yards[yardName]) { yards[yardName] = { timestamp: Date.now() }; Storage.saveYards(yards); }
+
+      // Render modal header + state
+      if (el.yardOverridesTitle) el.yardOverridesTitle.textContent = `Yard: ${yardName}`;
+
+      const ms = Milestones.load();
+      const advOn = !!ms.advanced;
+
+      if (el.yardOverridesHint) {
+        el.yardOverridesHint.textContent = advOn
+          ? "Overrides apply only to hives in this yard (advanced milestones is ON)."
+          : "Enable Advanced milestones (in Reminders) to use per-yard overrides.";
+      }
+
+      if (el.yardMilestonesOverrideToggle) {
+        el.yardMilestonesOverrideToggle.disabled = !advOn;
+      }
+
+      const ov = advOn ? Milestones.getYardQueenOverride(yardName) : null;
+      if (el.yardMilestonesOverrideToggle) el.yardMilestonesOverrideToggle.checked = !!ov;
+
+      const base = advOn ? Milestones.getQueenWindows() : Milestones.defaults().queen;
+      const effective = ov || base;
+
+      // Populate inputs
+      const setVals = (w) => {
+        if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = w.acceptance.start;
+        if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = w.acceptance.end;
+        if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = w.eggs.start;
+        if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = w.eggs.end;
+        if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = w.pattern.start;
+        if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = w.pattern.end;
+      };
+      setVals(effective);
+
+      // Show/hide editor
+      if (el.yardMilestoneEditor) {
+        if (advOn && !!ov) el.yardMilestoneEditor.classList.remove("hidden");
+        else el.yardMilestoneEditor.classList.add("hidden");
+      }
+
+      // Show modal
+      if (el.yardOverridesModal) {
+        el.yardOverridesModal.classList.remove("hidden");
+        el.yardOverridesModal.classList.add("show");
+      }
+    };
+
+    const closeYardOverrides = () => {
+      if (el.yardOverridesModal) {
+        el.yardOverridesModal.classList.remove("show");
+        el.yardOverridesModal.classList.add("hidden");
+      }
+    };
+
+    if (el.yardOverridesBtn) el.yardOverridesBtn.addEventListener("click", openYardOverrides);
+    if (el.yardOverridesClose) el.yardOverridesClose.addEventListener("click", closeYardOverrides);
+    if (el.yardOverridesModal) {
+      el.yardOverridesModal.addEventListener("click", (e) => {
+        if (e.target === el.yardOverridesModal) closeYardOverrides();
+      });
+    }
+
+    const getYardMsFromInputs = () => {
+      const d = Milestones.defaults().queen;
+      const normWin = (sEl, eEl, defWin) => {
+        const start = Milestones._clampInt(sEl?.value, defWin.start);
+        const end = Milestones._clampInt(eEl?.value, defWin.end);
+        return { start: Math.max(0, start), end: Math.max(Math.max(0, start), end) };
+      };
+      return {
+        acceptance: normWin(el.yard_ms_accept_start, el.yard_ms_accept_end, d.acceptance),
+        eggs: normWin(el.yard_ms_eggs_start, el.yard_ms_eggs_end, d.eggs),
+        pattern: normWin(el.yard_ms_pattern_start, el.yard_ms_pattern_end, d.pattern),
+      };
+    };
+
+    const saveYardOverrideIfEnabled = () => {
+      const yardName = (el.currentYard.value || "").trim();
+      if (!yardName) return;
+      const ms = Milestones.load();
+      if (!ms.advanced) return;
+      if (!el.yardMilestonesOverrideToggle?.checked) return;
+      Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
+      Reminders.render();
+    };
+
+    if (el.yardMilestonesOverrideToggle) {
+      el.yardMilestonesOverrideToggle.addEventListener("change", () => {
+        const yardName = (el.currentYard.value || "").trim();
+        const ms = Milestones.load();
+        if (!ms.advanced) { el.yardMilestonesOverrideToggle.checked = false; return; }
+        if (!yardName) return;
+
+        if (el.yardMilestonesOverrideToggle.checked) {
+          // Turn on override: seed from global settings
+          const base = Milestones.getQueenWindows();
+          if (el.yardMilestoneEditor) el.yardMilestoneEditor.classList.remove("hidden");
+          // Copy base into inputs (so you start from global)
+          if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = base.acceptance.start;
+          if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = base.acceptance.end;
+          if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = base.eggs.start;
+          if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = base.eggs.end;
+          if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = base.pattern.start;
+          if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = base.pattern.end;
+
+          Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
+        } else {
+          // Turn off override
+          Milestones.setYardQueenOverride(yardName, null);
+          if (el.yardMilestoneEditor) el.yardMilestoneEditor.classList.add("hidden");
+        }
+        Reminders.render();
+      });
+    }
+
+    const bindYardMsInputs = (sEl, eEl) => {
+      if (!sEl || !eEl) return;
+      sEl.addEventListener("change", saveYardOverrideIfEnabled);
+      eEl.addEventListener("change", saveYardOverrideIfEnabled);
+    };
+    bindYardMsInputs(el.yard_ms_accept_start, el.yard_ms_accept_end);
+    bindYardMsInputs(el.yard_ms_eggs_start, el.yard_ms_eggs_end);
+    bindYardMsInputs(el.yard_ms_pattern_start, el.yard_ms_pattern_end);
+
+    if (el.yardMilestonesResetToGlobal) {
+      el.yardMilestonesResetToGlobal.addEventListener("click", () => {
+        const yardName = (el.currentYard.value || "").trim();
+        if (!yardName) return;
+        const ms = Milestones.load();
+        if (!ms.advanced) return;
+
+        const base = Milestones.getQueenWindows();
+        if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = base.acceptance.start;
+        if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = base.acceptance.end;
+        if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = base.eggs.start;
+        if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = base.eggs.end;
+        if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = base.pattern.start;
+        if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = base.pattern.end;
+
+        if (el.yardMilestonesOverrideToggle?.checked) {
+          Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
+          Reminders.render();
+        }
+      });
+    }
+
     // Yard GPS capture
     el.captureYardGps.addEventListener("click", async () => {
       const yardName = (el.currentYard.value || "").trim();
@@ -5218,12 +5909,13 @@ function saveMiteTreatmentFromForm() {
         State.lastPosition = pos;
 
         const yards = Storage.loadYards();
-        yards[yardName] = {
+        const existing = yards[yardName] || {};
+        yards[yardName] = Object.assign({}, existing, {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           timestamp: Date.now()
-        };
+        });
         const res = Storage.saveYards(yards);
         if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export ZIP backup!");
 
@@ -5273,6 +5965,20 @@ function saveMiteTreatmentFromForm() {
     if (el.teamSelect) {
       el.teamSelect.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     }
+
+    // Sync (Option A) skeleton controls
+    if (el.syncEmail) {
+      el.syncEmail.addEventListener("change", () => Sync.setState({ email: (el.syncEmail.value || "").trim() }));
+    }
+    if (el.syncEnabled) {
+      el.syncEnabled.addEventListener("change", () => {
+        Sync.setState({ enabled: !!el.syncEnabled.checked });
+        UI.status(el.syncEnabled.checked ? "Sync journal enabled (skeleton)." : "Sync journal disabled.");
+      });
+    }
+    if (el.syncNowBtn) el.syncNowBtn.addEventListener("click", () => Sync.syncNow());
+    if (el.syncClearBtn) el.syncClearBtn.addEventListener("click", () => { Sync.clearJournal(); UI.status("Cleared sync journal."); });
+
 el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.queen.addEventListener("change", () => App.saveCurrentHiveAndInspection());
     el.notes.addEventListener("input", () => App.saveCurrentHiveAndInspection());
@@ -5517,13 +6223,15 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
       UI.ensureInspectionDefaults(insp);
       UI.ensureBoxes(insp);
 
-      const newBox = { id: Utils.uuid(), type: "deep", framesCount: 10, frameMap: [] };
+      const newBox = { id: Utils.uuid(), type: "deep", framesCount: 10, frameMap: [], sortKey: 0 };
       UI.normalizeDeepBox(newBox);
 
       const idx = Math.max(0, insp.boxes.findIndex(b => b.id === State.activeBoxId));
+      const active = insp.boxes[idx] || insp.boxes[insp.boxes.length - 1];
+      const baseKey = (active && typeof active.sortKey === "number") ? active.sortKey : ((idx + 1) * 10);
+      newBox.sortKey = baseKey + 5;
       insp.boxes.splice(idx + 1, 0, newBox);
-      // Keep stable ordering keys in sync with the visual stack
-      insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
+      UI.resequenceBoxes(insp);
       State.activeBoxId = newBox.id;
 
       const res = Storage.saveHives(hives);
@@ -5551,13 +6259,15 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
       UI.ensureInspectionDefaults(insp);
       UI.ensureBoxes(insp);
 
-      const newBox = { id: Utils.uuid(), type: "super", framesCount: 10, frameMap: [] };
+      const newBox = { id: Utils.uuid(), type: "super", framesCount: 10, frameMap: [], sortKey: 0 };
       UI.normalizeSuperBox(newBox);
 
       const idx = Math.max(0, insp.boxes.findIndex(b => b.id === State.activeBoxId));
+      const active = insp.boxes[idx] || insp.boxes[insp.boxes.length - 1];
+      const baseKey = (active && typeof active.sortKey === "number") ? active.sortKey : ((idx + 1) * 10);
+      newBox.sortKey = baseKey + 5;
       insp.boxes.splice(idx + 1, 0, newBox);
-      // Keep stable ordering keys in sync with the visual stack
-      insp.boxes.forEach((b,i) => { b.sortKey = (i + 1) * 10; });
+      UI.resequenceBoxes(insp);
       State.activeBoxId = newBox.id;
 
       const res = Storage.saveHives(hives);
@@ -5812,6 +6522,7 @@ el.importZipInput.addEventListener("change", async () => {
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
     Rearing.setVisible(false);
+      try { Milestones.renderUI(); } catch (_) {}
       Reminders.render();
     }
 
@@ -5918,6 +6629,27 @@ Type a new team name to add, or leave blank to cancel:`);
     el.enableNotifBtn.addEventListener("click", async () => {
       await Notifier.enable();
     });
+
+    // Milestones (global) UI wiring
+    try {
+      Milestones.renderUI();
+      if (el.advMilestonesToggle) {
+        el.advMilestonesToggle.addEventListener("change", () => Milestones.setAdvanced(!!el.advMilestonesToggle.checked));
+      }
+      const bindWin = (which, sEl, eEl) => {
+        if (!sEl || !eEl) return;
+        const handler = () => Milestones.setQueenWindow(which, sEl.value, eEl.value);
+        sEl.addEventListener("change", handler);
+        eEl.addEventListener("change", handler);
+      };
+      bindWin("acceptance", el.ms_accept_start, el.ms_accept_end);
+      bindWin("eggs", el.ms_eggs_start, el.ms_eggs_end);
+      bindWin("pattern", el.ms_pattern_start, el.ms_pattern_end);
+      if (el.ms_reset_btn) el.ms_reset_btn.addEventListener("click", () => Milestones.resetToStandard());
+      if (el.ms_close_btn) el.ms_close_btn.addEventListener("click", () => Milestones.setAdvanced(false));
+    } catch (_) {}
+
+    UI.renderSyncCard();
   }
 
 
