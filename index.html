@@ -421,11 +421,17 @@
     .drop-hint-bottom { border-bottom: 4px solid rgba(0,0,0,0.25); }
     .dragging { opacity: 0.85; }
 
-  </style>
+  
+    /* Edit lock */
+    body.editing-locked .edit-only { opacity: 0.55; pointer-events: none; }
+</style>
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111111" />
 
+
+  <!-- Map (Leaflet + OpenStreetMap) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 
 <body>
@@ -607,10 +613,22 @@
         <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
       </div>
 
-      <div class="row" style="margin-top:0.75rem;">
+      
+      <div id="mapPanel" class="card hidden" style="margin-top:0.5rem;">
+        <div class="row">
+          <div class="grow"><strong>🗺️ Yard Map</strong></div>
+          <button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
+        </div>
+        <div id="mapStatus" class="small" style="margin:0.5rem 0;"></div>
+        <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
+        <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
+      </div>
+<div class="row" style="margin-top:0.75rem;">
         <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
         <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
-        <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
+                <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
+        <button id="lockBtn" type="button" class="btn btn-muted grow">🔒 Locked</button>
+<button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
       </div>
 
       <div id="remindersPanel" class="card hidden" style="margin-top:0.5rem;">
@@ -1229,13 +1247,13 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     loadHives() { return this.load("hives", {}); },
-    saveHives(hives) { return this.save("hives", hives); },
+    saveHives(hives) { if (!Lock.requireUnlocked()) return false; return this.save("hives", hives); },
 
     loadYards() { return this.load("yards", {}); },
-    saveYards(yards) { return this.save("yards", yards); },
+    saveYards(yards) { if (!Lock.requireUnlocked()) return false; return this.save("yards", yards); },
 
     loadTeams() { return this.load("teams", { teams: [] }); },
-    saveTeams(teams) { return this.save("teams", teams); },
+    saveTeams(teams) { if (!Lock.requireUnlocked()) return false; return this.save("teams", teams); },
     // Queen rearing is stored inside hives so it syncs with Cloud Option A.
     loadRearing() {
       const hives = this.loadHives();
@@ -1437,6 +1455,99 @@ document.addEventListener("DOMContentLoaded", () => {
   // 2B) TEAMS (offline-only, per profile)
   //     Cloud Option A = manual sharing via export/import.
   // =========================================================
+  // =========================================================
+  // 2A.5) EDIT LOCK (PIN-gated editing)
+  // =========================================================
+  const Lock = {
+    ttlMinutes: 10,
+
+    keyUnlockedUntil() { return "editUnlockedUntil"; },
+
+    getUnlockedUntil() {
+      try { return parseInt(localStorage.getItem(User.key(this.keyUnlockedUntil())), 10) || 0; }
+      catch (_) { return 0; }
+    },
+
+    setUnlockedUntil(ts) {
+      try { localStorage.setItem(User.key(this.keyUnlockedUntil()), String(ts)); } catch (_) {}
+    },
+
+    isUnlocked() {
+      return Date.now() < this.getUnlockedUntil();
+    },
+
+    lockNow(silent=false) {
+      this.setUnlockedUntil(0);
+      if (!silent) UI.status("Locked");
+      this.applyUI();
+    },
+
+    async verifyPin(pin) {
+      const users = User.getUsers();
+      const active = User.getActiveId();
+      const u = users.find(x => x.id === active);
+      if (!u || !u.pinHash) return false;
+
+      const stored = String(u.pinHash || "").trim();
+      const raw = String(pin || "").trim();
+
+      const looksHex = /^[0-9a-f]{64}$/i.test(stored);
+
+      try {
+        if (looksHex && crypto?.subtle) {
+          const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+          const hex = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+          return hex === stored;
+        }
+      } catch (_) {}
+
+      return raw === stored;
+    },
+
+    async unlockWithPrompt() {
+      const users = User.getUsers();
+      const active = User.getActiveId();
+      const u = users.find(x => x.id === active);
+      if (!u) return;
+
+      if (!u.pinHash) {
+        alert("No PIN is set for this profile yet. Use “Set PIN” first, then you can unlock editing.");
+        return;
+      }
+
+      const pin = prompt("Enter PIN to unlock editing (auto-locks after 10 minutes):", "");
+      if (pin === null) return;
+
+      const ok = await this.verifyPin(pin);
+      if (!ok) {
+        alert("Incorrect PIN.");
+        return;
+      }
+
+      const until = Date.now() + (this.ttlMinutes * 60 * 1000);
+      this.setUnlockedUntil(until);
+      UI.status("Editing unlocked");
+      this.applyUI();
+    },
+
+    requireUnlocked() {
+      if (this.isUnlocked()) return true;
+      alert("Editing is locked. Click 🔒 Locked and enter your PIN to unlock editing.");
+      return false;
+    },
+
+    applyUI() {
+      if (!el || !el.lockBtn) return;
+      const unlocked = this.isUnlocked();
+      el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
+      el.lockBtn.classList.toggle("btn-danger", unlocked);
+      el.lockBtn.classList.toggle("btn-muted", !unlocked);
+      document.body.classList.toggle("editing-unlocked", unlocked);
+      document.body.classList.toggle("editing-locked", !unlocked);
+    }
+  };
+
+
   const Teams = {
     load() {
       const t = Storage.loadTeams();
@@ -2409,7 +2520,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
     remindersBtn: document.getElementById("remindersBtn"),
     lookupBtn: document.getElementById("lookupBtn"),
+    mapBtn: document.getElementById("mapBtn"),
+    lockBtn: document.getElementById("lockBtn"),
     lookupPanel: document.getElementById("lookupPanel"),
+    mapPanel: document.getElementById("mapPanel"),
+    yardMap: document.getElementById("yardMap"),
+    mapStatus: document.getElementById("mapStatus"),
+    mapCloseBtn: document.getElementById("mapCloseBtn"),
     lookupSearch: document.getElementById("lookupSearch"),
     lookupYard: document.getElementById("lookupYard"),
     lookupPurpose: document.getElementById("lookupPurpose"),
@@ -2726,6 +2843,130 @@ hiveYardGps: document.getElementById("hiveYardGps"),
 
     return { start, capped, emerge, mateStart, mateEnd, layStart, layEnd };
   }
+  // =========================================================
+  // 3.5) YARD MAP (Leaflet)
+  // =========================================================
+  const MapView = {
+    map: null,
+    markers: null,
+
+    buildCounts() {
+      const hives = Storage.loadHives() || {};
+      const counts = {};
+      Object.values(hives).forEach(h => {
+        const y = (h.location || "").trim();
+        if (!y) return;
+        counts[y] = (counts[y] || 0) + 1;
+      });
+      return counts;
+    },
+
+    render() {
+      if (!el.mapPanel || !el.yardMap || el.mapPanel.classList.contains("hidden")) return;
+
+      const yards = Storage.loadYards() || {};
+      const yardNames = Object.keys(yards);
+      if (!yardNames.length) {
+        el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      if (typeof L === "undefined") {
+        el.mapStatus.innerHTML = "<em>Map library not loaded. Connect to the internet once so the map can load (Leaflet + OpenStreetMap tiles).</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      const counts = this.buildCounts();
+
+      // Gather points
+      const pts = [];
+      yardNames.forEach(name => {
+        const y = yards[name];
+        if (y && typeof y.lat === "number" && typeof y.lon === "number") {
+          pts.push([y.lat, y.lon, name]);
+        }
+      });
+
+      if (!pts.length) {
+        el.mapStatus.innerHTML = "<em>No yard GPS points saved yet. Use the Yard GPS capture on mobile to save a yard home point.</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      el.mapStatus.textContent = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard`;
+
+      // Init map once
+      if (!this.map) {
+        this.map = L.map(el.yardMap, { zoomControl: true });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(this.map);
+
+        this.markers = L.layerGroup().addTo(this.map);
+      } else {
+        this.markers.clearLayers();
+      }
+
+      // Fit bounds
+      const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
+      try { this.map.fitBounds(bounds.pad(0.2)); } catch (_) {}
+
+      pts.forEach(([lat, lon, name]) => {
+        const c = counts[name] || 0;
+        const ymeta = YardMeta.get(name) || {};
+        const purpose = (ymeta.purpose || "standard");
+        const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
+
+        const radius = Math.max(6, Math.min(18, 6 + Math.round(Math.sqrt(c) * 3)));
+        const marker = L.circleMarker([lat, lon], {
+          radius,
+          weight: 2,
+          opacity: 0.9,
+          fillOpacity: 0.5
+        });
+
+        const popup = `
+          <div style="min-width:220px;">
+            <div><strong>${Utils.escapeHtml(name)}</strong></div>
+            <div class="small">${purposeLabel} • ${c} hive(s)</div>
+            <div class="small">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
+            <div style="margin-top:6px;">
+              <button type="button" data-yard="${encodeURIComponent(name)}" style="width:100%; padding:8px 10px; border-radius:12px; border:1px solid rgba(0,0,0,0.2); background:#fff; cursor:pointer;">
+                Open yard
+              </button>
+            </div>
+          </div>
+        `;
+        marker.bindPopup(popup);
+        marker.addTo(this.markers);
+
+        marker.on("popupopen", (e) => {
+          const root = e.popup && e.popup.getElement ? e.popup.getElement() : null;
+          const btn = root ? root.querySelector("button[data-yard]") : null;
+          if (btn) {
+            btn.onclick = () => {
+              const yn = decodeURIComponent(btn.getAttribute("data-yard") || "");
+              try {
+                el.currentYard.value = yn;
+                UI.refreshYardUI();
+                UI.renderYardGps(yn);
+                UI.renderYardPurposeCard(yn);
+                el.mapPanel.classList.add("hidden");
+              } catch (_) {}
+            };
+          }
+        });
+      });
+
+      // Leaflet needs a resize after panel show
+      setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 150);
+    }
+  };
+
+
 
 const UI = {
     status(text) {
@@ -7083,24 +7324,56 @@ Type a new team name to add, or leave blank to cancel:`);
       el.exportPanel.classList.toggle("hidden");
       el.remindersPanel.classList.add("hidden");
       el.lookupPanel.classList.add("hidden");
+      if (el.mapPanel) el.mapPanel.classList.add("hidden");
     });
     el.remindersBtn.addEventListener("click", () => {
       el.remindersPanel.classList.toggle("hidden");
       el.exportPanel.classList.add("hidden");
       el.lookupPanel.classList.add("hidden");
+      if (el.mapPanel) el.mapPanel.classList.add("hidden");
       Reminders.render();
     });
     el.lookupBtn.addEventListener("click", () => {
       el.lookupPanel.classList.toggle("hidden");
       el.exportPanel.classList.add("hidden");
       el.remindersPanel.classList.add("hidden");
+      if (el.mapPanel) el.mapPanel.classList.add("hidden");
       Lookup.render();
     });
+
+    // Yard map (desktop-friendly)
+    if (el.mapBtn && el.mapPanel) {
+      el.mapBtn.addEventListener("click", () => {
+        el.mapPanel.classList.toggle("hidden");
+        el.exportPanel.classList.add("hidden");
+        el.remindersPanel.classList.add("hidden");
+        el.lookupPanel.classList.add("hidden");
+        MapView.render();
+      });
+      if (el.mapCloseBtn) {
+        el.mapCloseBtn.addEventListener("click", () => el.mapPanel.classList.add("hidden"));
+      }
+    }
+
+    // Edit lock (PIN)
+    if (el.lockBtn) {
+      el.lockBtn.addEventListener("click", async () => {
+        if (Lock.isUnlocked()) Lock.lockNow();
+        else await Lock.unlockWithPrompt();
+      });
+    }
+
     el.enableNotifBtn.addEventListener("click", async () => {
       await Notifier.enable();
     });
 
-    // Milestones (global) UI wiring
+    // Keep lock UI current + auto-lock on inactivity
+    Lock.applyUI();
+    setInterval(() => { try { Lock.applyUI(); } catch (_) {} }, 15000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) Lock.lockNow(true);
+    });
+// Milestones (global) UI wiring
     try {
       Milestones.renderUI();
       if (el.advMilestonesToggle) {
@@ -7129,6 +7402,8 @@ Type a new team name to add, or leave blank to cancel:`);
 </script>
 
 
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
     // PWA: register service worker (safe no-op on unsupported browsers)
