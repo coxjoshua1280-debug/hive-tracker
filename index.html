@@ -172,25 +172,7 @@
       font-size: 1rem;
     }
 
-    
-    /* Yard overrides modal (full-screen overlay) */
-    #yardOverridesModal {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.55);
-      display: none;
-      align-items: flex-start;
-      justify-content: center;
-      z-index: 9998;
-      padding: 1rem;
-      overflow: auto;
-    }
-    #yardOverridesModal.show { display: flex; }
-    #yardOverridesCard {
-      width: min(760px, 100%);
-      margin-top: 1rem;
-    }
-/* Frame map */
+    /* Frame map */
     .frame-map {
       display: grid;
       gap: 0.6rem;
@@ -444,73 +426,6 @@
   </div>
 
   <div id="yardGps" class="small" style="margin-top:0.5rem;"></div>
-
-  <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
-    <button id="yardOverridesBtn" type="button" class="btn grow">⚙️ Yard overrides</button>
-  </div>
-
-  <div id="yardOverridesModal" class="hidden">
-    <div id="yardOverridesCard" class="card">
-      <div class="row" style="margin:0 0 0.25rem 0;">
-        <div class="grow"><strong>⚙️ Yard overrides</strong><div class="small" id="yardOverridesTitle"></div></div>
-        <button id="yardOverridesClose" type="button" class="btn">✕</button>
-      </div>
-
-      <div class="small" id="yardOverridesHint" style="margin-top:0.25rem;"></div>
-
-      <div class="card" style="margin-top:0.6rem;">
-        <div class="row" style="margin:0;">
-          <div class="grow"><strong>👑 Queen milestones</strong></div>
-        </div>
-
-        <label class="checkbox-label" style="margin-top:0.5rem;">
-          <input id="yardMilestonesOverrideToggle" type="checkbox" />
-          Override global milestones for this yard
-        </label>
-
-        <div id="yardMilestoneEditor" class="hidden" style="margin-top:0.6rem;">
-          <div class="small" style="margin-bottom:0.35rem; opacity:0.9;">Customize reminder windows (days after queen introduction).</div>
-
-          <div class="row" style="gap:0.6rem; align-items:flex-end;">
-            <div class="grow">
-              <label>Acceptance check (start)</label>
-              <input id="yard_ms_accept_start" type="number" min="0" step="1" />
-            </div>
-            <div class="grow">
-              <label>Acceptance check (end)</label>
-              <input id="yard_ms_accept_end" type="number" min="0" step="1" />
-            </div>
-          </div>
-
-          <div class="row" style="gap:0.6rem; align-items:flex-end;">
-            <div class="grow">
-              <label>Eggs check (start)</label>
-              <input id="yard_ms_eggs_start" type="number" min="0" step="1" />
-            </div>
-            <div class="grow">
-              <label>Eggs check (end)</label>
-              <input id="yard_ms_eggs_end" type="number" min="0" step="1" />
-            </div>
-          </div>
-
-          <div class="row" style="gap:0.6rem; align-items:flex-end;">
-            <div class="grow">
-              <label>Brood pattern (start)</label>
-              <input id="yard_ms_pattern_start" type="number" min="0" step="1" />
-            </div>
-            <div class="grow">
-              <label>Brood pattern (end)</label>
-              <input id="yard_ms_pattern_end" type="number" min="0" step="1" />
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:0.6rem; gap:0.5rem;">
-            <button id="yardMilestonesResetToGlobal" type="button" class="btn grow">Use global settings</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
     <div class="card" style="margin-top:0.75rem;">
     <button id="exportPanelToggle" type="button" class="btn btn-muted">⬇️ Export / Backup / Import</button>
@@ -1490,58 +1405,7 @@ key)) || JSON.stringify(fallback)); }
     },
 
     getQueenWindows() {
-      const s = this.load();
-      // Standard milestones are used unless advanced mode is enabled.
-      if (!s.advanced) return this.defaults().queen;
-      return s.queen;
-    },
-
-    getQueenWindowsForYard(yardName) {
-      const s = this.load();
-      if (!s.advanced) return this.defaults().queen;
-      const ov = this.getYardQueenOverride(yardName);
-      return ov || s.queen;
-    },
-
-    getYardQueenOverride(yardName) {
-      const name = (yardName || "").trim();
-      if (!name) return null;
-      const yards = Storage.loadYards();
-      const y = yards ? yards[name] : null;
-      const q = y?.settings?.milestones?.queen;
-      if (!q || typeof q !== "object") return null;
-
-      // Normalize to ensure start/end are sane integers.
-      const def = this.defaults().queen;
-      const normWin = (win, defWin) => {
-        const start = this._clampInt(win?.start, defWin.start);
-        const end = this._clampInt(win?.end, defWin.end);
-        return { start: Math.max(0, start), end: Math.max(Math.max(0, start), end) };
-      };
-      return {
-        acceptance: normWin(q.acceptance, def.acceptance),
-        eggs: normWin(q.eggs, def.eggs),
-        pattern: normWin(q.pattern, def.pattern)
-      };
-    },
-
-    setYardQueenOverride(yardName, queenWindowsOrNull) {
-      const name = (yardName || "").trim();
-      if (!name) return;
-      const yards = Storage.loadYards();
-      const y = Object.assign({}, (yards[name] || {}));
-      y.settings = Object.assign({}, (y.settings || {}));
-      y.settings.milestones = Object.assign({}, (y.settings.milestones || {}));
-
-      if (!queenWindowsOrNull) {
-        // Remove override
-        if (y.settings.milestones) delete y.settings.milestones.queen;
-      } else {
-        y.settings.milestones.queen = queenWindowsOrNull;
-      }
-
-      yards[name] = y;
-      Storage.saveYards(yards);
+      return this.load().queen;
     },
 
     // ISO yyyy-mm-dd + days
@@ -1642,7 +1506,7 @@ key)) || JSON.stringify(fallback)); }
         const q = (hive && hive.currentQueenId) ? UI.getQueenById(hive, hive.currentQueenId) : null;
         const intro = (q?.introduced || "").trim();
         if (intro) {
-          const w = Milestones.getQueenWindowsForYard(hive.location || "");
+          const w = Milestones.getQueenWindows();
           const addWindow = (which, title, emoji) => {
             const start = Math.max(0, Number(w?.[which]?.start ?? 0));
             const end = Math.max(start, Number(w?.[which]?.end ?? start));
@@ -2014,23 +1878,6 @@ key)) || JSON.stringify(fallback)); }
     captureYardGps: document.getElementById("captureYardGps"),
     detectNearestYard: document.getElementById("detectNearestYard"),
     yardGps: document.getElementById("yardGps"),
-
-    yardOverridesBtn: document.getElementById("yardOverridesBtn"),
-    yardOverridesModal: document.getElementById("yardOverridesModal"),
-    yardOverridesCard: document.getElementById("yardOverridesCard"),
-    yardOverridesTitle: document.getElementById("yardOverridesTitle"),
-    yardOverridesHint: document.getElementById("yardOverridesHint"),
-    yardOverridesClose: document.getElementById("yardOverridesClose"),
-
-    yardMilestonesOverrideToggle: document.getElementById("yardMilestonesOverrideToggle"),
-    yardMilestoneEditor: document.getElementById("yardMilestoneEditor"),
-    yard_ms_accept_start: document.getElementById("yard_ms_accept_start"),
-    yard_ms_accept_end: document.getElementById("yard_ms_accept_end"),
-    yard_ms_eggs_start: document.getElementById("yard_ms_eggs_start"),
-    yard_ms_eggs_end: document.getElementById("yard_ms_eggs_end"),
-    yard_ms_pattern_start: document.getElementById("yard_ms_pattern_start"),
-    yard_ms_pattern_end: document.getElementById("yard_ms_pattern_end"),
-    yardMilestonesResetToGlobal: document.getElementById("yardMilestonesResetToGlobal"),
 
     exportCsv: document.getElementById("exportCsv"),
     exportZip: document.getElementById("exportZip"),
@@ -3486,7 +3333,6 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       });
 
       const selected = (el.currentYard.value || "").trim();
-      if (el.yardOverridesBtn) el.yardOverridesBtn.disabled = !selected;
       if (!selected) {
         el.yardHives.innerHTML = "<em>Enter a yard name to list its hives.</em>";
         return;
@@ -5744,160 +5590,6 @@ function saveMiteTreatmentFromForm() {
       UI.renderHiveYardGps();
     });
 
-    // Yard overrides modal (per-yard milestone overrides)
-    const openYardOverrides = () => {
-      const yardName = (el.currentYard.value || "").trim();
-      if (!yardName) { alert("Enter a yard name first."); return; }
-
-      // Ensure the yard exists in Storage so settings have a home (even if GPS not captured yet)
-      const yards = Storage.loadYards();
-      if (!yards[yardName]) { yards[yardName] = { timestamp: Date.now() }; Storage.saveYards(yards); }
-
-      // Render modal header + state
-      if (el.yardOverridesTitle) el.yardOverridesTitle.textContent = `Yard: ${yardName}`;
-
-      const ms = Milestones.load();
-      const advOn = !!ms.advanced;
-
-      if (el.yardOverridesHint) {
-        el.yardOverridesHint.textContent = advOn
-          ? "Overrides apply only to hives in this yard (advanced milestones is ON)."
-          : "Enable Advanced milestones (in Reminders) to use per-yard overrides.";
-      }
-
-      if (el.yardMilestonesOverrideToggle) {
-        el.yardMilestonesOverrideToggle.disabled = !advOn;
-      }
-
-      const ov = advOn ? Milestones.getYardQueenOverride(yardName) : null;
-      if (el.yardMilestonesOverrideToggle) el.yardMilestonesOverrideToggle.checked = !!ov;
-
-      const base = advOn ? Milestones.getQueenWindows() : Milestones.defaults().queen;
-      const effective = ov || base;
-
-      // Populate inputs
-      const setVals = (w) => {
-        if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = w.acceptance.start;
-        if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = w.acceptance.end;
-        if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = w.eggs.start;
-        if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = w.eggs.end;
-        if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = w.pattern.start;
-        if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = w.pattern.end;
-      };
-      setVals(effective);
-
-      // Show/hide editor
-      if (el.yardMilestoneEditor) {
-        if (advOn && !!ov) el.yardMilestoneEditor.classList.remove("hidden");
-        else el.yardMilestoneEditor.classList.add("hidden");
-      }
-
-      // Show modal
-      if (el.yardOverridesModal) {
-        el.yardOverridesModal.classList.remove("hidden");
-        el.yardOverridesModal.classList.add("show");
-      }
-    };
-
-    const closeYardOverrides = () => {
-      if (el.yardOverridesModal) {
-        el.yardOverridesModal.classList.remove("show");
-        el.yardOverridesModal.classList.add("hidden");
-      }
-    };
-
-    if (el.yardOverridesBtn) el.yardOverridesBtn.addEventListener("click", openYardOverrides);
-    if (el.yardOverridesClose) el.yardOverridesClose.addEventListener("click", closeYardOverrides);
-    if (el.yardOverridesModal) {
-      el.yardOverridesModal.addEventListener("click", (e) => {
-        if (e.target === el.yardOverridesModal) closeYardOverrides();
-      });
-    }
-
-    const getYardMsFromInputs = () => {
-      const d = Milestones.defaults().queen;
-      const normWin = (sEl, eEl, defWin) => {
-        const start = Milestones._clampInt(sEl?.value, defWin.start);
-        const end = Milestones._clampInt(eEl?.value, defWin.end);
-        return { start: Math.max(0, start), end: Math.max(Math.max(0, start), end) };
-      };
-      return {
-        acceptance: normWin(el.yard_ms_accept_start, el.yard_ms_accept_end, d.acceptance),
-        eggs: normWin(el.yard_ms_eggs_start, el.yard_ms_eggs_end, d.eggs),
-        pattern: normWin(el.yard_ms_pattern_start, el.yard_ms_pattern_end, d.pattern),
-      };
-    };
-
-    const saveYardOverrideIfEnabled = () => {
-      const yardName = (el.currentYard.value || "").trim();
-      if (!yardName) return;
-      const ms = Milestones.load();
-      if (!ms.advanced) return;
-      if (!el.yardMilestonesOverrideToggle?.checked) return;
-      Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
-      Reminders.render();
-    };
-
-    if (el.yardMilestonesOverrideToggle) {
-      el.yardMilestonesOverrideToggle.addEventListener("change", () => {
-        const yardName = (el.currentYard.value || "").trim();
-        const ms = Milestones.load();
-        if (!ms.advanced) { el.yardMilestonesOverrideToggle.checked = false; return; }
-        if (!yardName) return;
-
-        if (el.yardMilestonesOverrideToggle.checked) {
-          // Turn on override: seed from global settings
-          const base = Milestones.getQueenWindows();
-          if (el.yardMilestoneEditor) el.yardMilestoneEditor.classList.remove("hidden");
-          // Copy base into inputs (so you start from global)
-          if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = base.acceptance.start;
-          if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = base.acceptance.end;
-          if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = base.eggs.start;
-          if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = base.eggs.end;
-          if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = base.pattern.start;
-          if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = base.pattern.end;
-
-          Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
-        } else {
-          // Turn off override
-          Milestones.setYardQueenOverride(yardName, null);
-          if (el.yardMilestoneEditor) el.yardMilestoneEditor.classList.add("hidden");
-        }
-        Reminders.render();
-      });
-    }
-
-    const bindYardMsInputs = (sEl, eEl) => {
-      if (!sEl || !eEl) return;
-      sEl.addEventListener("change", saveYardOverrideIfEnabled);
-      eEl.addEventListener("change", saveYardOverrideIfEnabled);
-    };
-    bindYardMsInputs(el.yard_ms_accept_start, el.yard_ms_accept_end);
-    bindYardMsInputs(el.yard_ms_eggs_start, el.yard_ms_eggs_end);
-    bindYardMsInputs(el.yard_ms_pattern_start, el.yard_ms_pattern_end);
-
-    if (el.yardMilestonesResetToGlobal) {
-      el.yardMilestonesResetToGlobal.addEventListener("click", () => {
-        const yardName = (el.currentYard.value || "").trim();
-        if (!yardName) return;
-        const ms = Milestones.load();
-        if (!ms.advanced) return;
-
-        const base = Milestones.getQueenWindows();
-        if (el.yard_ms_accept_start) el.yard_ms_accept_start.value = base.acceptance.start;
-        if (el.yard_ms_accept_end) el.yard_ms_accept_end.value = base.acceptance.end;
-        if (el.yard_ms_eggs_start) el.yard_ms_eggs_start.value = base.eggs.start;
-        if (el.yard_ms_eggs_end) el.yard_ms_eggs_end.value = base.eggs.end;
-        if (el.yard_ms_pattern_start) el.yard_ms_pattern_start.value = base.pattern.start;
-        if (el.yard_ms_pattern_end) el.yard_ms_pattern_end.value = base.pattern.end;
-
-        if (el.yardMilestonesOverrideToggle?.checked) {
-          Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
-          Reminders.render();
-        }
-      });
-    }
-
     // Yard GPS capture
     el.captureYardGps.addEventListener("click", async () => {
       const yardName = (el.currentYard.value || "").trim();
@@ -5909,13 +5601,12 @@ function saveMiteTreatmentFromForm() {
         State.lastPosition = pos;
 
         const yards = Storage.loadYards();
-        const existing = yards[yardName] || {};
-        yards[yardName] = Object.assign({}, existing, {
+        yards[yardName] = {
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
           timestamp: Date.now()
-        });
+        };
         const res = Storage.saveYards(yards);
         if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export ZIP backup!");
 
