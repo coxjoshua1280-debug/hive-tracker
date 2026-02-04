@@ -6276,10 +6276,9 @@ el.importZipInput.addEventListener("change", async () => {
     el.manageTeamsBtn.addEventListener("click", () => {
       const teams = Teams.list();
         const names = teams.map(t => `• ${t.name}`).join("\n") || "(none)";
-      const action = prompt(`Teams (offline)
-${names}
+      const action = prompt(`Teams (offline)${names}`);
 
-Type a new team name to add, or leave blank to cancel:`);
+Type a new team name to add, or leave blank to cancel:
       if (!action) return;
       Teams.add(action);
       const t2 = Teams.list();
