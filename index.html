@@ -451,6 +451,38 @@
   <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
   <datalist id="yardList"></datalist>
 
+  <div id="yardPurposeCard" class="card" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem;">
+      <div class="grow">
+        <strong>Yard purpose</strong>
+        <div class="small">Show only the tools you need for this yard.</div>
+      </div>
+    </div>
+    <label for="yardPurposeSelect">Primary purpose</label>
+    <select id="yardPurposeSelect">
+      <option value="standard">Standard (everything)</option>
+      <option value="queen">Queen rearing / mating</option>
+      <option value="split">Nuc / split growing yard</option>
+    </select>
+
+    <div id="yardSplitPanel" class="card hidden" style="margin-top:0.75rem; background: var(--muted);">
+      <div class="row" style="gap:0.5rem; align-items:flex-start;">
+        <div class="grow">
+          <strong>Split growth tracker</strong>
+          <div class="small">Targets double every 30 days. Track actual counts and queen installs.</div>
+        </div>
+        <button id="addSplitCohortBtn" type="button" class="btn btn-primary" style="width:auto; white-space:nowrap;">➕ New cohort</button>
+      </div>
+      <div id="splitCohortsList" style="margin-top:0.5rem;"></div>
+    </div>
+
+    <div id="yardQueenPanel" class="card hidden" style="margin-top:0.75rem; background: var(--muted);">
+      <strong>Queen yard tools</strong>
+      <div class="small" style="margin-top:0.25rem;">In queen yards, the Queen Rearing tools are enabled on each hive.</div>
+    </div>
+  </div>
+
+
   <div class="row" style="margin-top:0.5rem;">
     <button id="captureYardGps" type="button" class="btn">📍 Capture Yard GPS</button>
     <button id="detectNearestYard" type="button" class="btn">🧭 Detect Nearest Yard</button>
@@ -1699,6 +1731,103 @@ document.addEventListener("DOMContentLoaded", () => {
           });
         }
       } catch (_) {}
+
+      // Split yard cohorts -> reminders (next actions)
+      try {
+        const yards = Storage.loadYards() || {};
+        const todayISO = Utils.todayISO();
+        const todayDate = new Date(todayISO + "T00:00:00");
+        const toDays = (fromISO, toISO) => {
+          const da = new Date((fromISO || todayISO) + "T00:00:00");
+          const db = new Date((toISO || todayISO) + "T00:00:00");
+          return Math.round((db - da) / 86400000);
+        };
+
+        for (const [yardName, raw] of Object.entries(yards)) {
+          const y = YardMeta.normalize(raw || {});
+          if (y.purpose !== "split") continue;
+          const cohorts = Array.isArray(y.splitCohorts) ? y.splitCohorts : [];
+          for (const c of cohorts) {
+            const q = c.queen || {};
+            // Installed queen -> remind to confirm laying (B: from install date)
+            if (q.method === "installed" && q.installedDate && !q.confirmedLayingDate) {
+              const winStart = Milestones.addDaysISO(q.installedDate, 10);
+              const winEnd = Milestones.addDaysISO(q.installedDate, 14);
+              // If today is within/near window, show
+              const endDate = new Date(winEnd + "T00:00:00");
+              if (todayDate <= endDate) {
+                const startDate = new Date(winStart + "T00:00:00");
+                let days = 0;
+                let label = "Due soon";
+                if (todayDate < startDate) {
+                  days = toDays(todayISO, winStart);
+                  label = `In ${days}d (laying window)`;
+                } else if (todayDate <= endDate) {
+                  const left = toDays(todayISO, winEnd);
+                  label = left <= 0 ? "Due now (ends today)" : `Due now (ends in ${left}d)`;
+                  days = 0;
+                }
+                out.push({
+                  kind: "split",
+                  subkind: "confirmLaying",
+                  yard: yardName,
+                  cohortId: c.id,
+                  cohortName: c.name || "Cohort",
+                  when: winStart,
+                  windowEnd: winEnd,
+                  days,
+                  title: `🥚 Confirm laying (${c.name || "Cohort"})`,
+                  label
+                });
+              }
+            }
+
+            // Self-raised queen -> timeline reminders (approx)
+            if (q.method === "self" && !q.confirmedLayingDate) {
+              const tl = computeSelfQueenTimeline(q.selfStartDate || c.startDate || "");
+              if (tl) {
+                const addWindow = (title, emoji, startISO, endISO) => {
+                  const s = new Date(startISO + "T00:00:00");
+                  const e = new Date(endISO + "T00:00:00");
+                  if (todayDate > e) return; // already passed
+                  let days = 0;
+                  let label = "Upcoming";
+                  if (todayDate < s) {
+                    days = toDays(todayISO, startISO);
+                    label = `In ${days}d`;
+                  } else {
+                    const left = toDays(todayISO, endISO);
+                    label = left <= 0 ? "Due now (ends today)" : `Due now (ends in ${left}d)`;
+                    days = 0;
+                  }
+                  out.push({
+                    kind: "split",
+                    subkind: "selfTimeline",
+                    yard: yardName,
+                    cohortId: c.id,
+                    cohortName: c.name || "Cohort",
+                    when: startISO,
+                    windowEnd: endISO,
+                    days,
+                    title: `${emoji} ${title} (${c.name || "Cohort"})`,
+                    label
+                  });
+                };
+
+                // Capped cell check window: Day 7-10 from start
+                addWindow("Check queen cells (capping)", "🧷", Milestones.addDaysISO(tl.start, 7), Milestones.addDaysISO(tl.start, 10));
+                // Emergence: +/-1 day window
+                addWindow("Expected queen emergence", "🐝", Milestones.addDaysISO(tl.emerge, 0), Milestones.addDaysISO(tl.emerge, 1));
+                // Mating window
+                addWindow("Mating window", "💞", tl.mateStart, tl.mateEnd);
+                // Laying confirmation window
+                addWindow("Confirm laying window", "🥚", tl.layStart, tl.layEnd);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
 // Sort: overdue first, then soonest
       out.sort((a,b) => (a.days - b.days));
       return out;
@@ -1996,6 +2125,13 @@ document.addEventListener("DOMContentLoaded", () => {
     yardList: document.getElementById("yardList"),
     yardHives: document.getElementById("yardHives"),
 
+    yardPurposeCard: document.getElementById("yardPurposeCard"),
+    yardPurposeSelect: document.getElementById("yardPurposeSelect"),
+    yardSplitPanel: document.getElementById("yardSplitPanel"),
+    yardQueenPanel: document.getElementById("yardQueenPanel"),
+    addSplitCohortBtn: document.getElementById("addSplitCohortBtn"),
+    splitCohortsList: document.getElementById("splitCohortsList"),
+
     newInspectionBtn: document.getElementById("newInspectionBtn"),
     captureYardGps: document.getElementById("captureYardGps"),
     detectNearestYard: document.getElementById("detectNearestYard"),
@@ -2252,7 +2388,107 @@ hiveYardGps: document.getElementById("hiveYardGps"),
   // 6) UI (Rendering & DOM only)
   // =========================================================
 
-  const UI = {
+  
+  // =========================================================
+  // Yard Purpose + Split Growth (Yard-level metadata)
+  // =========================================================
+
+  const YardMeta = {
+    normalize(y) {
+      const out = Object.assign({}, (y || {}));
+      if (!out.purpose) out.purpose = "standard"; // standard | queen | split
+      if (!Array.isArray(out.splitCohorts)) out.splitCohorts = [];
+      return out;
+    },
+
+    getAll() { return Storage.loadYards() || {}; },
+
+    get(name) {
+      const n = (name || "").trim();
+      if (!n) return null;
+      const yards = this.getAll();
+      return this.normalize(yards[n]);
+    },
+
+    set(name, patch) {
+      const n = (name || "").trim();
+      if (!n) return;
+      const yards = this.getAll();
+      const cur = this.normalize(yards[n]);
+      const next = this.normalize(Object.assign({}, cur, (patch || {})));
+      yards[n] = next;
+      Storage.saveYards(yards);
+      return next;
+    },
+
+    update(name, fn) {
+      const n = (name || "").trim();
+      if (!n) return;
+      const yards = this.getAll();
+      const cur = this.normalize(yards[n]);
+      const next = this.normalize(fn(cur) || cur);
+      yards[n] = next;
+      Storage.saveYards(yards);
+      return next;
+    },
+
+    ensure(name) {
+      const n = (name || "").trim();
+      if (!n) return null;
+      const yards = this.getAll();
+      if (!yards[n]) {
+        yards[n] = this.normalize({ purpose: "standard", splitCohorts: [] });
+        Storage.saveYards(yards);
+      } else {
+        // ensure defaults
+        yards[n] = this.normalize(yards[n]);
+        Storage.saveYards(yards);
+      }
+      return yards[n];
+    },
+  };
+
+  function daysBetweenISO(startIso, endDateObj) {
+    try {
+      const d0 = new Date(startIso);
+      if (isNaN(d0.getTime())) return 0;
+      const d1 = endDateObj || new Date();
+      const ms = d1.getTime() - d0.getTime();
+      return Math.max(0, Math.floor(ms / 86400000));
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function computeDoublingTarget(countStart, startIso, doublingDays) {
+    const dd = Math.max(1, parseInt(doublingDays || 30, 10));
+    const days = daysBetweenISO(startIso, new Date());
+    const periods = Math.floor(days / dd);
+    return Math.max(0, Number(countStart || 0) * Math.pow(2, periods));
+  }
+
+
+  function computeSelfQueenTimeline(cellStartISO) {
+    const start = (cellStartISO || "").trim();
+    if (!start) return null;
+
+    // Simple walk-away timeline (approximate):
+    // Day 0: eggs/larvae available (split made / queen cell start)
+    // Day 8: likely capped
+    // Day 16: expected emergence
+    // Day 21-28: mating window (approx 5-12 days after emerge)
+    // Day 26-37: expected laying window (approx 10-21 days after emerge)
+    const capped = Milestones.addDaysISO(start, 8);
+    const emerge = Milestones.addDaysISO(start, 16);
+    const mateStart = Milestones.addDaysISO(emerge, 5);
+    const mateEnd = Milestones.addDaysISO(emerge, 12);
+    const layStart = Milestones.addDaysISO(emerge, 10);
+    const layEnd = Milestones.addDaysISO(emerge, 21);
+
+    return { start, capped, emerge, mateStart, mateEnd, layStart, layEnd };
+  }
+
+const UI = {
     status(text) {
       el.status.textContent = text || "";
       // Keep debug stats fresh without spamming the console panel.
@@ -3472,6 +3708,17 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       });
 
       const selected = (el.currentYard.value || "").trim();
+      // Yard purpose card (yard-level metadata)
+      if (el.yardPurposeCard) {
+        if (!selected) {
+          el.yardPurposeCard.classList.add("hidden");
+        } else {
+          el.yardPurposeCard.classList.remove("hidden");
+          YardMeta.ensure(selected);
+          UI.renderYardPurposeCard(selected);
+        }
+      }
+
       if (el.yardOverridesBtn) el.yardOverridesBtn.disabled = !selected;
       if (!selected) {
         el.yardHives.innerHTML = "<em>Enter a yard name to list its hives.</em>";
@@ -3500,6 +3747,121 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         container.appendChild(b);
       });
     },
+
+    renderYardPurposeCard(yardName) {
+      const name = (yardName || "").trim();
+      if (!name || !el.yardPurposeSelect) return;
+
+      const meta = YardMeta.ensure(name) || YardMeta.get(name) || { purpose: "standard", splitCohorts: [] };
+      el.yardPurposeSelect.value = meta.purpose || "standard";
+
+      // show/hide panels
+      if (el.yardSplitPanel) {
+        el.yardSplitPanel.classList.toggle("hidden", el.yardPurposeSelect.value !== "split");
+      }
+      if (el.yardQueenPanel) {
+        el.yardQueenPanel.classList.toggle("hidden", el.yardPurposeSelect.value !== "queen");
+      }
+
+      // Render split cohorts if needed
+      if (el.yardPurposeSelect.value === "split") {
+        UI.renderSplitCohorts(name);
+      }
+
+      // If a hive is currently loaded, apply yard purpose to hive-form toggles
+      if (State.currentHiveId) {
+        UI.applyYardPurposeToHiveForm((el.location.value || "").trim());
+      }
+    },
+
+    applyYardPurposeToHiveForm(yardName) {
+      // Gate hive-level tools by yard purpose
+      const name = (yardName || "").trim();
+      const meta = name ? (YardMeta.get(name) || { purpose: "standard" }) : { purpose: "standard" };
+
+      // Queen rearing controls
+      if (el.rearingToggleBtn) {
+        const show = meta.purpose === "queen";
+        el.rearingToggleBtn.style.display = show ? "" : "none";
+        if (!show) {
+          // also hide the rearing section if switching away
+          try { Rearing.setVisible(false); } catch (_) {}
+        }
+      }
+    },
+
+    renderSplitCohorts(yardName) {
+      const name = (yardName || "").trim();
+      if (!name || !el.splitCohortsList) return;
+
+      const meta = YardMeta.get(name) || { purpose: "split", splitCohorts: [] };
+      const cohorts = Array.isArray(meta.splitCohorts) ? meta.splitCohorts : [];
+
+      if (cohorts.length === 0) {
+        el.splitCohortsList.innerHTML = `<em>No cohorts yet. Tap “New cohort” to start tracking splits.</em>`;
+        return;
+      }
+
+      const rows = cohorts.map(c => {
+        const start = c.startDate || "";
+        const countStart = Number(c.countStart || 0);
+        const dd = Number(c.doublingDays || 30);
+        const target = computeDoublingTarget(countStart, start, dd);
+
+        const cps = Array.isArray(c.checkpoints) ? c.checkpoints : [];
+        const last = cps.length ? cps[cps.length - 1] : null;
+        const actual = last ? Number(last.countActual || 0) : countStart;
+
+        let status = "";
+        if (actual > target) status = "Ahead";
+        else if (actual === target) status = "On track";
+        else status = "Behind";
+
+        const q = c.queen || {};
+        let qText = "";
+        if (q.method === "installed") {
+          qText = q.installedDate ? `✅ Queens installed (${q.installedDate})` : "✅ Queens installed (date?)";
+          if (q.confirmedLayingDate) qText += ` • 🥚 Laying confirmed (${q.confirmedLayingDate})`;
+        } else if (q.method === "self") {
+          const tl = computeSelfQueenTimeline(q.selfStartDate || start || "");
+          if (q.confirmedLayingDate) {
+            qText = `🐣 Self-raised queen confirmed (${q.confirmedLayingDate})`;
+          } else if (tl) {
+            qText = `🐣 Self-raised queen (not yet confirmed laying) • 🐝 Emerge ~${tl.emerge} • 🥚 Lay window ${tl.layStart}–${tl.layEnd}`;
+          } else {
+            qText = "🐣 Self-raised queen (not yet confirmed laying)";
+          }
+        } else {
+          qText = "⬜ Queen status not set";
+        }
+
+        return `
+          <div class="card" style="margin-top:0.5rem;">
+            <div class="row" style="gap:0.5rem;">
+              <div class="grow">
+                <strong>${Utils.escapeHtml(c.name || "Cohort")}</strong>
+                <div class="small">Start: ${Utils.escapeHtml(start || "(set)")}
+• Start count: ${countStart}
+• Today target: ${target}
+• Actual: ${actual} (${status})</div>
+                <div class="small" style="margin-top:0.25rem;">${qText}</div>
+              </div>
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn" data-action="checkpoint" data-id="${c.id}" style="width:auto;">➕ Checkpoint</button>
+                <button type="button" class="btn" data-action="toggleQueen" data-id="${c.id}" style="width:auto;">👑 Queen plan</button>
+                ${(q.method==="self") ? `<button type="button" class="btn" data-action="selfTimeline" data-id="${c.id}" style="width:auto;">🗓 Timeline</button>` : ``}
+                <button type="button" class="btn" data-action="confirmLaying" data-id="${c.id}" style="width:auto;">🥚 Confirm laying</button>
+                <button type="button" class="btn btn-danger" data-action="deleteCohort" data-id="${c.id}" style="width:auto;">🗑</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      el.splitCohortsList.innerHTML = rows;
+    },
+
+
 
     renderYardGps(yardName) {
       if (!yardName) { el.yardGps.textContent = ""; return; }
@@ -4809,6 +5171,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       el.hiveIdDisplay.textContent = tagId;
       el.hiveName.value = hive.name || "";
       el.location.value = hive.location || "";
+      UI.applyYardPurposeToHiveForm((hive.location || "").trim());
       // teams
       (function() {
         const t = Teams.list();
@@ -4816,6 +5179,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         el.teamSelect.value = hive.teamId || "";
       })();
       UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
       UI.renderQueenSection(hive);
 
       el.hiveForm.classList.remove("hidden");
@@ -4861,6 +5225,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       UI.renderHistory(hive);
       UI.refreshYardUI();
       UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
       UI.renderQueenSection(hive);
       UI.status("Saved: " + (hive.name || hive.id));
     }
@@ -5168,6 +5533,7 @@ async function handleImportZipFromFile(file) {
     UI.refreshYardUI();
     UI.renderYardGps((el.currentYard.value || "").trim());
     UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
 
     UI.status("Import complete ✅");
     alert("Import complete ✅\nYour data and photos have been restored/merged.");
@@ -5421,7 +5787,182 @@ function saveMiteTreatmentFromForm() {
       UI.refreshYardUI();
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
     });
+
+
+    // Yard purpose selection
+    if (el.yardPurposeSelect) {
+      el.yardPurposeSelect.addEventListener("change", () => {
+        const yardName = (el.currentYard.value || "").trim();
+        if (!yardName) return;
+        YardMeta.set(yardName, { purpose: el.yardPurposeSelect.value || "standard" });
+        UI.renderYardPurposeCard(yardName);
+        UI.refreshYardUI();
+      });
+    }
+
+    // Split growth tracker actions
+    if (el.addSplitCohortBtn) {
+      el.addSplitCohortBtn.addEventListener("click", () => {
+        const yardName = (el.currentYard.value || "").trim();
+        if (!yardName) { alert("Enter a yard name first."); return; }
+
+        const name = prompt("Cohort name (optional):", "Spring splits");
+        const startDate = prompt("Start date (YYYY-MM-DD):", Utils.todayISO());
+        if (!startDate) return;
+        const countStartStr = prompt("Starting number of splits/nucs:", "10");
+        if (countStartStr === null) return;
+        const countStart = Math.max(0, parseInt(countStartStr, 10) || 0);
+
+        YardMeta.update(yardName, (y) => {
+          const c = {
+            id: Utils.uuid(),
+            name: (name || "").trim() || "Cohort",
+            startDate: startDate.trim(),
+            countStart,
+            doublingDays: 30,
+            checkpoints: [],
+            queen: { method: "", installedDate: "", confirmedLayingDate: "" }
+          };
+          y.splitCohorts = Array.isArray(y.splitCohorts) ? y.splitCohorts : [];
+          y.splitCohorts.push(c);
+          return y;
+        });
+
+        UI.renderYardPurposeCard(yardName);
+        UI.status("Cohort added");
+      });
+    }
+
+    if (el.splitCohortsList) {
+      el.splitCohortsList.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const action = btn.getAttribute("data-action");
+        const id = btn.getAttribute("data-id");
+        const yardName = (el.currentYard.value || "").trim();
+        if (!yardName || !id) return;
+
+        if (action === "deleteCohort") {
+          if (!confirm("Delete this cohort?")) return;
+          YardMeta.update(yardName, (y) => {
+            y.splitCohorts = (y.splitCohorts || []).filter(c => c.id !== id);
+            return y;
+          });
+          UI.renderYardPurposeCard(yardName);
+          return;
+        }
+
+        if (action === "checkpoint") {
+          const countStr = prompt("Actual count right now:", "");
+          if (countStr === null) return;
+          const countActual = Math.max(0, parseInt(countStr, 10) || 0);
+          const notes = prompt("Notes (optional):", "");
+          YardMeta.update(yardName, (y) => {
+            const c = (y.splitCohorts || []).find(x => x.id === id);
+            if (!c) return y;
+            c.checkpoints = Array.isArray(c.checkpoints) ? c.checkpoints : [];
+            c.checkpoints.push({ date: Utils.todayISO(), countActual, notes: (notes || "").trim() });
+            return y;
+          });
+          UI.renderYardPurposeCard(yardName);
+          UI.status("Checkpoint saved");
+          return;
+        }
+
+        if (action === "toggleQueen") {
+  const choice = prompt(
+    "Queen outcome for this cohort:
+" +
+    "1 = Installed queen
+" +
+    "2 = Self-raised queen (walk-away)
+" +
+    "3 = Clear queen info
+
+" +
+    "Type 1, 2, or 3:"
+  );
+  if (choice === null) return;
+
+  YardMeta.update(yardName, (y) => {
+    const c = (y.splitCohorts || []).find(x => x.id === id);
+    if (!c) return y;
+
+    c.queen = c.queen || {};
+    const keepConfirmed = c.queen.confirmedLayingDate || "";
+
+    if (String(choice).trim() === "1") {
+      const d = prompt("Install date (YYYY-MM-DD):", c.queen.installedDate || Utils.todayISO());
+      if (d === null) return y;
+      c.queen = {
+        method: "installed",
+        installedDate: (d || "").trim() || Utils.todayISO(),
+        confirmedLayingDate: keepConfirmed
+      };
+    } else if (String(choice).trim() === "2") {
+      // Walk-away / emergency / self-raised queen
+      const base = (c.queen && c.queen.selfStartDate) ? c.queen.selfStartDate : (c.startDate || Utils.todayISO());
+      const sd = prompt("Self-raised timeline start date (YYYY-MM-DD). Use the date the split had eggs/larvae:", base);
+      if (sd === null) return y;
+      c.queen = {
+        method: "self",
+        installedDate: "",
+        selfStartDate: (sd || "").trim() || base,
+        confirmedLayingDate: keepConfirmed
+      };
+    } else if (String(choice).trim() === "3") {
+      c.queen = null;
+    } else {
+      // invalid input: do nothing
+    }
+    return y;
+  });
+
+  UI.renderYardPurposeCard(yardName);
+  return;
+}
+
+
+if (action === "selfTimeline") {
+  YardMeta.update(yardName, (y) => {
+    const c = (y.splitCohorts || []).find(x => x.id === id);
+    if (!c) return y;
+    c.queen = c.queen || {};
+    if (c.queen.method !== "self") return y;
+
+    const base = c.queen.selfStartDate || c.startDate || Utils.todayISO();
+    const sd = prompt("Edit self-raised timeline start date (YYYY-MM-DD):", base);
+    if (sd === null) return y;
+    c.queen.selfStartDate = (sd || "").trim() || base;
+    return y;
+  });
+
+  UI.renderYardPurposeCard(yardName);
+  UI.status("Timeline updated");
+  return;
+}
+
+if (action === "confirmLaying") {
+  YardMeta.update(yardName, (y) => {
+    const c = (y.splitCohorts || []).find(x => x.id === id);
+    if (!c) return y;
+    c.queen = c.queen || {};
+    if (!c.queen.method) return y;
+
+    const d = prompt("Laying confirmed date (YYYY-MM-DD):", c.queen.confirmedLayingDate || Utils.todayISO());
+    if (d === null) return y;
+    c.queen.confirmedLayingDate = (d || "").trim() || Utils.todayISO();
+    return y;
+  });
+
+  UI.renderYardPurposeCard(yardName);
+  UI.status("Laying confirmed");
+  return;
+}
+      });
+    }
 
     // Yard overrides modal (per-yard milestone overrides)
     const openYardOverrides = () => {
@@ -5602,6 +6143,7 @@ function saveMiteTreatmentFromForm() {
         UI.renderYardGps(yardName);
         UI.refreshYardUI();
         UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
       } catch (err) {
         alert("GPS error: " + (err.message || err));
         UI.status("Ready");
@@ -5620,6 +6162,7 @@ function saveMiteTreatmentFromForm() {
           UI.status("No yard nearby (within 100m).");
           UI.renderYardGps((el.currentYard.value || "").trim());
           UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
           return;
         }
 
@@ -5627,6 +6170,7 @@ function saveMiteTreatmentFromForm() {
         UI.refreshYardUI();
         UI.renderYardGps(nearest.name);
         UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
         UI.status(`Nearest yard: ${nearest.name} (${Math.round(nearest.meters)}m)`);
       } catch (err) {
         alert("GPS error: " + (err.message || err));
@@ -5639,6 +6183,7 @@ function saveMiteTreatmentFromForm() {
     el.location.addEventListener("input", () => {
       App.saveCurrentHiveAndInspection();
       UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
     });
     
     if (el.teamSelect) {
@@ -6200,6 +6745,7 @@ el.importZipInput.addEventListener("change", async () => {
       UI.refreshYardUI();
       UI.renderYardGps((el.currentYard.value || "").trim());
       UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
     Rearing.setVisible(false);
       try { Milestones.renderUI(); } catch (_) {}
       Reminders.render();
@@ -6220,6 +6766,7 @@ el.importZipInput.addEventListener("change", async () => {
     UI.refreshYardUI();
     UI.renderYardGps((el.currentYard.value || "").trim());
     UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
     Rearing.setVisible(false);
     Reminders.render();
 
