@@ -6112,17 +6112,14 @@ function saveMiteTreatmentFromForm() {
 
         if (action === "toggleQueen") {
   const choice = prompt(
-    "Queen outcome for this cohort:
-" +
-    "1 = Installed queen
-" +
-    "2 = Self-raised queen (walk-away)
-" +
-    "3 = Clear queen info
+`Queen outcome for this cohort:
+1 = Installed queen
+2 = Self-raised queen (walk-away)
+3 = Clear queen info
 
-" +
-    "Type 1, 2, or 3:"
-  );
+Type 1, 2, or 3:`
+);
+
   if (choice === null) return;
 
   YardMeta.update(yardName, (y) => {
