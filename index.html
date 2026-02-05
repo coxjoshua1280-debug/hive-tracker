@@ -829,6 +829,10 @@ button, .btn { border-radius: 12px; }
       <div class="grow">
         <strong>🍯 Yard Nectar & Dearth</strong>
         <div class="small">Track likely nectar sources, honey windows, when to add/pull supers, and local dearth periods for this yard.</div>
+    <div id="yardNectarBanner" class="card" style="margin-top:0.6rem; padding:0.6rem; border:1px solid rgba(47,36,24,0.12);">
+      <div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>
+    </div>
+
       </div>
       <button id="addYardNectarBtn" type="button" class="btn">➕ Nectar source</button>
       <button id="addYardDearthBtn" type="button" class="btn">➕ Dearth</button>
@@ -3199,6 +3203,8 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     yardNectarList: document.getElementById("yardNectarList"),
     yardDearthList: document.getElementById("yardDearthList"),
 
+    yardNectarBanner: document.getElementById("yardNectarBanner"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3350,7 +3356,10 @@ hiveYardGps: document.getElementById("hiveYardGps"),
       return out;
     },
 
-    getAll() { return Storage.loadYards() || {}; },
+    getAll() { return Storage.loadYards() || {}; }
+};
+
+
 const SwarmRemoval = {
   key: "bn_swarm_removal_v1",
   load() { return Storage.load(this.key, []); },
@@ -3707,6 +3716,75 @@ const UI = {
       meta.nectarSources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
       meta.dearths = Array.isArray(meta.dearths) ? meta.dearths : [];
 
+      const parseMonthOrISO = (s, which) => {
+        const v = String(s || "").trim();
+        if (!v) return null;
+        // ISO date
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { kind:"date", date: v };
+        // Month name/abbr
+        const map = {
+          jan:1, january:1, feb:2, february:2, mar:3, march:3, apr:4, april:4, may:5,
+          jun:6, june:6, jul:7, july:7, aug:8, august:8, sep:9, sept:9, september:9,
+          oct:10, october:10, nov:11, november:11, dec:12, december:12
+        };
+        const key = v.toLowerCase().replace(".", "").trim();
+        if (map[key]) return { kind:"month", month: map[key], raw: v };
+        return { kind:"text", raw: v };
+      };
+
+      const toRange = (startStr, endStr) => {
+        const y = new Date(Utils.todayISO() + "T00:00:00").getFullYear();
+        const s = parseMonthOrISO(startStr, "start");
+        const e = parseMonthOrISO(endStr, "end");
+        if (!s || !e) return null;
+
+        const mk = (obj, isEnd) => {
+          if (obj.kind === "date") return obj.date;
+          if (obj.kind === "month") {
+            const m = obj.month;
+            const day = isEnd ? new Date(y, m, 0).getDate() : 1; // last day if end
+            const mm = String(m).padStart(2,"0");
+            const dd = String(day).padStart(2,"0");
+            return `${y}-${mm}-${dd}`;
+          }
+          return null;
+        };
+
+        const sISO = mk(s, false);
+        const eISO = mk(e, true);
+        // If both are not parseable, treat as non-calendar text
+        if (!sISO || !eISO) return null;
+
+        // Handle wrap (e.g., Oct -> Feb)
+        if (eISO < sISO) {
+          // bump end year by +1
+          const eObj = new Date(eISO + "T00:00:00");
+          const ny = y + 1;
+          const mm = String(eObj.getMonth()+1).padStart(2,"0");
+          const dd = String(eObj.getDate()).padStart(2,"0");
+          return { startISO: sISO, endISO: `${ny}-${mm}-${dd}` };
+        }
+        return { startISO: sISO, endISO: eISO };
+      };
+
+      const isTodayIn = (rng) => {
+        if (!rng) return false;
+        const t = new Date(Utils.todayISO() + "T00:00:00").getTime();
+        const a = new Date(rng.startISO + "T00:00:00").getTime();
+        const b = new Date(rng.endISO + "T00:00:00").getTime();
+        return t >= a && t <= b;
+      };
+
+      const relToToday = (iso) => {
+        if (!iso) return "";
+        const t = new Date(Utils.todayISO() + "T00:00:00").getTime();
+        const d = new Date(iso + "T00:00:00").getTime();
+        const diff = Math.round((d - t) / 86400000);
+        if (diff === 0) return "today";
+        if (diff > 0) return `in ${diff}d`;
+        return `${Math.abs(diff)}d ago`;
+      };
+
       if (el.yardNectarList) {
         if (meta.nectarSources.length === 0) {
           el.yardNectarList.innerHTML = "<em>No nectar sources listed for this yard yet.</em>";
@@ -3743,7 +3821,65 @@ const UI = {
             </div>`;
           }).join("");
         }
+      
+      // ---- Season banner (flow/dearth + super guidance) ----
+      if (el.yardNectarBanner) {
+        const flowsToday = meta.nectarSources
+          .map(s => ({ s, rng: toRange(s.start, s.end) }))
+          .filter(x => x.rng && isTodayIn(x.rng));
+
+        const dearthToday = meta.dearths
+          .map(d => ({ d, rng: toRange(d.start, d.end) }))
+          .filter(x => x.rng && isTodayIn(x.rng));
+
+        if (dearthToday.length > 0) {
+          const d0 = dearthToday[0];
+          const note = d0.d.notes ? ` • ${Utils.escapeHtml(d0.d.notes)}` : "";
+          el.yardNectarBanner.innerHTML =
+            `<div><strong>🔻 Dearth right now</strong> (${Utils.escapeHtml(d0.rng.startISO)} → ${Utils.escapeHtml(d0.rng.endISO)})${note}</div>` +
+            `<div class="small" style="margin-top:0.25rem;">Consider: feed if needed, watch robbing, avoid opening too long.</div>`;
+        } else if (flowsToday.length > 0) {
+          const top = flowsToday.slice(0,3).map(x => Utils.escapeHtml(x.s.source || "Source")).join(", ");
+          const honeys = [...new Set(flowsToday.map(x => (x.s.honey||"").trim()).filter(Boolean))].slice(0,3);
+          const honeyLine = honeys.length ? `Honey: <strong>${honeys.map(Utils.escapeHtml).join(", ")}</strong>` : "";
+          // Best super window (first flow entry that has guidance)
+          const withSupers = flowsToday.find(x => (x.s.superOn || x.s.superOff));
+          let superLine = "";
+          if (withSupers) {
+            const onR = toRange(withSupers.s.superOn, withSupers.s.superOn);
+            const offR = toRange(withSupers.s.superOff, withSupers.s.superOff);
+            const onISO = onR ? onR.startISO : "";
+            const offISO = offR ? offR.startISO : "";
+            const onRel = onISO ? relToToday(onISO) : "";
+            const offRel = offISO ? relToToday(offISO) : "";
+            superLine = `${onISO ? `Add supers: <strong>${Utils.escapeHtml(onISO)}</strong> (${Utils.escapeHtml(onRel)})` : ""}` +
+                        `${(onISO && offISO) ? " • " : ""}` +
+                        `${offISO ? `Pull supers: <strong>${Utils.escapeHtml(offISO)}</strong> (${Utils.escapeHtml(offRel)})` : ""}`;
+          }
+          el.yardNectarBanner.innerHTML =
+            `<div><strong>🟢 Flow right now</strong> • ${top}</div>` +
+            (honeyLine ? `<div class="small" style="margin-top:0.25rem;">${honeyLine}</div>` : "") +
+            (superLine ? `<div class="small" style="margin-top:0.25rem;">${superLine}</div>` : `<div class="small" style="margin-top:0.25rem;">Tip: add a “supers on/off” date inside a nectar source to show super recommendations here.</div>`);
+        } else {
+          // If there are entries, show what's next
+          const nextFlow = meta.nectarSources
+            .map(s => ({ s, rng: toRange(s.start, s.end) }))
+            .filter(x => x.rng)
+            .sort((a,b) => (a.rng.startISO||"").localeCompare(b.rng.startISO||""))[0];
+
+          const nextDearth = meta.dearths
+            .map(d => ({ d, rng: toRange(d.start, d.end) }))
+            .filter(x => x.rng)
+            .sort((a,b) => (a.rng.startISO||"").localeCompare(b.rng.startISO||""))[0];
+
+          const lines = [];
+          if (nextFlow) lines.push(`Next flow: <strong>${Utils.escapeHtml(nextFlow.s.source||"Source")}</strong> (${Utils.escapeHtml(nextFlow.rng.startISO)} → ${Utils.escapeHtml(nextFlow.rng.endISO)})`);
+          if (nextDearth) lines.push(`Next dearth: (${Utils.escapeHtml(nextDearth.rng.startISO)} → ${Utils.escapeHtml(nextDearth.rng.endISO)})`);
+          el.yardNectarBanner.innerHTML = lines.length ? `<div><strong>🟡 Upcoming</strong></div><div class="small" style="margin-top:0.25rem;">${lines.join("<br/>")}</div>`
+                                             : `<div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>`;
+        }
       }
+}
     },
 
     renderSwarmRemovalList() {
