@@ -3,8 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hive Tracker</title>
+  <title>BroodNote</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@700&display=swap" rel="stylesheet">
   <style>
+:root {
+  --bn-bg: #2F2418;
+  --bn-gold: #C69214;
+  --bn-amber: #E0A82E;
+  --bn-paper: #F5F1E8;
+  --bn-ink: #2F2418;
+  --bn-card: #FFFFFF;
+  --bn-muted: #6B5B4B;
+}
+
+body {
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bn-paper);
+  color: var(--bn-ink);
+}
+
+h1, .app-title {
+  font-family: Merriweather, serif;
+  letter-spacing: 0.2px;
+}
+
+button, .btn {
+  border-radius: 12px;
+}
+
+button.primary, .primary-btn {
+  background: var(--bn-bg) !important;
+  color: var(--bn-paper) !important;
+  border: 2px solid var(--bn-gold) !important;
+}
+
+button:not(.primary):not(.danger), .btn:not(.primary):not(.danger) {
+  background: #fff;
+  border: 1px solid rgba(47,36,24,0.18);
+}
+
+.card, .panel, .section, .box, .tile {
+  background: var(--bn-card);
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(47,36,24,0.08);
+}
+
+.badge, .pill {
+  background: rgba(198,146,20,0.14);
+  border: 1px solid rgba(198,146,20,0.35);
+}
+
+
 
     :root{
       --bg1:#fff7cc;
@@ -16,11 +67,6 @@
       --accent2:#2f2a1f; /* charcoal */
       --muted:#fff1b8;
       --danger:#b42318;
-    
-      --purpose-standard:#f4b400;
-      --purpose-queen:#7c3aed;
-      --purpose-split:#16a34a;
-      --purpose-unknown:#64748b;
     }
 
     body {
@@ -426,22 +472,15 @@
     .drop-hint-bottom { border-bottom: 4px solid rgba(0,0,0,0.25); }
     .dragging { opacity: 0.85; }
 
-  
-    /* Edit lock */
-    body.editing-locked .edit-only { opacity: 0.55; pointer-events: none; }
-</style>
+  </style>
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111111" />
 
-
-  <!-- Map (Leaflet + OpenStreetMap) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
-  <h1 id="appTitle">🐝 Hive Tracker</h1>
+  <h1 id="appTitle">BroodNote</h1>
 
   <div class="card" id="userCard" style="margin-top:0.5rem;">
     <div class="row" style="margin:0 0 0.5rem;">
@@ -569,17 +608,63 @@
     </div>
   </div>
 
-    
-<div class="row" style="margin-top:0.75rem;">
-  <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
-  <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
-  <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
-    <button id="cloudBtn" type="button" class="btn grow">☁️ Cloud</button>
-<button id="lockBtn" type="button" class="btn btn-muted grow">🔒 Locked</button>
-  <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
-</div>
+    <div class="card" style="margin-top:0.75rem;">
+    <button id="exportPanelToggle" type="button" class="btn btn-muted">⬇️ Export / Backup / Import</button>
 
-<div id="remindersPanel" class="card hidden" style="margin-top:0.5rem;">
+    
+      <div id="lookupPanel" class="card hidden" style="margin-top:0.5rem;">
+        <div class="row" style="align-items:flex-end;">
+          <div class="grow">
+            <strong>🔎 Lookup / Database</strong>
+            <div class="small">Desktop-friendly search. Paste a tag serial number to open a hive instantly.</div>
+          </div>
+        </div>
+
+        <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
+          <div class="grow" style="min-width:220px;">
+            <label for="lookupSearch" style="margin-top:0;">Search</label>
+            <input id="lookupSearch" type="text" placeholder="Hive name, yard, notes, tag serial…" />
+          </div>
+          <div style="min-width:180px;">
+            <label for="lookupYard" style="margin-top:0;">Yard</label>
+            <select id="lookupYard"></select>
+          </div>
+          <div style="min-width:200px;">
+            <label for="lookupPurpose" style="margin-top:0;">Purpose</label>
+            <select id="lookupPurpose">
+              <option value="">All purposes</option>
+              <option value="standard">Standard</option>
+              <option value="queen">Queen rearing / mating</option>
+              <option value="split">Nuc / split growing</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" style="gap:0.5rem; margin-top:0.5rem;">
+          <button id="lookupOpenTagBtn" type="button" class="btn btn-primary">Open by tag serial</button>
+          <button id="lookupClearBtn" type="button" class="btn btn-muted">Clear</button>
+        </div>
+
+        <div id="lookupResults" style="margin-top:0.75rem;"></div>
+      </div>
+
+
+<div id="exportPanel" class="hidden" style="margin-top:0.6rem;">
+      <div class="card" style="margin:0;">
+        <label class="checkbox-label" style="margin:0;">
+          <input id="exportCurrentYardOnly" type="checkbox" />
+          Export only current yard
+        </label>
+        <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
+      </div>
+
+      <div class="row" style="margin-top:0.75rem;">
+        <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
+        <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
+        <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
+      </div>
+
+      <div id="remindersPanel" class="card hidden" style="margin-top:0.5rem;">
         <div class="row">
           <div class="grow"><strong>🔔 Treatment reminders</strong></div>
           <button id="enableNotifBtn" type="button" class="btn btn-muted" style="width:auto; padding:0.45rem 0.65rem;">Enable notifications</button>
@@ -650,109 +735,7 @@
         </div>
       </div>
 
-<div id="lookupPanel" class="card hidden" style="margin-top:0.5rem;">
-        <div class="row" style="align-items:flex-end;">
-          <div class="grow">
-            <strong>🔎 Lookup / Database</strong>
-            <div class="small">Desktop-friendly search. Paste a tag serial number to open a hive instantly.</div>
-          </div>
-        </div>
-
-        <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
-          <div class="grow" style="min-width:220px;">
-            <label for="lookupSearch" style="margin-top:0;">Search</label>
-            <input id="lookupSearch" type="text" placeholder="Hive name, yard, notes, tag serial…" />
-          </div>
-          <div style="min-width:180px;">
-            <label for="lookupYard" style="margin-top:0;">Yard</label>
-            <select id="lookupYard"></select>
-          </div>
-          <div style="min-width:200px;">
-            <label for="lookupPurpose" style="margin-top:0;">Purpose</label>
-            <select id="lookupPurpose">
-              <option value="">All purposes</option>
-              <option value="standard">Standard</option>
-              <option value="queen">Queen rearing / mating</option>
-              <option value="split">Nuc / split growing</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row" style="gap:0.5rem; margin-top:0.5rem;">
-          <button id="lookupOpenTagBtn" type="button" class="btn btn-primary">Open by tag serial</button>
-          <button id="lookupClearBtn" type="button" class="btn btn-muted">Clear</button>
-        </div>
-
-        <div id="lookupResults" style="margin-top:0.75rem;"></div>
-      </div>
-
-<div id="cloudPanel" class="card hidden" style="margin-top:0.5rem;">
-  <div class="row" style="margin:0;">
-    <div class="grow"><strong>☁️ Cloud Backup (Supabase)</strong></div>
-    <button id="cloudCloseBtn" type="button" class="btn btn-muted" style="width:auto; padding:0.45rem 0.65rem;">Close</button>
-  </div>
-  <div class="small" style="margin-top:0.35rem;">
-    Cloud backups are manual + offline-friendly. Create a Supabase project, paste the URL + anon key, then sign in.
-  </div>
-
-  <div class="card" style="margin-top:0.65rem;">
-    <div class="small"><strong>Project settings</strong></div>
-    <label for="sbUrl">Supabase URL</label>
-    <input id="sbUrl" type="text" placeholder="https://YOURPROJECT.supabase.co" autocomplete="off" />
-    <label for="sbAnon">Supabase anon key</label>
-    <input id="sbAnon" type="password" placeholder="anon public key" autocomplete="off" />
-    <div class="small" style="margin-top:0.35rem; opacity:0.9;">
-      Stored locally on this device (per profile). You can clear it anytime.
-    </div>
-    <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
-      <button id="sbSaveBtn" type="button" class="btn grow">Save</button>
-      <button id="sbClearBtn" type="button" class="btn">Clear</button>
-    </div>
-  </div>
-
-  <div class="card" style="margin-top:0.65rem;">
-    <div class="small"><strong>Account</strong></div>
-    <label for="cloudEmail">Email</label>
-    <input id="cloudEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-    <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
-      <button id="cloudSignInBtn" type="button" class="btn grow">Send magic link</button>
-      <button id="cloudSignOutBtn" type="button" class="btn">Sign out</button>
-    </div>
-    <div id="cloudAuthStatus" class="small" style="margin-top:0.5rem;"></div>
-  </div>
-
-  <div class="card" style="margin-top:0.65rem;">
-    <div class="small"><strong>Backups</strong></div>
-    <div class="row" style="margin-top:0.35rem; gap:0.5rem;">
-      <button id="cloudBackupNowBtn" type="button" class="btn grow">Back up now</button>
-      <button id="cloudRefreshListBtn" type="button" class="btn">Refresh list</button>
-    </div>
-    <div class="small" style="margin-top:0.35rem; opacity:0.9;">Backups are stored in your Supabase Storage bucket: <strong>hivetracker-backups</strong></div>
-    <div id="cloudBackupList" style="margin-top:0.6rem;"></div>
-  </div>
-
-  <div id="cloudStatus" class="small" style="margin-top:0.6rem;"></div>
-</div>
-
-<div id="mapPanel" class="card hidden" style="margin-top:0.5rem;">
-        <div class="row">
-          <div class="grow"><strong>🗺️ Yard Map</strong></div>
-          
-<button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
-        </div>
-        <div id="mapStatus" class="small" style="margin:0.5rem 0;"></div>
-        <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
-        <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
-      </div>
-
-<div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
-<div class="card" style="margin:0;">
-        <label class="checkbox-label" style="margin:0;">
-          <input id="exportCurrentYardOnly" type="checkbox" />
-          Export only current yard
-        </label>
-        <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
-      </div>
+      <div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
         <div class="small">Export CSV or a full ZIP backup (includes photos). Import merges into the current profile.</div>
         <div class="row" style="margin-top:0.75rem;">
           <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
@@ -761,14 +744,18 @@
         </div>
         <input id="importZipInput" type="file" accept=".zip,application/zip" class="hidden" />
       </div>
-<div id="debugCard" class="card hidden" style="margin-top:0.5rem;">
+
+</div>
+  </div>
+
+  <div id="debugCard" class="card hidden" style="margin-top:0.5rem;">
     <label class="checkbox-label" style="margin:0;">
       <input id="debugMode" type="checkbox" />
       Debug mode (show console + quick stats)
     </label>
     <div id="debugStats" class="small" style="margin-top:0.35rem;"></div>
     <div id="debugConsole" class="debug-console" aria-label="Debug console"></div>
-    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 Hive Tracker” 10× to show/hide this panel.</div>
+    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 BroodNote” 10× to show/hide this panel.</div>
   </div>
   <div id="yardHives" class="card"></div>
   <div id="status" class="small"></div>
@@ -1180,365 +1167,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // =========================================================
-  // 2A) CLOUD BACKUP (Supabase) — manual backups + restore
-  // =========================================================
-  const CloudBackup = {
-    CONFIG_KEY: "sb_config_v1",
-    BUCKET: "hivetracker-backups",
-
-    _client: null,
-    _session: null,
-
-    loadConfig() {
-      const c = Storage.load(this.CONFIG_KEY, { url: "", anon: "", email: "" }) || {};
-      return { url: (c.url || "").trim(), anon: (c.anon || "").trim(), email: (c.email || "").trim() };
-    },
-
-    saveConfig(patch) {
-      const cur = this.loadConfig();
-      const next = Object.assign({}, cur, (patch || {}));
-      Storage.save(this.CONFIG_KEY, next);
-      return next;
-    },
-
-    hasLib() {
-      return !!(window.supabase && window.supabase.createClient);
-    },
-
-    getClient() {
-      const cfg = this.loadConfig();
-      if (!cfg.url || !cfg.anon) return null;
-      if (!this.hasLib()) return null;
-      if (this._client && this._client.__cfgUrl === cfg.url && this._client.__cfgAnon === cfg.anon) return this._client;
-
-      const client = window.supabase.createClient(cfg.url, cfg.anon, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
-      });
-      client.__cfgUrl = cfg.url;
-      client.__cfgAnon = cfg.anon;
-      this._client = client;
-      return client;
-    },
-
-    setStatus(msg) {
-      if (el.cloudStatus) el.cloudStatus.textContent = msg || "";
-    },
-
-    setAuthStatus(msg) {
-      if (el.cloudAuthStatus) el.cloudAuthStatus.textContent = msg || "";
-    },
-
-    async refreshSession() {
-      const client = this.getClient();
-      if (!client) {
-        this._session = null;
-        return null;
-      }
-      try {
-        const { data, error } = await client.auth.getSession();
-        if (error) throw error;
-        this._session = data?.session || null;
-        return this._session;
-      } catch (e) {
-        this._session = null;
-        this.setAuthStatus("Auth error: " + (e?.message || e));
-        return null;
-      }
-    },
-
-    async init() {
-      // populate inputs
-      const cfg = this.loadConfig();
-      if (el.sbUrl) el.sbUrl.value = cfg.url || "";
-      if (el.sbAnon) el.sbAnon.value = cfg.anon || "";
-      if (el.cloudEmail) el.cloudEmail.value = cfg.email || "";
-
-      if (!this.hasLib()) {
-        this.setStatus("Supabase library didn't load (needs internet).");
-        return;
-      }
-
-      const client = this.getClient();
-      if (!client) {
-        this.setAuthStatus("Paste Supabase URL + anon key, then Save.");
-        return;
-      }
-
-      // watch auth state
-      try {
-        client.auth.onAuthStateChange((_event, session) => {
-          this._session = session || null;
-          this.renderAuthState();
-        });
-      } catch (_) {}
-
-      await this.refreshSession();
-      this.renderAuthState();
-    },
-
-    renderAuthState() {
-      const cfg = this.loadConfig();
-      const clientReady = !!this.getClient();
-      if (!clientReady) {
-        this.setAuthStatus("Not configured yet.");
-        return;
-      }
-
-      const s = this._session;
-      if (s?.user?.email) {
-        this.setAuthStatus(`Signed in as ${s.user.email}`);
-      } else {
-        this.setAuthStatus("Signed out.");
-      }
-
-      // enable/disable buttons
-      const signedIn = !!(s && s.user);
-      if (el.cloudSignOutBtn) el.cloudSignOutBtn.disabled = !signedIn;
-      if (el.cloudBackupNowBtn) el.cloudBackupNowBtn.disabled = !signedIn;
-      if (el.cloudRefreshListBtn) el.cloudRefreshListBtn.disabled = !signedIn;
-      if (el.cloudSignInBtn) el.cloudSignInBtn.disabled = signedIn;
-      if (el.cloudEmail) el.cloudEmail.disabled = signedIn;
-
-      // keep saved email
-      if (cfg.email && el.cloudEmail && !signedIn) el.cloudEmail.value = cfg.email;
-    },
-
-    async saveConfigFromUI() {
-      const url = (el.sbUrl?.value || "").trim();
-      const anon = (el.sbAnon?.value || "").trim();
-      const email = (el.cloudEmail?.value || "").trim();
-
-      this.saveConfig({ url, anon, email });
-      this._client = null;
-      this._session = null;
-
-      this.setStatus("Saved.");
-      await this.init();
-    },
-
-    clearConfig() {
-      this.saveConfig({ url: "", anon: "", email: "" });
-      this._client = null;
-      this._session = null;
-      if (el.sbUrl) el.sbUrl.value = "";
-      if (el.sbAnon) el.sbAnon.value = "";
-      if (el.cloudEmail) el.cloudEmail.value = "";
-      this.setAuthStatus("Cleared.");
-      this.setStatus("");
-      if (el.cloudBackupList) el.cloudBackupList.innerHTML = "";
-    },
-
-    async signInMagicLink() {
-      const email = (el.cloudEmail?.value || "").trim();
-      if (!email) { alert("Enter your email first."); return; }
-
-      const client = this.getClient();
-      if (!client) { alert("Paste Supabase URL + anon key and Save first."); return; }
-
-      this.saveConfig({ email });
-
-      try {
-        this.setStatus("Sending magic link…");
-        const { error } = await client.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: window.location.href }
-        });
-        if (error) throw error;
-        this.setStatus("Magic link sent. Check your email and click the link to finish sign-in.");
-      } catch (e) {
-        this.setStatus("Sign-in error: " + (e?.message || e));
-      }
-    },
-
-    async signOut() {
-      const client = this.getClient();
-      if (!client) return;
-      try {
-        await client.auth.signOut();
-        this._session = null;
-        this.renderAuthState();
-        this.setStatus("Signed out.");
-        if (el.cloudBackupList) el.cloudBackupList.innerHTML = "";
-      } catch (e) {
-        this.setStatus("Sign-out error: " + (e?.message || e));
-      }
-    },
-
-    makeBackupObject() {
-      const activeUserId = User.getActiveId();
-      const users = User.getUsers();
-      const teams = Storage.loadTeams();
-      const hives = Storage.loadHives();
-      const yards = Storage.loadYards();
-      const milestones = Storage.load(Milestones.KEY, null);
-      const reminders = Storage.load("reminders_v1", null); // if present
-      const meta = Storage.loadMeta();
-
-      return {
-        app: "HiveTracker",
-        schemaVersion: 1,
-        exportedAt: new Date().toISOString(),
-        activeUserId,
-        users,
-        teams,
-        hives,
-        yards,
-        milestones,
-        reminders,
-        meta
-      };
-    },
-
-    async backupNow() {
-      if (!Lock.requireUnlocked()) return;
-      const client = this.getClient();
-      if (!client) { alert("Configure Supabase first."); return; }
-
-      await this.refreshSession();
-      const s = this._session;
-      if (!s?.user?.id) { alert("Sign in first."); return; }
-
-      const payload = this.makeBackupObject();
-      const json = JSON.stringify(payload);
-      const bytes = new TextEncoder().encode(json);
-
-      const ts = new Date();
-      const stamp = ts.toISOString().replace(/[:.]/g, "-");
-      const path = `users/${s.user.id}/${stamp}_${payload.activeUserId}.json`;
-
-      try {
-        this.setStatus("Uploading backup…");
-        const { error } = await client.storage.from(this.BUCKET).upload(path, bytes, {
-          contentType: "application/json",
-          upsert: false
-        });
-        if (error) throw error;
-        this.setStatus("Backup uploaded.");
-        await this.refreshList();
-      } catch (e) {
-        this.setStatus("Upload error: " + (e?.message || e));
-      }
-    },
-
-    _renderList(items) {
-      if (!el.cloudBackupList) return;
-      if (!items || items.length === 0) {
-        el.cloudBackupList.innerHTML = `<div class="small" style="opacity:0.85;">No backups found yet.</div>`;
-        return;
-      }
-
-      const rows = items.map(it => {
-        const name = it.name || "";
-        const size = (typeof it.metadata?.size === "number") ? `${Math.round(it.metadata.size/1024)} KB` : "";
-        const updated = it.updated_at ? new Date(it.updated_at).toLocaleString() : "";
-        const safe = name.replace(/"/g, "&quot;");
-        return `
-          <div class="card" style="margin:0.5rem 0; padding:0.6rem;">
-            <div class="row" style="margin:0;">
-              <div class="grow">
-                <div><strong>${safe}</strong></div>
-                <div class="small" style="opacity:0.85;">${updated} ${size ? "• " + size : ""}</div>
-              </div>
-              <button type="button" class="btn btn-muted" data-cloud-action="restore" data-cloud-name="${safe}" style="width:auto;">Restore</button>
-              <button type="button" class="btn" data-cloud-action="delete" data-cloud-name="${safe}" style="width:auto;">Delete</button>
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      el.cloudBackupList.innerHTML = rows;
-    },
-
-    async refreshList() {
-      const client = this.getClient();
-      if (!client) return;
-      await this.refreshSession();
-      const s = this._session;
-      if (!s?.user?.id) return;
-
-      try {
-        this.setStatus("Loading backups…");
-        const folder = `users/${s.user.id}`;
-        const { data, error } = await client.storage.from(this.BUCKET).list(folder, {
-          limit: 50,
-          offset: 0,
-          sortBy: { column: "updated_at", order: "desc" }
-        });
-        if (error) throw error;
-        this._renderList(data || []);
-        this.setStatus("");
-      } catch (e) {
-        this.setStatus("List error: " + (e?.message || e));
-      }
-    },
-
-    async restoreByName(name) {
-      if (!Lock.requireUnlocked()) return;
-      if (!confirm("Restore this backup? This will overwrite your current profile data.")) return;
-
-      const client = this.getClient();
-      if (!client) return;
-      await this.refreshSession();
-      const s = this._session;
-      if (!s?.user?.id) return;
-
-      try {
-        this.setStatus("Downloading backup…");
-        const full = `users/${s.user.id}/${name}`;
-        const { data, error } = await client.storage.from(this.BUCKET).download(full);
-        if (error) throw error;
-
-        const text = await data.text();
-        const obj = JSON.parse(text);
-
-        // Write into this profile's local storage
-        if (obj.teams) Storage.saveTeams(obj.teams);
-        if (obj.hives) Storage.saveHives(obj.hives);
-        if (obj.yards) Storage.saveYards(obj.yards);
-        if (obj.milestones) Storage.save(Milestones.KEY, obj.milestones);
-        if (obj.reminders) Storage.save("reminders_v1", obj.reminders);
-        if (obj.meta) Storage.saveMeta(obj.meta);
-
-        this.setStatus("Restore complete.");
-        alert("Restore complete. The app will refresh the yard list now.");
-        UI.refreshYardUI();
-        Reminders.render();
-        if (el.lookupPanel && !el.lookupPanel.classList.contains("hidden")) Lookup.render();
-        if (el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render();
-      } catch (e) {
-        this.setStatus("Restore error: " + (e?.message || e));
-      }
-    },
-
-    async deleteByName(name) {
-      const client = this.getClient();
-      if (!client) return;
-      await this.refreshSession();
-      const s = this._session;
-      if (!s?.user?.id) return;
-
-      if (!confirm("Delete this backup from the cloud?")) return;
-
-      try {
-        const full = `users/${s.user.id}/${name}`;
-        this.setStatus("Deleting…");
-        const { error } = await client.storage.from(this.BUCKET).remove([full]);
-        if (error) throw error;
-        this.setStatus("Deleted.");
-        await this.refreshList();
-      } catch (e) {
-        this.setStatus("Delete error: " + (e?.message || e));
-      }
-    }
-  };
-
-
-
-  // =========================================================
   // 1B) PROFILES (Multi-user, offline-first)
   //     Each profile has its own data namespace in localStorage.
   // =========================================================
@@ -1652,13 +1280,13 @@ document.addEventListener("DOMContentLoaded", () => {
     },
 
     loadHives() { return this.load("hives", {}); },
-    saveHives(hives) { if (!Lock.requireUnlocked()) return false; return this.save("hives", hives); },
+    saveHives(hives) { return this.save("hives", hives); },
 
     loadYards() { return this.load("yards", {}); },
-    saveYards(yards) { if (!Lock.requireUnlocked()) return false; return this.save("yards", yards); },
+    saveYards(yards) { return this.save("yards", yards); },
 
     loadTeams() { return this.load("teams", { teams: [] }); },
-    saveTeams(teams) { if (!Lock.requireUnlocked()) return false; return this.save("teams", teams); },
+    saveTeams(teams) { return this.save("teams", teams); },
     // Queen rearing is stored inside hives so it syncs with Cloud Option A.
     loadRearing() {
       const hives = this.loadHives();
@@ -1860,109 +1488,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // 2B) TEAMS (offline-only, per profile)
   //     Cloud Option A = manual sharing via export/import.
   // =========================================================
-  // =========================================================
-  // 2A.5) EDIT LOCK (PIN-gated editing)
-  // =========================================================
-  const Lock = {
-    ttlMinutes: 10,
-
-    isDesktop() {
-      try { return window.matchMedia && window.matchMedia("(min-width: 900px)").matches; }
-      catch (_) { return true; }
-    },
-
-
-    keyUnlockedUntil() { return "editUnlockedUntil"; },
-
-    getUnlockedUntil() {
-      try { return parseInt(localStorage.getItem(User.key(this.keyUnlockedUntil())), 10) || 0; }
-      catch (_) { return 0; }
-    },
-
-    setUnlockedUntil(ts) {
-      try { localStorage.setItem(User.key(this.keyUnlockedUntil()), String(ts)); } catch (_) {}
-    },
-
-    isUnlocked() {
-      return Date.now() < this.getUnlockedUntil();
-    },
-
-    lockNow(silent=false) {
-      this.setUnlockedUntil(0);
-      if (!silent) UI.status("Locked");
-      this.applyUI();
-    },
-
-    async verifyPin(pin) {
-      const users = User.getUsers();
-      const active = User.getActiveId();
-      const u = users.find(x => x.id === active);
-      if (!u || !u.pinHash) return false;
-
-      const stored = String(u.pinHash || "").trim();
-      const raw = String(pin || "").trim();
-
-      const looksHex = /^[0-9a-f]{64}$/i.test(stored);
-
-      try {
-        if (looksHex && crypto?.subtle) {
-          const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
-          const hex = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
-          return hex === stored;
-        }
-      } catch (_) {}
-
-      return raw === stored;
-    },
-
-    async unlockWithPrompt() {
-      const users = User.getUsers();
-      const active = User.getActiveId();
-      const u = users.find(x => x.id === active);
-      if (!u) return;
-
-      if (!u.pinHash) {
-        alert("No PIN is set for this profile yet. Use “Set PIN” first, then you can unlock editing.");
-        return;
-      }
-
-      const pin = prompt("Enter PIN to unlock editing (auto-locks after 10 minutes):", "");
-      if (pin === null) return;
-
-      const ok = await this.verifyPin(pin);
-      if (!ok) {
-        alert("Incorrect PIN.");
-        return;
-      }
-
-      const until = Date.now() + (this.ttlMinutes * 60 * 1000);
-      this.setUnlockedUntil(until);
-      UI.status("Editing unlocked");
-      this.applyUI();
-    },
-
-    requireUnlocked() {
-      if (!this.isDesktop()) return true;
-      if (this.isUnlocked()) return true;
-      alert("Editing is locked. Click 🔒 Locked and enter your PIN to unlock editing.");
-      return false;
-    },
-
-    applyUI() {
-      if (!el || !el.lockBtn) return;
-      const desktop = this.isDesktop();
-      el.lockBtn.style.display = desktop ? "" : "none";
-      const unlocked = desktop ? this.isUnlocked() : true;
-
-      el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
-      el.lockBtn.classList.toggle("btn-danger", unlocked);
-      el.lockBtn.classList.toggle("btn-muted", !unlocked);
-      document.body.classList.toggle("editing-unlocked", unlocked);
-      document.body.classList.toggle("editing-locked", !unlocked);
-    }
-  };
-
-
   const Teams = {
     load() {
       const t = Storage.loadTeams();
@@ -2488,7 +2013,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (last[nowKey] === sig) return; // once per day per signature
 
       try {
-        new Notification("Hive Tracker reminders", {
+        new Notification("BroodNote reminders", {
           body: dueNow.map(d => {
             if (d.kind === "nextDose") return `🧪 Next dose: ${d.hiveName || ""} (${d.when})`;
             if (d.kind === "remove") return `🐜 Remove/reapply: ${d.hiveName || ""} (${d.when})`;
@@ -2915,7 +2440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     exportZip: document.getElementById("exportZip"),
     importZipBtn: document.getElementById("importZipBtn"),
     importZipInput: document.getElementById("importZipInput"),
-    exportPanelToggle: document.getElementById("exportMenuBtn"),
+    exportPanelToggle: document.getElementById("exportPanelToggle"),
     exportPanel: document.getElementById("exportPanel"),
     exportCurrentYardOnly: document.getElementById("exportCurrentYardOnly"),
     // profiles + teams + reminders + export menu
@@ -2935,15 +2460,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     remindersBtn: document.getElementById("remindersBtn"),
     lookupBtn: document.getElementById("lookupBtn"),
-    mapBtn: document.getElementById("mapBtn"),
-    cloudBtn: document.getElementById("cloudBtn"),
-    lockBtn: document.getElementById("lockBtn"),
     lookupPanel: document.getElementById("lookupPanel"),
-    mapPanel: document.getElementById("mapPanel"),
-    cloudPanel: document.getElementById("cloudPanel"),
-    yardMap: document.getElementById("yardMap"),
-    mapStatus: document.getElementById("mapStatus"),
-    mapCloseBtn: document.getElementById("mapCloseBtn"),
     lookupSearch: document.getElementById("lookupSearch"),
     lookupYard: document.getElementById("lookupYard"),
     lookupPurpose: document.getElementById("lookupPurpose"),
@@ -2953,21 +2470,6 @@ document.addEventListener("DOMContentLoaded", () => {
     remindersPanel: document.getElementById("remindersPanel"),
     enableNotifBtn: document.getElementById("enableNotifBtn"),
     reminderList: document.getElementById("reminderList"),
-    // cloud backup (supabase)
-    sbUrl: document.getElementById("sbUrl"),
-    sbAnon: document.getElementById("sbAnon"),
-    sbSaveBtn: document.getElementById("sbSaveBtn"),
-    sbClearBtn: document.getElementById("sbClearBtn"),
-    cloudEmail: document.getElementById("cloudEmail"),
-    cloudSignInBtn: document.getElementById("cloudSignInBtn"),
-    cloudSignOutBtn: document.getElementById("cloudSignOutBtn"),
-    cloudAuthStatus: document.getElementById("cloudAuthStatus"),
-    cloudBackupNowBtn: document.getElementById("cloudBackupNowBtn"),
-    cloudRefreshListBtn: document.getElementById("cloudRefreshListBtn"),
-    cloudBackupList: document.getElementById("cloudBackupList"),
-    cloudStatus: document.getElementById("cloudStatus"),
-    cloudCloseBtn: document.getElementById("cloudCloseBtn"),
-
 
     // milestone settings (global; per-yard overrides can come later)
     advMilestonesToggle: document.getElementById("advMilestonesToggle"),
@@ -3275,243 +2777,6 @@ hiveYardGps: document.getElementById("hiveYardGps"),
 
     return { start, capped, emerge, mateStart, mateEnd, layStart, layEnd };
   }
-  // =========================================================
-  // 3.5) YARD MAP (Leaflet)
-  // =========================================================
-  const MapView = {
-    map: null,
-    markers: null,
-
-    buildCounts() {
-      const hives = Storage.loadHives() || {};
-      const counts = {};
-      Object.values(hives).forEach(h => {
-        const y = (h.location || "").trim();
-        if (!y) return;
-        counts[y] = (counts[y] || 0) + 1;
-      });
-      return counts;
-    },
-
-    render() {
-      if (!el.mapPanel || !el.yardMap || el.mapPanel.classList.contains("hidden")) return;
-
-      const yards = Storage.loadYards() || {};
-      const yardNames = Object.keys(yards);
-      if (!yardNames.length) {
-        el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
-        el.yardMap.innerHTML = "";
-        return;
-      }
-
-      if (typeof L === "undefined") {
-        el.mapStatus.innerHTML = "<em>Map library not loaded. Connect to the internet once so the map can load (Leaflet + OpenStreetMap tiles).</em>";
-        el.yardMap.innerHTML = "";
-        return;
-      }
-
-      const counts = this.buildCounts();
-
-      // Gather points
-      const pts = [];
-      yardNames.forEach(name => {
-        const y = yards[name];
-        if (y && typeof y.lat === "number" && typeof y.lon === "number") {
-          pts.push([y.lat, y.lon, name]);
-        }
-      });
-
-      
-// Render missing GPS yards list (desktop-friendly)
-const missing = yardNames.filter(name => {
-  const y = yards[name];
-  return !(y && typeof y.lat === "number" && typeof y.lon === "number");
-});
-
-if (el.mapMissingGps) {
-  if (!missing.length) {
-    el.mapMissingGps.textContent = "";
-  } else {
-    const unlocked = Lock.isUnlocked();
-    const rows = missing.map(name => {
-      const c = counts[name] || 0;
-      const ymeta = YardMeta.get(name) || {};
-      const purpose = (ymeta.purpose || "standard");
-      const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
-      const btnLabel = unlocked ? "Set location" : "Unlock to set";
-      const dis = unlocked ? "" : "disabled";
-      return `
-        <div class="card" style="margin:0.35rem 0; padding:0.65rem;">
-          <div class="row" style="align-items:center;">
-            <div class="grow">
-              <div><strong>${Utils.escapeHtml(name)}</strong></div>
-              <div class="small">${purposeLabel} • ${c} hive(s)</div>
-            </div>
-            <button type="button" class="btn btn-muted" style="width:auto;" data-setgps="${encodeURIComponent(name)}" ${dis}>${btnLabel}</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-    el.mapMissingGps.innerHTML = `
-      <div style="margin-top:0.25rem;"><strong>Missing yard GPS</strong> <span class="small">(home point)</span></div>
-      <div class="small">These yards won’t appear on the map until a home point is saved.</div>
-      ${rows}
-    `;
-
-    // Wire buttons
-    el.mapMissingGps.querySelectorAll("button[data-setgps]").forEach(btn => {
-      btn.onclick = () => {
-        const yn = decodeURIComponent(btn.getAttribute("data-setgps") || "");
-        if (!yn) return;
-        if (!Lock.requireUnlocked()) return;
-
-        const pick = prompt(
-          `Set yard home point for "${yn}"\n\n1 = Use my current location\n2 = Enter coordinates\n\nType 1 or 2:`,
-          "1"
-        );
-        if (pick === null) return;
-
-        const setCoords = (lat, lon) => {
-          const yards2 = Storage.loadYards() || {};
-          yards2[yn] = yards2[yn] || {};
-          yards2[yn].lat = lat;
-          yards2[yn].lon = lon;
-          Storage.saveYards(yards2);
-          UI.status("Yard GPS saved");
-          this.render();
-        };
-
-        if (String(pick).trim() === "1") {
-          if (!navigator.geolocation) {
-            alert("Geolocation not available on this device/browser. Choose option 2 to enter coordinates.");
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const lat = pos?.coords?.latitude;
-              const lon = pos?.coords?.longitude;
-              if (typeof lat !== "number" || typeof lon !== "number") {
-                alert("Could not read location.");
-                return;
-              }
-              setCoords(lat, lon);
-            },
-            (err) => {
-              alert("Location error: " + (err && err.message ? err.message : err));
-            },
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-          );
-          return;
-        }
-
-        // Option 2: manual entry
-        const raw = prompt("Enter coordinates as: lat, lon", "");
-        if (raw === null) return;
-        const parts = String(raw).split(",").map(s => s.trim()).filter(Boolean);
-        if (parts.length < 2) { alert("Please enter in the format: lat, lon"); return; }
-        const lat = parseFloat(parts[0]);
-        const lon = parseFloat(parts[1]);
-        if (!isFinite(lat) || !isFinite(lon)) { alert("Invalid coordinates."); return; }
-        setCoords(lat, lon);
-      };
-    });
-  }
-}
-
-if (!pts.length) {
-        el.mapStatus.innerHTML = "<em>No yard GPS points saved yet. Use the Yard GPS capture on mobile to save a yard home point.</em>";
-        el.yardMap.innerHTML = "";
-        return;
-      }
-
-      el.mapStatus.innerHTML = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard` +
-        ` <span style="margin-left:10px; display:inline-flex; gap:10px; align-items:center; flex-wrap:wrap;">`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-standard);display:inline-block;"></span><span class="small">Standard</span></span>`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-queen);display:inline-block;"></span><span class="small">Queen</span></span>`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-split);display:inline-block;"></span><span class="small">Split</span></span>`
-        + `</span>`;
-
-      // Init map once
-      if (!this.map) {
-        this.map = L.map(el.yardMap, { zoomControl: true });
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution: "&copy; OpenStreetMap contributors"
-        }).addTo(this.map);
-
-        this.markers = L.layerGroup().addTo(this.map);
-      } else {
-        this.markers.clearLayers();
-      }
-
-      // Fit bounds
-      const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
-      try { this.map.fitBounds(bounds.pad(0.2)); } catch (_) {}
-
-      pts.forEach(([lat, lon, name]) => {
-        const c = counts[name] || 0;
-        const ymeta = YardMeta.get(name) || {};
-        const purpose = (ymeta.purpose || "standard");
-        const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
-
-        const radius = Math.max(6, Math.min(18, 6 + Math.round(Math.sqrt(c) * 3)));
-
-        const css = getComputedStyle(document.documentElement);
-        const purposeColor = (
-          purpose === "queen" ? (css.getPropertyValue("--purpose-queen") || "").trim() :
-          purpose === "split" ? (css.getPropertyValue("--purpose-split") || "").trim() :
-          purpose === "standard" ? (css.getPropertyValue("--purpose-standard") || "").trim() :
-          (css.getPropertyValue("--purpose-unknown") || "").trim()
-        ) || "#f4b400";
-
-        const marker = L.circleMarker([lat, lon], {
-          radius,
-          color: purposeColor,
-          fillColor: purposeColor,
-          weight: 2,
-          opacity: 0.95,
-          fillOpacity: 0.55
-        });
-
-        const popup = `
-          <div style="min-width:220px;">
-            <div><strong>${Utils.escapeHtml(name)}</strong></div>
-            <div class="small">${purposeLabel} • ${c} hive(s)</div>
-            <div class="small">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
-            <div style="margin-top:6px;">
-              <button type="button" data-yard="${encodeURIComponent(name)}" style="width:100%; padding:8px 10px; border-radius:12px; border:1px solid rgba(0,0,0,0.2); background:#fff; cursor:pointer;">
-                Open yard
-              </button>
-            </div>
-          </div>
-        `;
-        marker.bindPopup(popup);
-        marker.addTo(this.markers);
-
-        marker.on("popupopen", (e) => {
-          const root = e.popup && e.popup.getElement ? e.popup.getElement() : null;
-          const btn = root ? root.querySelector("button[data-yard]") : null;
-          if (btn) {
-            btn.onclick = () => {
-              const yn = decodeURIComponent(btn.getAttribute("data-yard") || "");
-              try {
-                el.currentYard.value = yn;
-                UI.refreshYardUI();
-                UI.renderYardGps(yn);
-                UI.renderYardPurposeCard(yn);
-                el.mapPanel.classList.add("hidden");
-              } catch (_) {}
-            };
-          }
-        });
-      });
-
-      // Leaflet needs a resize after panel show
-      setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 150);
-    }
-  };
-
-
 
 const UI = {
     status(text) {
@@ -7869,98 +7134,24 @@ Type a new team name to add, or leave blank to cancel:`);
       el.exportPanel.classList.toggle("hidden");
       el.remindersPanel.classList.add("hidden");
       el.lookupPanel.classList.add("hidden");
-      if (el.mapPanel) el.mapPanel.classList.add("hidden");
-      if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
     });
     el.remindersBtn.addEventListener("click", () => {
       el.remindersPanel.classList.toggle("hidden");
       el.exportPanel.classList.add("hidden");
       el.lookupPanel.classList.add("hidden");
-      if (el.mapPanel) el.mapPanel.classList.add("hidden");
-      if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
       Reminders.render();
     });
     el.lookupBtn.addEventListener("click", () => {
       el.lookupPanel.classList.toggle("hidden");
       el.exportPanel.classList.add("hidden");
       el.remindersPanel.classList.add("hidden");
-      if (el.mapPanel) el.mapPanel.classList.add("hidden");
-      if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
       Lookup.render();
     });
-
-    // Cloud backup (Supabase)
-    if (el.cloudBtn && el.cloudPanel) {
-      el.cloudBtn.addEventListener("click", () => {
-        console.log("Cloud button clicked");
-        el.cloudPanel.classList.remove("hidden");
-        el.exportPanel.classList.add("hidden");
-        el.remindersPanel.classList.add("hidden");
-        el.lookupPanel.classList.add("hidden");
-        if (el.mapPanel) el.mapPanel.classList.add("hidden");
-        CloudBackup.init();
-      });
-      if (el.cloudCloseBtn) el.cloudCloseBtn.addEventListener("click", () => el.cloudPanel.classList.add("hidden"));
-    }
-
-    if (el.sbSaveBtn) el.sbSaveBtn.addEventListener("click", async () => { await CloudBackup.saveConfigFromUI(); });
-    if (el.sbClearBtn) el.sbClearBtn.addEventListener("click", () => CloudBackup.clearConfig());
-    if (el.cloudSignInBtn) el.cloudSignInBtn.addEventListener("click", async () => { await CloudBackup.signInMagicLink(); });
-    if (el.cloudSignOutBtn) el.cloudSignOutBtn.addEventListener("click", async () => { await CloudBackup.signOut(); });
-    if (el.cloudBackupNowBtn) el.cloudBackupNowBtn.addEventListener("click", async () => { await CloudBackup.backupNow(); });
-    if (el.cloudRefreshListBtn) el.cloudRefreshListBtn.addEventListener("click", async () => { await CloudBackup.refreshList(); });
-
-    // Cloud backup list actions (restore/delete)
-    if (el.cloudBackupList) {
-      el.cloudBackupList.addEventListener("click", async (e) => {
-        const btn = e.target && e.target.closest ? e.target.closest("[data-cloud-action]") : null;
-        if (!btn) return;
-        const action = btn.getAttribute("data-cloud-action");
-        const name = btn.getAttribute("data-cloud-name");
-        if (!action || !name) return;
-
-        // decode HTML entity quotes if any (safe enough for filenames)
-        const fname = name.replace(/&quot;/g, '"');
-
-        if (action === "restore") await CloudBackup.restoreByName(fname);
-        if (action === "delete") await CloudBackup.deleteByName(fname);
-      });
-    }
-
-    // Yard map (desktop-friendly)
-    if (el.mapBtn && el.mapPanel) {
-      el.mapBtn.addEventListener("click", () => {
-        el.mapPanel.classList.toggle("hidden");
-        el.exportPanel.classList.add("hidden");
-        el.remindersPanel.classList.add("hidden");
-        el.lookupPanel.classList.add("hidden");
-        if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
-        MapView.render();
-      });
-      if (el.mapCloseBtn) {
-        el.mapCloseBtn.addEventListener("click", () => el.mapPanel.classList.add("hidden"));
-      }
-    }
-
-    // Edit lock (PIN)
-    if (el.lockBtn) {
-      el.lockBtn.addEventListener("click", async () => {
-        if (Lock.isUnlocked()) Lock.lockNow();
-        else await Lock.unlockWithPrompt();
-      });
-    }
-
     el.enableNotifBtn.addEventListener("click", async () => {
       await Notifier.enable();
     });
 
-    // Keep lock UI current + auto-lock on inactivity
-    Lock.applyUI();
-    setInterval(() => { try { Lock.applyUI(); } catch (_) {} }, 15000);
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) Lock.lockNow(true);
-    });
-// Milestones (global) UI wiring
+    // Milestones (global) UI wiring
     try {
       Milestones.renderUI();
       if (el.advMilestonesToggle) {
@@ -7989,8 +7180,6 @@ Type a new team name to add, or leave blank to cancel:`);
 </script>
 
 
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
     // PWA: register service worker (safe no-op on unsupported browsers)
