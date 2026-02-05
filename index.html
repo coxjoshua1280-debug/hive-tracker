@@ -823,7 +823,20 @@ button, .btn { border-radius: 12px; }
       <div id="swarmTrapList" class="small" style="margin-top:0.6rem;"></div>
     </div>
 
-  <div id="swarmRemovalCard" class="card" style="margin-top:0.75rem;">
+  <div 
+  <div id="yardNectarPanel" class="card" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>🍯 Yard Nectar & Dearth</strong>
+        <div class="small">Track likely nectar sources, honey windows, when to add/pull supers, and local dearth periods for this yard.</div>
+      </div>
+      <button id="addYardNectarBtn" type="button" class="btn">➕ Nectar source</button>
+      <button id="addYardDearthBtn" type="button" class="btn">➕ Dearth</button>
+    </div>
+    <div id="yardNectarList" class="small" style="margin-top:0.6rem;"></div>
+    <div id="yardDearthList" class="small" style="margin-top:0.6rem;"></div>
+  </div>
+id="swarmRemovalCard" class="card" style="margin-top:0.75rem;">
     <div class="row" style="gap:0.5rem; align-items:flex-start;">
       <div class="grow">
         <strong>Swarm & Removal Log</strong>
@@ -3179,6 +3192,13 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     fieldNotesClear: document.getElementById("fieldNotesClear"),
     fieldNotesStatus: document.getElementById("fieldNotesStatus"),
 
+    // Yard nectar/dearth
+    yardNectarPanel: document.getElementById("yardNectarPanel"),
+    addYardNectarBtn: document.getElementById("addYardNectarBtn"),
+    addYardDearthBtn: document.getElementById("addYardDearthBtn"),
+    yardNectarList: document.getElementById("yardNectarList"),
+    yardDearthList: document.getElementById("yardDearthList"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3676,7 +3696,56 @@ const UI = {
       el.status.textContent = text || "";
       // Keep debug stats fresh without spamming the console panel.
       if (typeof Debug !== "undefined" && Debug.isOn && Debug.isOn()) Debug.renderStats();
+      // Render yard nectar/dearth info
+      try { this.renderYardNectar(name); } catch (_) {}
+
     },
+    renderYardNectar(yardName) {
+      const name = (yardName || "").trim();
+      if (!name) return;
+      const meta = YardMeta.ensure(name) || YardMeta.get(name) || {};
+      meta.nectarSources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
+      meta.dearths = Array.isArray(meta.dearths) ? meta.dearths : [];
+
+      if (el.yardNectarList) {
+        if (meta.nectarSources.length === 0) {
+          el.yardNectarList.innerHTML = "<em>No nectar sources listed for this yard yet.</em>";
+        } else {
+          el.yardNectarList.innerHTML = "<strong>Nectar sources</strong>" + meta.nectarSources.map(s => {
+            const when = `${Utils.escapeHtml(s.start || "?")} → ${Utils.escapeHtml(s.end || "?")}`;
+            const honey = s.honey ? ` • honey: <strong>${Utils.escapeHtml(s.honey)}</strong>` : "";
+            const supers = (s.superOn || s.superOff) ? ` • supers: ${Utils.escapeHtml(s.superOn||"?")} → <strong>${Utils.escapeHtml(s.superOff||"?")}</strong>` : "";
+            return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
+              <div><strong>${Utils.escapeHtml(s.source || "Source")}</strong> • ${when}${honey}${supers}</div>
+              ${s.notes ? `<div class="small">${Utils.escapeHtml(s.notes)}</div>` : ""}
+              <div class="row" style="gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap;">
+                <button class="btn" data-yard-nectar-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Edit</button>
+                <button class="btn" data-yard-nectar-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+      }
+
+      if (el.yardDearthList) {
+        if (meta.dearths.length === 0) {
+          el.yardDearthList.innerHTML = "<em>No dearth periods listed for this yard yet.</em>";
+        } else {
+          el.yardDearthList.innerHTML = "<strong>Dearth periods</strong>" + meta.dearths.map(d => {
+            const when = `${Utils.escapeHtml(d.start || "?")} → ${Utils.escapeHtml(d.end || "?")}`;
+            const note = d.notes ? ` • ${Utils.escapeHtml(d.notes)}` : "";
+            return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
+              <div><strong>Dearth</strong> • ${when}${note}</div>
+              <div class="row" style="gap:0.4rem; margin-top:0.4rem;">
+                <button class="btn" data-yard-dearth-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Edit</button>
+                <button class="btn" data-yard-dearth-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+      }
+    },
+
     renderSwarmRemovalList() {
       if (!el.swarmRemovalList) return;
       const list = SwarmRemoval.load();
@@ -8275,6 +8344,138 @@ el.importZipInput.addEventListener("change", async () => {
       saveFieldCardPatch((fc)=>{fc.notes="";});
       if (el.fieldNotes) el.fieldNotes.value="";
       if (el.fieldNotesStatus) el.fieldNotesStatus.textContent="Cleared.";
+    });
+
+
+
+    // -------------------------
+    // Yard Nectar/Dearth wiring
+    // -------------------------
+    function currentYardName() { return (el.currentYard?.value || "").trim(); }
+
+    function promptNectarSource(existing) {
+      const e = existing || {};
+      const source = prompt("Nectar source (e.g., Tulip poplar / Clover / Sourwood):", e.source || "");
+      if (source === null) return null;
+      const start = prompt("Flow start (month or date, e.g., Apr or 2026-04-15):", e.start || "");
+      if (start === null) return null;
+      const end = prompt("Flow end (month or date):", e.end || "");
+      if (end === null) return null;
+      const honey = prompt("Honey type (optional, e.g., Tulip poplar / Wildflower):", e.honey || "");
+      if (honey === null) return null;
+      const superOn = prompt("Add supers around (optional):", e.superOn || "");
+      if (superOn === null) return null;
+      const superOff = prompt("Pull supers around (optional):", e.superOff || "");
+      if (superOff === null) return null;
+      const notes = prompt("Notes (optional):", e.notes || "");
+      if (notes === null) return null;
+      return { source: (source||"").trim(), start:(start||"").trim(), end:(end||"").trim(), honey:(honey||"").trim(),
+               superOn:(superOn||"").trim(), superOff:(superOff||"").trim(), notes:(notes||"").trim() };
+    }
+
+    function promptDearth(existing) {
+      const e = existing || {};
+      const start = prompt("Dearth start (month or date):", e.start || "");
+      if (start === null) return null;
+      const end = prompt("Dearth end (month or date):", e.end || "");
+      if (end === null) return null;
+      const notes = prompt("Notes (optional, e.g., feed / robbing risk / small blooms only):", e.notes || "");
+      if (notes === null) return null;
+      return { start:(start||"").trim(), end:(end||"").trim(), notes:(notes||"").trim() };
+    }
+
+    if (el.addYardNectarBtn) el.addYardNectarBtn.addEventListener("click", () => {
+      const yn = currentYardName();
+      if (!yn) { alert("Set Current Yard first."); return; }
+      const data = promptNectarSource(null);
+      if (!data) return;
+      YardMeta.update(yn, (y) => {
+        y.nectarSources = Array.isArray(y.nectarSources) ? y.nectarSources : [];
+        y.nectarSources.unshift({ id: Utils.uuid(), ...data });
+        return y;
+      });
+      UI.renderYardPurposeCard(yn);
+      UI.status("Nectar source added");
+    });
+
+    if (el.addYardDearthBtn) el.addYardDearthBtn.addEventListener("click", () => {
+      const yn = currentYardName();
+      if (!yn) { alert("Set Current Yard first."); return; }
+      const data = promptDearth(null);
+      if (!data) return;
+      YardMeta.update(yn, (y) => {
+        y.dearths = Array.isArray(y.dearths) ? y.dearths : [];
+        y.dearths.unshift({ id: Utils.uuid(), ...data });
+        return y;
+      });
+      UI.renderYardPurposeCard(yn);
+      UI.status("Dearth added");
+    });
+
+    document.addEventListener("click", (e) => {
+      const b1 = e.target && e.target.closest && e.target.closest("[data-yard-nectar-action]");
+      if (b1) {
+        const action = b1.getAttribute("data-yard-nectar-action");
+        const yn = b1.getAttribute("data-yard") || "";
+        const id = b1.getAttribute("data-id") || "";
+        if (!yn || !id) return;
+        if (action === "delete") {
+          if (!confirm("Delete this nectar source?")) return;
+          YardMeta.update(yn, (y) => {
+            y.nectarSources = (y.nectarSources || []).filter(s => s.id !== id);
+            return y;
+          });
+          UI.renderYardPurposeCard(yn);
+          return;
+        }
+        if (action === "edit") {
+          const meta = YardMeta.get(yn) || {};
+          const src = (meta.nectarSources || []).find(s => s.id === id);
+          const data = promptNectarSource(src);
+          if (!data) return;
+          YardMeta.update(yn, (y) => {
+            y.nectarSources = Array.isArray(y.nectarSources) ? y.nectarSources : [];
+            const s = y.nectarSources.find(x => x.id === id);
+            if (!s) return y;
+            Object.assign(s, data);
+            return y;
+          });
+          UI.renderYardPurposeCard(yn);
+          return;
+        }
+      }
+
+      const b2 = e.target && e.target.closest && e.target.closest("[data-yard-dearth-action]");
+      if (b2) {
+        const action = b2.getAttribute("data-yard-dearth-action");
+        const yn = b2.getAttribute("data-yard") || "";
+        const id = b2.getAttribute("data-id") || "";
+        if (!yn || !id) return;
+        if (action === "delete") {
+          if (!confirm("Delete this dearth period?")) return;
+          YardMeta.update(yn, (y) => {
+            y.dearths = (y.dearths || []).filter(d => d.id !== id);
+            return y;
+          });
+          UI.renderYardPurposeCard(yn);
+          return;
+        }
+        if (action === "edit") {
+          const meta = YardMeta.get(yn) || {};
+          const d0 = (meta.dearths || []).find(d => d.id === id);
+          const data = promptDearth(d0);
+          if (!data) return;
+          YardMeta.update(yn, (y) => {
+            y.dearths = Array.isArray(y.dearths) ? y.dearths : [];
+            const d = y.dearths.find(x => x.id === id);
+            if (!d) return y;
+            Object.assign(d, data);
+            return y;
+          });
+          UI.renderYardPurposeCard(yn);
+          return;
+        }
+      }
     });
 
 
