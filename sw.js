@@ -1,5 +1,5 @@
 /* Hive Tracker Service Worker */
-const CACHE_NAME = "hive-tracker-v5";
+const CACHE_NAME = "hive-tracker-v5-broodnote-v1";
 const ASSETS = [
   "./",
   "./index.html",

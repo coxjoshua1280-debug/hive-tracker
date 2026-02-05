@@ -3,8 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hive Tracker</title>
+  <title>BroodNote</title>
   <style>
+:root {
+  --bn-bg: #2F2418;
+  --bn-honey: #C69214;
+  --bn-paper: #F5F1E8;
+}
+body {
+  background: var(--bn-paper) !important;
+}
+button.primary, .btn.primary {
+  background: var(--bn-bg) !important;
+  border-color: var(--bn-honey) !important;
+}
+
+
 
     :root{
       --bg1:#fff7cc;
@@ -441,7 +455,7 @@
 </head>
 
 <body>
-  <h1 id="appTitle">🐝 Hive Tracker</h1>
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.25rem;"><img src="assets/broodnote-logo.png" alt="BroodNote logo" style="width:44px;height:44px;border-radius:12px;object-fit:contain;box-shadow:0 2px 10px rgba(47,36,24,0.12);"><h1 id="appTitle">🐝 BroodNote</h1></div>
 
   <div class="card" id="userCard" style="margin-top:0.5rem;">
     <div class="row" style="margin:0 0 0.5rem;">
@@ -768,7 +782,7 @@
     </label>
     <div id="debugStats" class="small" style="margin-top:0.35rem;"></div>
     <div id="debugConsole" class="debug-console" aria-label="Debug console"></div>
-    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 Hive Tracker” 10× to show/hide this panel.</div>
+    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 BroodNote” 10× to show/hide this panel.</div>
   </div>
   <div id="yardHives" class="card"></div>
   <div id="status" class="small"></div>
@@ -2488,7 +2502,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (last[nowKey] === sig) return; // once per day per signature
 
       try {
-        new Notification("Hive Tracker reminders", {
+        new Notification("BroodNote reminders", {
           body: dueNow.map(d => {
             if (d.kind === "nextDose") return `🧪 Next dose: ${d.hiveName || ""} (${d.when})`;
             if (d.kind === "remove") return `🐜 Remove/reapply: ${d.hiveName || ""} (${d.when})`;
