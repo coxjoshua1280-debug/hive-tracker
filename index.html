@@ -4967,34 +4967,11 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
 
       // Render split cohorts if needed
       if (el.yardPurposeSelect.value === "split") {
-        UI.
-    renderSwarmTraps(yardName) {
-      const name = (yardName || "").trim();
-      if (!name || !el.swarmTrapList) return;
-      const meta = YardMeta.ensure(name) || YardMeta.get(name) || {};
-      meta.swarmTraps = Array.isArray(meta.swarmTraps) ? meta.swarmTraps : [];
-      if (meta.swarmTraps.length === 0) {
-        el.swarmTrapList.innerHTML = "<em>No traps yet.</em>";
-        return;
+        UI.renderSplitCohorts(name);
       }
-      el.swarmTrapList.innerHTML = meta.swarmTraps.map(t => {
-        const gps = (t.lat && t.lon) ? `${Number(t.lat).toFixed(5)}, ${Number(t.lon).toFixed(5)}` : "(no GPS)";
-        const tied = t.tiedHiveId ? ` • tied: <strong>${Utils.escapeHtml(t.tiedHiveId)}</strong>` : "";
-        const status = Utils.escapeHtml(t.status || "ready");
-        const last = t.lastCheck ? ` • last: ${Utils.escapeHtml(t.lastCheck)}` : "";
-        return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
-          <div><strong>${Utils.escapeHtml(t.label || "Trap")}</strong> • ${gps}${tied}</div>
-          <div class="small">status: <strong>${status}</strong>${last}</div>
-          <div class="row" style="gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap;">
-            <button class="btn" data-trap-action="check" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Check</button>
-            <button class="btn" data-trap-action="caught" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Caught</button>
-            <button class="btn" data-trap-action="move" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Update GPS</button>
-            <button class="btn" data-trap-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Delete</button>
-          </div>
-        </div>`;
-      }).join("");
-    },
-renderSplitCohorts(name);
+      // Render swarm traps if needed
+      if (el.yardPurposeSelect.value === "swarmtrap") {
+        UI.renderSwarmTraps(name);
       }
 
       // If a hive is currently loaded, apply yard purpose to hive-form toggles
