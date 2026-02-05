@@ -3,37 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BroodNote</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@700&display=swap" rel="stylesheet">
+  <title>Hive Tracker</title>
   <style>
-:root {
-  --bn-bg: #2F2418;
-  --bn-gold: #C69214;
-  --bn-amber: #E0A82E;
-  --bn-paper: #F5F1E8;
-  --bn-ink: #2F2418;
-  --bn-card: #FFFFFF;
-}
-body {
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background: var(--bn-paper);
-  color: var(--bn-ink);
-}
-h1, .app-title {
-  font-family: Merriweather, serif;
-  letter-spacing: 0.2px;
-}
-button, .btn { border-radius: 12px; }
-.btn.primary, button.primary {
-  background: var(--bn-bg) !important;
-  color: var(--bn-paper) !important;
-  border: 2px solid var(--bn-gold) !important;
-}
-.card { border-radius: 16px; box-shadow: 0 2px 12px rgba(47,36,24,0.08); }
-
-
 
     :root{
       --bg1:#fff7cc;
@@ -470,7 +441,7 @@ button, .btn { border-radius: 12px; }
 </head>
 
 <body>
-  <h1 id="appTitle">BroodNote</h1>
+  <h1 id="appTitle">🐝 Hive Tracker</h1>
 
   <div class="card" id="userCard" style="margin-top:0.5rem;">
     <div class="row" style="margin:0 0 0.5rem;">
@@ -504,7 +475,6 @@ button, .btn { border-radius: 12px; }
       <option value="standard">Standard (everything)</option>
       <option value="queen">Queen rearing / mating</option>
       <option value="split">Nuc / split growing yard</option>
-      <option value="swarmtrap">Swarm trap yard</option>
     </select>
 
     <div id="yardSplitPanel" class="card hidden" style="margin-top:0.75rem; background: var(--muted);">
@@ -767,14 +737,6 @@ button, .btn { border-radius: 12px; }
 <div id="mapPanel" class="card hidden" style="margin-top:0.5rem;">
         <div class="row">
           <div class="grow"><strong>🗺️ Yard Map</strong></div>
-        <div class="row" style="gap:0.5rem; margin-top:0.5rem;">
-          <button id="mapModeYards" type="button" class="btn primary">Yards</button>
-          <button id="mapModeEvents" type="button" class="btn">Swarms & Removals</button>
-        </div>
-        <div id="eventsMapHint" class="small" style="margin-top:0.35rem; display:none;">
-          Showing swarm/removal hotspots. Add items in “Swarm & Removal Log”.
-        </div>
-
           
 <button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
         </div>
@@ -806,51 +768,11 @@ button, .btn { border-radius: 12px; }
     </label>
     <div id="debugStats" class="small" style="margin-top:0.35rem;"></div>
     <div id="debugConsole" class="debug-console" aria-label="Debug console"></div>
-    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 BroodNote” 10× to show/hide this panel.</div>
+    <div class="small" style="margin-top:0.5rem; opacity:0.8;">Tip: tap “🐝 Hive Tracker” 10× to show/hide this panel.</div>
   </div>
   <div id="yardHives" class="card"></div>
   <div id="status" class="small"></div>
 
-
-    <div id="yardSwarmTrapPanel" class="card hidden" style="margin-top:0.75rem; background: var(--muted);">
-      <div class="row" style="gap:0.5rem; align-items:flex-start;">
-        <div class="grow">
-          <strong>Swarm traps</strong>
-          <div class="small">Track trap locations and link catches to hives.</div>
-        </div>
-        <button id="addSwarmTrapBtn" type="button" class="btn">➕ Add trap</button>
-      </div>
-      <div id="swarmTrapList" class="small" style="margin-top:0.6rem;"></div>
-    </div>
-
-  <div 
-  <div id="yardNectarPanel" class="card" style="margin-top:0.75rem;">
-    <div class="row" style="gap:0.5rem; align-items:flex-start;">
-      <div class="grow">
-        <strong>🍯 Yard Nectar & Dearth</strong>
-        <div class="small">Track likely nectar sources, honey windows, when to add/pull supers, and local dearth periods for this yard.</div>
-    <div id="yardNectarBanner" class="card" style="margin-top:0.6rem; padding:0.6rem; border:1px solid rgba(47,36,24,0.12);">
-      <div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>
-    </div>
-
-      </div>
-      <button id="addYardNectarBtn" type="button" class="btn">➕ Nectar source</button>
-      <button id="addYardDearthBtn" type="button" class="btn">➕ Dearth</button>
-    </div>
-    <div id="yardNectarList" class="small" style="margin-top:0.6rem;"></div>
-    <div id="yardDearthList" class="small" style="margin-top:0.6rem;"></div>
-  </div>
-id="swarmRemovalCard" class="card" style="margin-top:0.75rem;">
-    <div class="row" style="gap:0.5rem; align-items:flex-start;">
-      <div class="grow">
-        <strong>Swarm & Removal Log</strong>
-        <div class="small">Capture swarms and building removals. Shows up on the Events map.</div>
-      </div>
-      <button id="addSwarmEventBtn" type="button" class="btn">🐝 Add swarm</button>
-      <button id="addRemovalEventBtn" type="button" class="btn">🏠 Add removal</button>
-    </div>
-    <div id="swarmRemovalList" class="small" style="margin-top:0.6rem;"></div>
-  </div>
   <div id="hiveForm" class="hidden card">
     <p style="margin-top:0;"><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
 
@@ -1138,44 +1060,7 @@ id="swarmRemovalCard" class="card" style="margin-top:0.75rem;">
       <div id="photoGallery" class="gallery"></div>
     </div>
 
-    
-    <h2>Field Card (Latest)</h2>
-    <div id="fieldCard" class="card" style="margin:0 0 0.75rem 0;">
-      <div class="small" id="fieldCardSummary">Open a hive to view the latest field card.</div>
-
-      <div class="card" style="margin-top:0.6rem;">
-        <strong>👑 Queen Timeline</strong>
-        <div id="fieldQueen" class="small" style="margin-top:0.35rem;"></div>
-      </div>
-
-      <div class="card" style="margin-top:0.6rem;">
-        <strong>🐜 Mite Treatment</strong>
-        <div id="fieldMite" class="small" style="margin-top:0.35rem;"></div>
-      </div>
-
-      <div class="card" style="margin-top:0.6rem;">
-        <strong>🧬 Brood Pattern (quick)</strong>
-        <div class="row" style="margin-top:0.5rem; gap:0.5rem; flex-wrap:wrap;">
-          <button id="fieldBroodSolid" type="button" class="btn">✅ Solid</button>
-          <button id="fieldBroodSpotty" type="button" class="btn">🟡 Spotty</button>
-          <button id="fieldBroodNone" type="button" class="btn">🔴 None</button>
-          <button id="fieldBroodClear" type="button" class="btn">✖ Clear</button>
-        </div>
-        <div id="fieldBroodStatus" class="small" style="margin-top:0.4rem;"></div>
-      </div>
-
-      <div class="card" style="margin-top:0.6rem;">
-        <strong>📝 Quick Field Notes</strong>
-        <textarea id="fieldNotes" placeholder="Short notes for the latest inspection…"></textarea>
-        <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
-          <button id="fieldNotesSave" type="button" class="btn primary grow">Save Notes</button>
-          <button id="fieldNotesClear" type="button" class="btn">Clear</button>
-        </div>
-        <div id="fieldNotesStatus" class="small" style="margin-top:0.35rem;"></div>
-      </div>
-    </div>
-
-<h2>Inspection History</h2>
+    <h2>Inspection History</h2>
     <div id="history" class="card" style="margin:0;"></div>
   </div>
 
@@ -1494,7 +1379,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const meta = Storage.loadMeta();
 
       return {
-        app: "BroodNote",
+        app: "HiveTracker",
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         activeUserId,
@@ -1622,8 +1507,6 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("Restore complete. The app will refresh the yard list now.");
         UI.refreshYardUI();
         Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
         if (el.lookupPanel && !el.lookupPanel.classList.contains("hidden")) Lookup.render();
         if (el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render();
       } catch (e) {
@@ -2169,8 +2052,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.save(s);
       this.renderUI();
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     },
 
     resetToStandard() {
@@ -2178,8 +2059,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.save(s);
       this.renderUI();
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     },
 
     setQueenWindow(which, start, end) {
@@ -2191,8 +2070,6 @@ document.addEventListener("DOMContentLoaded", () => {
       this.save(s);
       this.renderUI();
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     },
 
     getQueenWindows() {
@@ -2611,7 +2488,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (last[nowKey] === sig) return; // once per day per signature
 
       try {
-        new Notification("BroodNote reminders", {
+        new Notification("Hive Tracker reminders", {
           body: dueNow.map(d => {
             if (d.kind === "nextDose") return `🧪 Next dose: ${d.hiveName || ""} (${d.when})`;
             if (d.kind === "remove") return `🐜 Remove/reapply: ${d.hiveName || ""} (${d.when})`;
@@ -3161,50 +3038,6 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     rearingEditor: document.getElementById("rearingEditor"),
     rearingCalendar: document.getElementById("rearingCalendar"),
 
-    // Swarm traps + events + nectar map
-    yardSwarmTrapPanel: document.getElementById("yardSwarmTrapPanel"),
-    addSwarmTrapBtn: document.getElementById("addSwarmTrapBtn"),
-    swarmTrapList: document.getElementById("swarmTrapList"),
-    swarmRemovalCard: document.getElementById("swarmRemovalCard"),
-    addSwarmEventBtn: document.getElementById("addSwarmEventBtn"),
-    addRemovalEventBtn: document.getElementById("addRemovalEventBtn"),
-    swarmRemovalList: document.getElementById("swarmRemovalList"),
-    mapModeYards: document.getElementById("mapModeYards"),
-    mapModeEvents: document.getElementById("mapModeEvents"),
-    eventsMapHint: document.getElementById("eventsMapHint"),
-    nectarMapBtn: document.getElementById("nectarMapBtn"),
-    nectarMapPanel: document.getElementById("nectarMapPanel"),
-    nectarState: document.getElementById("nectarState"),
-    nectarMonth: document.getElementById("nectarMonth"),
-    nectarNotes: document.getElementById("nectarNotes"),
-    nectarSaveBtn: document.getElementById("nectarSaveBtn"),
-    nectarClearBtn: document.getElementById("nectarClearBtn"),
-    nectarStatus: document.getElementById("nectarStatus"),
-
-    // Field Card
-    fieldCard: document.getElementById("fieldCard"),
-    fieldCardSummary: document.getElementById("fieldCardSummary"),
-    fieldQueen: document.getElementById("fieldQueen"),
-    fieldMite: document.getElementById("fieldMite"),
-    fieldBroodSolid: document.getElementById("fieldBroodSolid"),
-    fieldBroodSpotty: document.getElementById("fieldBroodSpotty"),
-    fieldBroodNone: document.getElementById("fieldBroodNone"),
-    fieldBroodClear: document.getElementById("fieldBroodClear"),
-    fieldBroodStatus: document.getElementById("fieldBroodStatus"),
-    fieldNotes: document.getElementById("fieldNotes"),
-    fieldNotesSave: document.getElementById("fieldNotesSave"),
-    fieldNotesClear: document.getElementById("fieldNotesClear"),
-    fieldNotesStatus: document.getElementById("fieldNotesStatus"),
-
-    // Yard nectar/dearth
-    yardNectarPanel: document.getElementById("yardNectarPanel"),
-    addYardNectarBtn: document.getElementById("addYardNectarBtn"),
-    addYardDearthBtn: document.getElementById("addYardDearthBtn"),
-    yardNectarList: document.getElementById("yardNectarList"),
-    yardDearthList: document.getElementById("yardDearthList"),
-
-    yardNectarBanner: document.getElementById("yardNectarBanner"),
-
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3356,26 +3189,327 @@ hiveYardGps: document.getElementById("hiveYardGps"),
       return out;
     },
 
-    getAll() { return Storage.loadYards() || {}; }
-};
+    getAll() { return Storage.loadYards() || {}; },
 
+    get(name) {
+      const n = (name || "").trim();
+      if (!n) return null;
+      const yards = this.getAll();
+      return this.normalize(yards[n]);
+    },
 
-const SwarmRemoval = {
-  key: "bn_swarm_removal_v1",
-  load() { return Storage.load(this.key, []); },
-  save(list) { return Storage.save(this.key, list); },
-  add(item) {
-    const list = this.load();
-    list.unshift(item);
-    this.save(list);
-    return list;
-  },
-  remove(id) {
-    const list = this.load().filter(x => x.id !== id);
-    this.save(list);
-    return list;
+    set(name, patch) {
+      const n = (name || "").trim();
+      if (!n) return;
+      const yards = this.getAll();
+      const cur = this.normalize(yards[n]);
+      const next = this.normalize(Object.assign({}, cur, (patch || {})));
+      yards[n] = next;
+      Storage.saveYards(yards);
+      return next;
+    },
+
+    update(name, fn) {
+      const n = (name || "").trim();
+      if (!n) return;
+      const yards = this.getAll();
+      const cur = this.normalize(yards[n]);
+      const next = this.normalize(fn(cur) || cur);
+      yards[n] = next;
+      Storage.saveYards(yards);
+      return next;
+    },
+
+    ensure(name) {
+      const n = (name || "").trim();
+      if (!n) return null;
+      const yards = this.getAll();
+      if (!yards[n]) {
+        yards[n] = this.normalize({ purpose: "standard", splitCohorts: [] });
+        Storage.saveYards(yards);
+      } else {
+        // ensure defaults
+        yards[n] = this.normalize(yards[n]);
+        Storage.saveYards(yards);
+      }
+      return yards[n];
+    },
+  };
+
+  function daysBetweenISO(startIso, endDateObj) {
+    try {
+      const d0 = new Date(startIso);
+      if (isNaN(d0.getTime())) return 0;
+      const d1 = endDateObj || new Date();
+      const ms = d1.getTime() - d0.getTime();
+      return Math.max(0, Math.floor(ms / 86400000));
+    } catch (_) {
+      return 0;
+    }
   }
-};
+
+  function computeDoublingTarget(countStart, startIso, doublingDays) {
+    const dd = Math.max(1, parseInt(doublingDays || 30, 10));
+    const days = daysBetweenISO(startIso, new Date());
+    const periods = Math.floor(days / dd);
+    return Math.max(0, Number(countStart || 0) * Math.pow(2, periods));
+  }
+
+
+  function computeSelfQueenTimeline(cellStartISO) {
+    const start = (cellStartISO || "").trim();
+    if (!start) return null;
+
+    // Simple walk-away timeline (approximate):
+    // Day 0: eggs/larvae available (split made / queen cell start)
+    // Day 8: likely capped
+    // Day 16: expected emergence
+    // Day 21-28: mating window (approx 5-12 days after emerge)
+    // Day 26-37: expected laying window (approx 10-21 days after emerge)
+    const capped = Milestones.addDaysISO(start, 8);
+    const emerge = Milestones.addDaysISO(start, 16);
+    const mateStart = Milestones.addDaysISO(emerge, 5);
+    const mateEnd = Milestones.addDaysISO(emerge, 12);
+    const layStart = Milestones.addDaysISO(emerge, 10);
+    const layEnd = Milestones.addDaysISO(emerge, 21);
+
+    return { start, capped, emerge, mateStart, mateEnd, layStart, layEnd };
+  }
+  // =========================================================
+  // 3.5) YARD MAP (Leaflet)
+  // =========================================================
+  const MapView = {
+    map: null,
+    markers: null,
+
+    buildCounts() {
+      const hives = Storage.loadHives() || {};
+      const counts = {};
+      Object.values(hives).forEach(h => {
+        const y = (h.location || "").trim();
+        if (!y) return;
+        counts[y] = (counts[y] || 0) + 1;
+      });
+      return counts;
+    },
+
+    render() {
+      if (!el.mapPanel || !el.yardMap || el.mapPanel.classList.contains("hidden")) return;
+
+      const yards = Storage.loadYards() || {};
+      const yardNames = Object.keys(yards);
+      if (!yardNames.length) {
+        el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      if (typeof L === "undefined") {
+        el.mapStatus.innerHTML = "<em>Map library not loaded. Connect to the internet once so the map can load (Leaflet + OpenStreetMap tiles).</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      const counts = this.buildCounts();
+
+      // Gather points
+      const pts = [];
+      yardNames.forEach(name => {
+        const y = yards[name];
+        if (y && typeof y.lat === "number" && typeof y.lon === "number") {
+          pts.push([y.lat, y.lon, name]);
+        }
+      });
+
+      
+// Render missing GPS yards list (desktop-friendly)
+const missing = yardNames.filter(name => {
+  const y = yards[name];
+  return !(y && typeof y.lat === "number" && typeof y.lon === "number");
+});
+
+if (el.mapMissingGps) {
+  if (!missing.length) {
+    el.mapMissingGps.textContent = "";
+  } else {
+    const unlocked = Lock.isUnlocked();
+    const rows = missing.map(name => {
+      const c = counts[name] || 0;
+      const ymeta = YardMeta.get(name) || {};
+      const purpose = (ymeta.purpose || "standard");
+      const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
+      const btnLabel = unlocked ? "Set location" : "Unlock to set";
+      const dis = unlocked ? "" : "disabled";
+      return `
+        <div class="card" style="margin:0.35rem 0; padding:0.65rem;">
+          <div class="row" style="align-items:center;">
+            <div class="grow">
+              <div><strong>${Utils.escapeHtml(name)}</strong></div>
+              <div class="small">${purposeLabel} • ${c} hive(s)</div>
+            </div>
+            <button type="button" class="btn btn-muted" style="width:auto;" data-setgps="${encodeURIComponent(name)}" ${dis}>${btnLabel}</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+    el.mapMissingGps.innerHTML = `
+      <div style="margin-top:0.25rem;"><strong>Missing yard GPS</strong> <span class="small">(home point)</span></div>
+      <div class="small">These yards won’t appear on the map until a home point is saved.</div>
+      ${rows}
+    `;
+
+    // Wire buttons
+    el.mapMissingGps.querySelectorAll("button[data-setgps]").forEach(btn => {
+      btn.onclick = () => {
+        const yn = decodeURIComponent(btn.getAttribute("data-setgps") || "");
+        if (!yn) return;
+        if (!Lock.requireUnlocked()) return;
+
+        const pick = prompt(
+          `Set yard home point for "${yn}"\n\n1 = Use my current location\n2 = Enter coordinates\n\nType 1 or 2:`,
+          "1"
+        );
+        if (pick === null) return;
+
+        const setCoords = (lat, lon) => {
+          const yards2 = Storage.loadYards() || {};
+          yards2[yn] = yards2[yn] || {};
+          yards2[yn].lat = lat;
+          yards2[yn].lon = lon;
+          Storage.saveYards(yards2);
+          UI.status("Yard GPS saved");
+          this.render();
+        };
+
+        if (String(pick).trim() === "1") {
+          if (!navigator.geolocation) {
+            alert("Geolocation not available on this device/browser. Choose option 2 to enter coordinates.");
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos?.coords?.latitude;
+              const lon = pos?.coords?.longitude;
+              if (typeof lat !== "number" || typeof lon !== "number") {
+                alert("Could not read location.");
+                return;
+              }
+              setCoords(lat, lon);
+            },
+            (err) => {
+              alert("Location error: " + (err && err.message ? err.message : err));
+            },
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+          );
+          return;
+        }
+
+        // Option 2: manual entry
+        const raw = prompt("Enter coordinates as: lat, lon", "");
+        if (raw === null) return;
+        const parts = String(raw).split(",").map(s => s.trim()).filter(Boolean);
+        if (parts.length < 2) { alert("Please enter in the format: lat, lon"); return; }
+        const lat = parseFloat(parts[0]);
+        const lon = parseFloat(parts[1]);
+        if (!isFinite(lat) || !isFinite(lon)) { alert("Invalid coordinates."); return; }
+        setCoords(lat, lon);
+      };
+    });
+  }
+}
+
+if (!pts.length) {
+        el.mapStatus.innerHTML = "<em>No yard GPS points saved yet. Use the Yard GPS capture on mobile to save a yard home point.</em>";
+        el.yardMap.innerHTML = "";
+        return;
+      }
+
+      el.mapStatus.innerHTML = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard` +
+        ` <span style="margin-left:10px; display:inline-flex; gap:10px; align-items:center; flex-wrap:wrap;">`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-standard);display:inline-block;"></span><span class="small">Standard</span></span>`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-queen);display:inline-block;"></span><span class="small">Queen</span></span>`
+        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-split);display:inline-block;"></span><span class="small">Split</span></span>`
+        + `</span>`;
+
+      // Init map once
+      if (!this.map) {
+        this.map = L.map(el.yardMap, { zoomControl: true });
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(this.map);
+
+        this.markers = L.layerGroup().addTo(this.map);
+      } else {
+        this.markers.clearLayers();
+      }
+
+      // Fit bounds
+      const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
+      try { this.map.fitBounds(bounds.pad(0.2)); } catch (_) {}
+
+      pts.forEach(([lat, lon, name]) => {
+        const c = counts[name] || 0;
+        const ymeta = YardMeta.get(name) || {};
+        const purpose = (ymeta.purpose || "standard");
+        const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
+
+        const radius = Math.max(6, Math.min(18, 6 + Math.round(Math.sqrt(c) * 3)));
+
+        const css = getComputedStyle(document.documentElement);
+        const purposeColor = (
+          purpose === "queen" ? (css.getPropertyValue("--purpose-queen") || "").trim() :
+          purpose === "split" ? (css.getPropertyValue("--purpose-split") || "").trim() :
+          purpose === "standard" ? (css.getPropertyValue("--purpose-standard") || "").trim() :
+          (css.getPropertyValue("--purpose-unknown") || "").trim()
+        ) || "#f4b400";
+
+        const marker = L.circleMarker([lat, lon], {
+          radius,
+          color: purposeColor,
+          fillColor: purposeColor,
+          weight: 2,
+          opacity: 0.95,
+          fillOpacity: 0.55
+        });
+
+        const popup = `
+          <div style="min-width:220px;">
+            <div><strong>${Utils.escapeHtml(name)}</strong></div>
+            <div class="small">${purposeLabel} • ${c} hive(s)</div>
+            <div class="small">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
+            <div style="margin-top:6px;">
+              <button type="button" data-yard="${encodeURIComponent(name)}" style="width:100%; padding:8px 10px; border-radius:12px; border:1px solid rgba(0,0,0,0.2); background:#fff; cursor:pointer;">
+                Open yard
+              </button>
+            </div>
+          </div>
+        `;
+        marker.bindPopup(popup);
+        marker.addTo(this.markers);
+
+        marker.on("popupopen", (e) => {
+          const root = e.popup && e.popup.getElement ? e.popup.getElement() : null;
+          const btn = root ? root.querySelector("button[data-yard]") : null;
+          if (btn) {
+            btn.onclick = () => {
+              const yn = decodeURIComponent(btn.getAttribute("data-yard") || "");
+              try {
+                el.currentYard.value = yn;
+                UI.refreshYardUI();
+                UI.renderYardGps(yn);
+                UI.renderYardPurposeCard(yn);
+                el.mapPanel.classList.add("hidden");
+              } catch (_) {}
+            };
+          }
+        });
+      });
+
+      // Leaflet needs a resize after panel show
+      setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 150);
+    }
+  };
 
 
 
@@ -3384,223 +3518,7 @@ const UI = {
       el.status.textContent = text || "";
       // Keep debug stats fresh without spamming the console panel.
       if (typeof Debug !== "undefined" && Debug.isOn && Debug.isOn()) Debug.renderStats();
-      // Render yard nectar/dearth info
-      try { this.renderYardNectar(name); } catch (_) {}
-
     },
-    renderYardNectar(yardName) {
-      const name = (yardName || "").trim();
-      if (!name) return;
-      const meta = YardMeta.ensure(name) || YardMeta.get(name) || {};
-      meta.nectarSources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
-      meta.dearths = Array.isArray(meta.dearths) ? meta.dearths : [];
-
-      const parseMonthOrISO = (s, which) => {
-        const v = String(s || "").trim();
-        if (!v) return null;
-        // ISO date
-        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { kind:"date", date: v };
-        // Month name/abbr
-        const map = {
-          jan:1, january:1, feb:2, february:2, mar:3, march:3, apr:4, april:4, may:5,
-          jun:6, june:6, jul:7, july:7, aug:8, august:8, sep:9, sept:9, september:9,
-          oct:10, october:10, nov:11, november:11, dec:12, december:12
-        };
-        const key = v.toLowerCase().replace(".", "").trim();
-        if (map[key]) return { kind:"month", month: map[key], raw: v };
-        return { kind:"text", raw: v };
-      };
-
-      const toRange = (startStr, endStr) => {
-        const y = new Date(Utils.todayISO() + "T00:00:00").getFullYear();
-        const s = parseMonthOrISO(startStr, "start");
-        const e = parseMonthOrISO(endStr, "end");
-        if (!s || !e) return null;
-
-        const mk = (obj, isEnd) => {
-          if (obj.kind === "date") return obj.date;
-          if (obj.kind === "month") {
-            const m = obj.month;
-            const day = isEnd ? new Date(y, m, 0).getDate() : 1; // last day if end
-            const mm = String(m).padStart(2,"0");
-            const dd = String(day).padStart(2,"0");
-            return `${y}-${mm}-${dd}`;
-          }
-          return null;
-        };
-
-        const sISO = mk(s, false);
-        const eISO = mk(e, true);
-        // If both are not parseable, treat as non-calendar text
-        if (!sISO || !eISO) return null;
-
-        // Handle wrap (e.g., Oct -> Feb)
-        if (eISO < sISO) {
-          // bump end year by +1
-          const eObj = new Date(eISO + "T00:00:00");
-          const ny = y + 1;
-          const mm = String(eObj.getMonth()+1).padStart(2,"0");
-          const dd = String(eObj.getDate()).padStart(2,"0");
-          return { startISO: sISO, endISO: `${ny}-${mm}-${dd}` };
-        }
-        return { startISO: sISO, endISO: eISO };
-      };
-
-      const isTodayIn = (rng) => {
-        if (!rng) return false;
-        const t = new Date(Utils.todayISO() + "T00:00:00").getTime();
-        const a = new Date(rng.startISO + "T00:00:00").getTime();
-        const b = new Date(rng.endISO + "T00:00:00").getTime();
-        return t >= a && t <= b;
-      };
-
-      const relToToday = (iso) => {
-        if (!iso) return "";
-        const t = new Date(Utils.todayISO() + "T00:00:00").getTime();
-        const d = new Date(iso + "T00:00:00").getTime();
-        const diff = Math.round((d - t) / 86400000);
-        if (diff === 0) return "today";
-        if (diff > 0) return `in ${diff}d`;
-        return `${Math.abs(diff)}d ago`;
-      };
-
-      if (el.yardNectarList) {
-        if (meta.nectarSources.length === 0) {
-          el.yardNectarList.innerHTML = "<em>No nectar sources listed for this yard yet.</em>";
-        } else {
-          el.yardNectarList.innerHTML = "<strong>Nectar sources</strong>" + meta.nectarSources.map(s => {
-            const when = `${Utils.escapeHtml(s.start || "?")} → ${Utils.escapeHtml(s.end || "?")}`;
-            const honey = s.honey ? ` • honey: <strong>${Utils.escapeHtml(s.honey)}</strong>` : "";
-            const supers = (s.superOn || s.superOff) ? ` • supers: ${Utils.escapeHtml(s.superOn||"?")} → <strong>${Utils.escapeHtml(s.superOff||"?")}</strong>` : "";
-            return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
-              <div><strong>${Utils.escapeHtml(s.source || "Source")}</strong> • ${when}${honey}${supers}</div>
-              ${s.notes ? `<div class="small">${Utils.escapeHtml(s.notes)}</div>` : ""}
-              <div class="row" style="gap:0.4rem; margin-top:0.4rem; flex-wrap:wrap;">
-                <button class="btn" data-yard-nectar-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Edit</button>
-                <button class="btn" data-yard-nectar-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Delete</button>
-              </div>
-            </div>`;
-          }).join("");
-        }
-      }
-
-      if (el.yardDearthList) {
-        if (meta.dearths.length === 0) {
-          el.yardDearthList.innerHTML = "<em>No dearth periods listed for this yard yet.</em>";
-        } else {
-          el.yardDearthList.innerHTML = "<strong>Dearth periods</strong>" + meta.dearths.map(d => {
-            const when = `${Utils.escapeHtml(d.start || "?")} → ${Utils.escapeHtml(d.end || "?")}`;
-            const note = d.notes ? ` • ${Utils.escapeHtml(d.notes)}` : "";
-            return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
-              <div><strong>Dearth</strong> • ${when}${note}</div>
-              <div class="row" style="gap:0.4rem; margin-top:0.4rem;">
-                <button class="btn" data-yard-dearth-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Edit</button>
-                <button class="btn" data-yard-dearth-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Delete</button>
-              </div>
-            </div>`;
-          }).join("");
-        }
-      
-      // ---- Season banner (flow/dearth + super guidance) ----
-      if (el.yardNectarBanner) {
-        const flowsToday = meta.nectarSources
-          .map(s => ({ s, rng: toRange(s.start, s.end) }))
-          .filter(x => x.rng && isTodayIn(x.rng));
-
-        const dearthToday = meta.dearths
-          .map(d => ({ d, rng: toRange(d.start, d.end) }))
-          .filter(x => x.rng && isTodayIn(x.rng));
-
-        if (dearthToday.length > 0) {
-          const d0 = dearthToday[0];
-          const note = d0.d.notes ? ` • ${Utils.escapeHtml(d0.d.notes)}` : "";
-          el.yardNectarBanner.innerHTML =
-            `<div><strong>🔻 Dearth right now</strong> (${Utils.escapeHtml(d0.rng.startISO)} → ${Utils.escapeHtml(d0.rng.endISO)})${note}</div>` +
-            `<div class="small" style="margin-top:0.25rem;">Consider: feed if needed, watch robbing, avoid opening too long.</div>`;
-        } else if (flowsToday.length > 0) {
-          const top = flowsToday.slice(0,3).map(x => Utils.escapeHtml(x.s.source || "Source")).join(", ");
-          const honeys = [...new Set(flowsToday.map(x => (x.s.honey||"").trim()).filter(Boolean))].slice(0,3);
-          const honeyLine = honeys.length ? `Honey: <strong>${honeys.map(Utils.escapeHtml).join(", ")}</strong>` : "";
-          // Best super window (first flow entry that has guidance)
-          const withSupers = flowsToday.find(x => (x.s.superOn || x.s.superOff));
-          let superLine = "";
-          if (withSupers) {
-            const onR = toRange(withSupers.s.superOn, withSupers.s.superOn);
-            const offR = toRange(withSupers.s.superOff, withSupers.s.superOff);
-            const onISO = onR ? onR.startISO : "";
-            const offISO = offR ? offR.startISO : "";
-            const onRel = onISO ? relToToday(onISO) : "";
-            const offRel = offISO ? relToToday(offISO) : "";
-            superLine = `${onISO ? `Add supers: <strong>${Utils.escapeHtml(onISO)}</strong> (${Utils.escapeHtml(onRel)})` : ""}` +
-                        `${(onISO && offISO) ? " • " : ""}` +
-                        `${offISO ? `Pull supers: <strong>${Utils.escapeHtml(offISO)}</strong> (${Utils.escapeHtml(offRel)})` : ""}`;
-          }
-          el.yardNectarBanner.innerHTML =
-            `<div><strong>🟢 Flow right now</strong> • ${top}</div>` +
-            (honeyLine ? `<div class="small" style="margin-top:0.25rem;">${honeyLine}</div>` : "") +
-            (superLine ? `<div class="small" style="margin-top:0.25rem;">${superLine}</div>` : `<div class="small" style="margin-top:0.25rem;">Tip: add a “supers on/off” date inside a nectar source to show super recommendations here.</div>`);
-        } else {
-          // If there are entries, show what's next
-          const nextFlow = meta.nectarSources
-            .map(s => ({ s, rng: toRange(s.start, s.end) }))
-            .filter(x => x.rng)
-            .sort((a,b) => (a.rng.startISO||"").localeCompare(b.rng.startISO||""))[0];
-
-          const nextDearth = meta.dearths
-            .map(d => ({ d, rng: toRange(d.start, d.end) }))
-            .filter(x => x.rng)
-            .sort((a,b) => (a.rng.startISO||"").localeCompare(b.rng.startISO||""))[0];
-
-          const lines = [];
-          if (nextFlow) lines.push(`Next flow: <strong>${Utils.escapeHtml(nextFlow.s.source||"Source")}</strong> (${Utils.escapeHtml(nextFlow.rng.startISO)} → ${Utils.escapeHtml(nextFlow.rng.endISO)})`);
-          if (nextDearth) lines.push(`Next dearth: (${Utils.escapeHtml(nextDearth.rng.startISO)} → ${Utils.escapeHtml(nextDearth.rng.endISO)})`);
-          el.yardNectarBanner.innerHTML = lines.length ? `<div><strong>🟡 Upcoming</strong></div><div class="small" style="margin-top:0.25rem;">${lines.join("<br/>")}</div>`
-                                             : `<div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>`;
-        }
-      }
-}
-    },
-
-    renderSwarmRemovalList() {
-      if (!el.swarmRemovalList) return;
-      const list = SwarmRemoval.load();
-      if (!Array.isArray(list) || list.length === 0) {
-        el.swarmRemovalList.innerHTML = "<em>No swarms/removals logged yet.</em>";
-        return;
-      }
-      el.swarmRemovalList.innerHTML = list.slice(0, 30).map(e => {
-        const gps = (e.lat && e.lon) ? `${Number(e.lat).toFixed(5)}, ${Number(e.lon).toFixed(5)}` : "(no GPS)";
-        const size = Utils.escapeHtml(e.size || "");
-        const att = Utils.escapeHtml(e.attitude || "");
-        const tied = e.tiedHiveId ? ` • hive: <strong>${Utils.escapeHtml(e.tiedHiveId)}</strong>` : "";
-        return `<div class="card" style="margin-top:0.5rem; padding:0.6rem;">
-          <div><strong>${Utils.escapeHtml(e.type || "event")}</strong> • ${Utils.escapeHtml(e.date || "")} • ${gps}${tied}</div>
-          <div class="small">${size ? `size: <strong>${size}</strong>` : ""}${att ? ` • attitude: <strong>${att}</strong>` : ""}${e.notes ? ` • ${Utils.escapeHtml(e.notes)}` : ""}</div>
-          <div class="row" style="gap:0.4rem; margin-top:0.4rem;">
-            <button class="btn" data-event-action="delete" data-id="${e.id}">Delete</button>
-          </div>
-        </div>`;
-      }).join("");
-    },
-
-    // Nectar planner (offline, editable)
-    nectarKey: "bn_nectar_map_v1",
-    nectarLoad() { return Storage.load(this.nectarKey, {}); },
-    nectarSave(data) { return Storage.save(this.nectarKey, data); },
-    renderNectarUI() {
-      if (!el.nectarState || !el.nectarMonth || !el.nectarNotes) return;
-      const states = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
-      if (el.nectarState.options.length === 0) {
-        el.nectarState.innerHTML = states.map(s => `<option value="${s}">${s}</option>`).join("");
-      }
-      const data = this.nectarLoad() || {};
-      const st = el.nectarState.value || states[0];
-      const mo = String(el.nectarMonth.value || "1");
-      const notes = (data[st] && data[st][mo]) ? data[st][mo] : "";
-      el.nectarNotes.value = notes;
-      if (el.nectarStatus) el.nectarStatus.textContent = notes ? "Loaded saved notes." : "No notes saved for this month yet.";
-    },
-
 
     renderSyncCard() {
       if (!el.syncStatus || !el.syncEnabled || !el.syncEmail) return;
@@ -4799,99 +4717,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         row.appendChild(delBtn);
         el.history.appendChild(row);
       });
-      // Keep Field Card in sync with the latest inspection
-      try {
-        const latest = (hive.inspections && hive.inspections[0]) ? hive.inspections[0] : null;
-        if (latest && this.renderFieldCard) this.renderFieldCard(hive, latest);
-      } catch (_) {}
-      // Keep swarm/removal list fresh
-      try { this.renderSwarmRemovalList(); } catch (_) {}
-
     },
-    renderFieldCard(hive, insp) {
-      if (!el.fieldCard || !el.fieldCardSummary) return;
-      if (!hive || !insp) {
-        el.fieldCardSummary.textContent = "Open a hive to view the latest field card.";
-        if (el.fieldQueen) el.fieldQueen.textContent = "";
-        if (el.fieldMite) el.fieldMite.textContent = "";
-        if (el.fieldBroodStatus) el.fieldBroodStatus.textContent = "";
-        if (el.fieldNotes) el.fieldNotes.value = "";
-        if (el.fieldNotesStatus) el.fieldNotesStatus.textContent = "";
-        return;
-      }
-      const hiveName = (hive.name || hive.id || "").trim();
-      const yard = (hive.location || "").trim();
-      const d = (insp.date || "").trim();
-      el.fieldCardSummary.innerHTML = `<strong>${Utils.escapeHtml(hiveName)}</strong> • ${Utils.escapeHtml(yard)} • Latest inspection: <strong>${Utils.escapeHtml(d || "(unknown)")}</strong>`;
-
-      // Queen timeline from active queen
-      try {
-        const q = (hive.currentQueenId) ? UI.getQueenById(hive, hive.currentQueenId) : null;
-        const intro = (q?.introduced || "").trim();
-        if (!q || !intro) {
-          el.fieldQueen.innerHTML = `<em>No active queen timeline set.</em>`;
-        } else {
-          const w = Milestones.getQueenWindowsForYard(yard);
-          const toLine = (which, label) => {
-            const start = Math.max(0, Number(w?.[which]?.start ?? 0));
-            const end = Math.max(start, Number(w?.[which]?.end ?? start));
-            const startISO = Milestones.addDaysISO(intro, start);
-            const endISO = Milestones.addDaysISO(intro, end);
-            const today = new Date(Utils.todayISO() + "T00:00:00");
-            const sD = new Date(startISO + "T00:00:00");
-            const eD = new Date(endISO + "T00:00:00");
-            let status = "🟢";
-            let msg = "";
-            if (today < sD) {
-              const days = Math.round((sD - today)/86400000);
-              status = "🟡";
-              msg = `in ${days}d (Day ${start}–${end})`;
-            } else if (today >= sD && today <= eD) {
-              const left = Math.round((eD - today)/86400000);
-              status = "🟢";
-              msg = left <= 0 ? `due now (ends today)` : `due now (ends in ${left}d)`;
-            } else {
-              const overdue = Math.round((today - eD)/86400000);
-              status = "🔴";
-              msg = `overdue ${overdue}d (Day ${start}–${end})`;
-            }
-            return `${status} <strong>${label}</strong>: ${startISO} → ${endISO} • ${msg}`;
-          };
-          const lines = [
-            toLine("acceptance", "Acceptance check"),
-            toLine("eggs", "Look for eggs"),
-            toLine("pattern", "Brood pattern check"),
-          ];
-          el.fieldQueen.innerHTML = `Active: <strong>${Utils.escapeHtml(q.tag || q.name || "Queen")}</strong> (introduced ${Utils.escapeHtml(intro)})<br/>` + lines.join("<br/>");
-        }
-      } catch (e) {
-        el.fieldQueen.textContent = "Queen timeline unavailable.";
-      }
-
-      // Mite treatment from this inspection
-      try {
-        const mt = insp.miteTreatment || null;
-        if (!mt || (!mt.type && !mt.installedDate && !mt.dueDate && !mt.dateInstalled && !mt.due)) {
-          el.fieldMite.innerHTML = `<em>No mite treatment recorded on latest inspection.</em>`;
-        } else {
-          const type = Utils.escapeHtml(mt.type || mt.treatmentType || mt.kind || "");
-          const installed = Utils.escapeHtml(mt.installedDate || mt.dateInstalled || mt.installed || "");
-          const due = Utils.escapeHtml(mt.dueDate || mt.due || "");
-          el.fieldMite.innerHTML = `${type ? `<strong>${type}</strong><br/>` : ""}Installed: ${installed || "(n/a)"}<br/>Next due: <strong>${due || "(n/a)"}</strong>`;
-        }
-      } catch (_) {
-        el.fieldMite.textContent = "Mite treatment unavailable.";
-      }
-
-      // Brood pattern quick state
-      insp.fieldCard = insp.fieldCard || {};
-      const bp = (insp.fieldCard.broodPattern || "").trim();
-      const label = bp === "solid" ? "✅ Solid" : bp === "spotty" ? "🟡 Spotty" : bp === "none" ? "🔴 None" : "";
-      if (el.fieldBroodStatus) el.fieldBroodStatus.textContent = label ? `Saved brood pattern: ${label}` : "No brood pattern saved yet.";
-      if (el.fieldNotes) el.fieldNotes.value = (insp.fieldCard.notes || "").toString();
-      if (el.fieldNotesStatus) el.fieldNotesStatus.textContent = (insp.fieldCard.updatedAt ? `Last updated: ${Utils.prettyDateTime(insp.fieldCard.updatedAt)}` : "");
-    },
-
 
     refreshYardUI() {
       const hives = Storage.loadHives();
@@ -4961,17 +4787,10 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       if (el.yardQueenPanel) {
         el.yardQueenPanel.classList.toggle("hidden", el.yardPurposeSelect.value !== "queen");
       }
-      if (el.yardSwarmTrapPanel) {
-        el.yardSwarmTrapPanel.classList.toggle("hidden", el.yardPurposeSelect.value !== "swarmtrap");
-      }
 
       // Render split cohorts if needed
       if (el.yardPurposeSelect.value === "split") {
         UI.renderSplitCohorts(name);
-      }
-      // Render swarm traps if needed
-      if (el.yardPurposeSelect.value === "swarmtrap") {
-        UI.renderSwarmTraps(name);
       }
 
       // If a hive is currently loaded, apply yard purpose to hive-form toggles
@@ -7259,8 +7078,6 @@ if (action === "confirmLaying") {
       if (!el.yardMilestonesOverrideToggle?.checked) return;
       Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     };
 
     if (el.yardMilestonesOverrideToggle) {
@@ -7289,8 +7106,6 @@ if (action === "confirmLaying") {
           if (el.yardMilestoneEditor) el.yardMilestoneEditor.classList.add("hidden");
         }
         Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
       });
     }
 
@@ -7321,8 +7136,6 @@ if (action === "confirmLaying") {
         if (el.yardMilestonesOverrideToggle?.checked) {
           Milestones.setYardQueenOverride(yardName, getYardMsFromInputs());
           Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
         }
       });
     }
@@ -7912,365 +7725,6 @@ el.importZipInput.addEventListener("change", async () => {
       if (!file) return;
       await handleImportZipFromFile(file);
     });
-
-    // -------------------------
-    // Swarm traps + events + nectar wiring
-    // -------------------------
-    async function getCurrentGps() {
-      return await new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-        );
-      });
-    }
-
-    if (el.yardPurposeSelect) {
-      el.yardPurposeSelect.addEventListener("change", () => {
-        const yn = (el.currentYard.value || "").trim();
-        if (!yn) return;
-        YardMeta.update(yn, (y) => { y.purpose = el.yardPurposeSelect.value; return y; });
-        UI.renderYardPurposeCard(yn);
-      });
-    }
-
-    if (el.addSwarmTrapBtn) el.addSwarmTrapBtn.addEventListener("click", async () => {
-      const yn = (el.currentYard.value || "").trim();
-      if (!yn) { alert("Set Current Yard first."); return; }
-      const label = prompt("Trap label (e.g., Trap 1 / Oak edge):", "");
-      if (!label) return;
-      const tiedHiveId = prompt("Tie to hive ID (optional):", "") || "";
-      const gps = await getCurrentGps();
-      const lat = gps?.lat ?? "";
-      const lon = gps?.lon ?? "";
-      YardMeta.update(yn, (y) => {
-        y.swarmTraps = Array.isArray(y.swarmTraps) ? y.swarmTraps : [];
-        y.swarmTraps.unshift({ id: Utils.uuid(), label: label.trim(), tiedHiveId: tiedHiveId.trim(), lat, lon, status: "ready", lastCheck: "" });
-        return y;
-      });
-      UI.renderYardPurposeCard(yn);
-      UI.status("Trap added");
-    });
-
-    // Trap list delegation
-    document.addEventListener("click", async (e) => {
-      const btn = e.target && e.target.closest && e.target.closest("[data-trap-action]");
-      if (!btn) return;
-      const action = btn.getAttribute("data-trap-action");
-      const yn = btn.getAttribute("data-yard") || "";
-      const id = btn.getAttribute("data-id") || "";
-      if (!yn || !id) return;
-
-      if (action === "delete") {
-        if (!confirm("Delete this trap?")) return;
-        YardMeta.update(yn, (y) => {
-          y.swarmTraps = (y.swarmTraps || []).filter(t => t.id !== id);
-          return y;
-        });
-        UI.renderYardPurposeCard(yn);
-        return;
-      }
-
-      if (action === "check") {
-        const notes = prompt("Check notes (optional):", "") || "";
-        YardMeta.update(yn, (y) => {
-          const t = (y.swarmTraps || []).find(x => x.id === id);
-          if (!t) return y;
-          t.lastCheck = Utils.todayISO();
-          t.status = "checked";
-          t.notes = notes.trim();
-          return y;
-        });
-        UI.renderYardPurposeCard(yn);
-        return;
-      }
-
-      if (action === "caught") {
-        const hiveId = prompt("Hive ID for this catch (optional):", "") || "";
-        const size = prompt("Size (small/med/large):", "med") || "";
-        const attitude = prompt("Attitude (calm/normal/hot):", "normal") || "";
-        const gps = await getCurrentGps();
-        YardMeta.update(yn, (y) => {
-          const t = (y.swarmTraps || []).find(x => x.id === id);
-          if (!t) return y;
-          t.lastCheck = Utils.todayISO();
-          t.status = "caught";
-          if (hiveId.trim()) t.tiedHiveId = hiveId.trim();
-          return y;
-        });
-        SwarmRemoval.add({ id: Utils.uuid(), type: "swarm", date: Utils.todayISO(), yard: yn, tiedHiveId: hiveId.trim(), size: size.trim(), attitude: attitude.trim(), lat: gps?.lat ?? "", lon: gps?.lon ?? "", notes: "Caught from trap" });
-        UI.renderYardPurposeCard(yn);
-        UI.renderSwarmRemovalList();
-        UI.status("Swarm logged");
-        return;
-      }
-
-      if (action === "move") {
-        const gps = await getCurrentGps();
-        if (!gps) { alert("GPS not available."); return; }
-        YardMeta.update(yn, (y) => {
-          const t = (y.swarmTraps || []).find(x => x.id === id);
-          if (!t) return y;
-          t.lat = gps.lat;
-          t.lon = gps.lon;
-          return y;
-        });
-        UI.renderYardPurposeCard(yn);
-        UI.status("Trap GPS updated");
-        return;
-      }
-    });
-
-    if (el.addSwarmEventBtn) el.addSwarmEventBtn.addEventListener("click", async () => {
-      const yn = (el.currentYard.value || "").trim();
-      const size = prompt("Swarm size (small/med/large):", "med"); if (size === null) return;
-      const attitude = prompt("Attitude (calm/normal/hot):", "normal"); if (attitude === null) return;
-      const tiedHiveId = prompt("Tie to hive ID (optional):", "") || "";
-      const notes = prompt("Notes (optional):", "") || "";
-      const gps = await getCurrentGps();
-      SwarmRemoval.add({ id: Utils.uuid(), type: "swarm", date: Utils.todayISO(), yard: yn, tiedHiveId: tiedHiveId.trim(), size: (size||"").trim(), attitude: (attitude||"").trim(), lat: gps?.lat ?? "", lon: gps?.lon ?? "", notes: (notes||"").trim() });
-      UI.renderSwarmRemovalList();
-      UI.status("Swarm added");
-    });
-
-    if (el.addRemovalEventBtn) el.addRemovalEventBtn.addEventListener("click", async () => {
-      const yn = (el.currentYard.value || "").trim();
-      const size = prompt("Removal size (small/med/large):", "med"); if (size === null) return;
-      const attitude = prompt("Attitude (calm/normal/hot):", "normal"); if (attitude === null) return;
-      const tiedHiveId = prompt("Tie to hive ID (optional):", "") || "";
-      const notes = prompt("Notes (optional):", "") || "";
-      const gps = await getCurrentGps();
-      SwarmRemoval.add({ id: Utils.uuid(), type: "removal", date: Utils.todayISO(), yard: yn, tiedHiveId: tiedHiveId.trim(), size: (size||"").trim(), attitude: (attitude||"").trim(), lat: gps?.lat ?? "", lon: gps?.lon ?? "", notes: (notes||"").trim() });
-      UI.renderSwarmRemovalList();
-      UI.status("Removal added");
-    });
-
-    document.addEventListener("click", (e) => {
-      const btn = e.target && e.target.closest && e.target.closest("[data-event-action]");
-      if (!btn) return;
-      if (btn.getAttribute("data-event-action") !== "delete") return;
-      const id = btn.getAttribute("data-id") || "";
-      if (!id) return;
-      if (!confirm("Delete this event?")) return;
-      SwarmRemoval.remove(id);
-      UI.renderSwarmRemovalList();
-      UI.status("Event deleted");
-    });
-
-    // Map mode toggles (yards vs events)
-    if (el.mapModeYards && el.mapModeEvents) {
-      el.mapModeYards.addEventListener("click", () => {
-        el.mapModeYards.classList.add("primary"); el.mapModeEvents.classList.remove("primary");
-        if (el.eventsMapHint) el.eventsMapHint.style.display = "none";
-        try { MapUI.setMode("yards"); } catch (_) {}
-      });
-      el.mapModeEvents.addEventListener("click", () => {
-        el.mapModeEvents.classList.add("primary"); el.mapModeYards.classList.remove("primary");
-        if (el.eventsMapHint) el.eventsMapHint.style.display = "block";
-        try { MapUI.setMode("events"); } catch (_) {}
-      });
-    }
-
-    // Nectar panel toggle + save
-    if (el.nectarMapBtn && el.nectarMapPanel) {
-      el.nectarMapBtn.addEventListener("click", () => {
-        el.nectarMapPanel.classList.toggle("hidden");
-        if (el.mapPanel) el.mapPanel.classList.add("hidden");
-        if (el.lookupPanel) el.lookupPanel.classList.add("hidden");
-        if (el.exportPanel) el.exportPanel.classList.add("hidden");
-        if (el.remindersPanel) el.remindersPanel.classList.add("hidden");
-        if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
-        UI.renderNectarUI();
-      });
-    }
-    if (el.nectarState) el.nectarState.addEventListener("change", () => UI.renderNectarUI());
-    if (el.nectarMonth) el.nectarMonth.addEventListener("change", () => UI.renderNectarUI());
-    if (el.nectarSaveBtn) el.nectarSaveBtn.addEventListener("click", () => {
-      const st = el.nectarState.value; const mo = String(el.nectarMonth.value);
-      const data = UI.nectarLoad() || {};
-      data[st] = data[st] || {};
-      data[st][mo] = (el.nectarNotes.value || "").trim();
-      UI.nectarSave(data);
-      if (el.nectarStatus) el.nectarStatus.textContent = "Saved.";
-      UI.status("Nectar notes saved");
-    });
-    if (el.nectarClearBtn) el.nectarClearBtn.addEventListener("click", () => {
-      const st = el.nectarState.value; const mo = String(el.nectarMonth.value);
-      const data = UI.nectarLoad() || {};
-      if (data[st]) delete data[st][mo];
-      UI.nectarSave(data);
-      UI.renderNectarUI();
-      UI.status("Cleared");
-    });
-
-    // Field card wiring
-    function saveFieldCardPatch(patchFn) {
-      if (!State.currentHiveId) { alert("Load a hive first."); return false; }
-      const hives = Storage.loadHives();
-      const hive = hives[State.currentHiveId];
-      if (!hive || !Array.isArray(hive.inspections) || hive.inspections.length === 0) { alert("No inspections yet."); return false; }
-      hive.inspections.sort((a,b) => (b.date||"").localeCompare(a.date||""));
-      const insp = hive.inspections[0];
-      UI.ensureInspectionDefaults(insp);
-      insp.fieldCard = insp.fieldCard || {};
-      patchFn(insp.fieldCard, insp);
-      insp.fieldCard.updatedAt = Date.now();
-      const res = Storage.saveHives(hives);
-      if (!res.ok) { alert("Save failed (storage full?) — export ZIP backup!"); return false; }
-      UI.renderHistory(hive);
-      UI.status("Field card saved");
-      return true;
-    }
-    if (el.fieldBroodSolid) el.fieldBroodSolid.addEventListener("click", () => saveFieldCardPatch((fc)=>{fc.broodPattern="solid";}));
-    if (el.fieldBroodSpotty) el.fieldBroodSpotty.addEventListener("click", () => saveFieldCardPatch((fc)=>{fc.broodPattern="spotty";}));
-    if (el.fieldBroodNone) el.fieldBroodNone.addEventListener("click", () => saveFieldCardPatch((fc)=>{fc.broodPattern="none";}));
-    if (el.fieldBroodClear) el.fieldBroodClear.addEventListener("click", () => saveFieldCardPatch((fc)=>{fc.broodPattern="";}));
-    if (el.fieldNotesSave) el.fieldNotesSave.addEventListener("click", () => {
-      saveFieldCardPatch((fc)=>{fc.notes=(el.fieldNotes?.value||"").trim();});
-      if (el.fieldNotesStatus) el.fieldNotesStatus.textContent="Saved.";
-    });
-    if (el.fieldNotesClear) el.fieldNotesClear.addEventListener("click", () => {
-      if (!confirm("Clear field notes on the latest inspection?")) return;
-      saveFieldCardPatch((fc)=>{fc.notes="";});
-      if (el.fieldNotes) el.fieldNotes.value="";
-      if (el.fieldNotesStatus) el.fieldNotesStatus.textContent="Cleared.";
-    });
-
-
-
-    // -------------------------
-    // Yard Nectar/Dearth wiring
-    // -------------------------
-    function currentYardName() { return (el.currentYard?.value || "").trim(); }
-
-    function promptNectarSource(existing) {
-      const e = existing || {};
-      const source = prompt("Nectar source (e.g., Tulip poplar / Clover / Sourwood):", e.source || "");
-      if (source === null) return null;
-      const start = prompt("Flow start (month or date, e.g., Apr or 2026-04-15):", e.start || "");
-      if (start === null) return null;
-      const end = prompt("Flow end (month or date):", e.end || "");
-      if (end === null) return null;
-      const honey = prompt("Honey type (optional, e.g., Tulip poplar / Wildflower):", e.honey || "");
-      if (honey === null) return null;
-      const superOn = prompt("Add supers around (optional):", e.superOn || "");
-      if (superOn === null) return null;
-      const superOff = prompt("Pull supers around (optional):", e.superOff || "");
-      if (superOff === null) return null;
-      const notes = prompt("Notes (optional):", e.notes || "");
-      if (notes === null) return null;
-      return { source: (source||"").trim(), start:(start||"").trim(), end:(end||"").trim(), honey:(honey||"").trim(),
-               superOn:(superOn||"").trim(), superOff:(superOff||"").trim(), notes:(notes||"").trim() };
-    }
-
-    function promptDearth(existing) {
-      const e = existing || {};
-      const start = prompt("Dearth start (month or date):", e.start || "");
-      if (start === null) return null;
-      const end = prompt("Dearth end (month or date):", e.end || "");
-      if (end === null) return null;
-      const notes = prompt("Notes (optional, e.g., feed / robbing risk / small blooms only):", e.notes || "");
-      if (notes === null) return null;
-      return { start:(start||"").trim(), end:(end||"").trim(), notes:(notes||"").trim() };
-    }
-
-    if (el.addYardNectarBtn) el.addYardNectarBtn.addEventListener("click", () => {
-      const yn = currentYardName();
-      if (!yn) { alert("Set Current Yard first."); return; }
-      const data = promptNectarSource(null);
-      if (!data) return;
-      YardMeta.update(yn, (y) => {
-        y.nectarSources = Array.isArray(y.nectarSources) ? y.nectarSources : [];
-        y.nectarSources.unshift({ id: Utils.uuid(), ...data });
-        return y;
-      });
-      UI.renderYardPurposeCard(yn);
-      UI.status("Nectar source added");
-    });
-
-    if (el.addYardDearthBtn) el.addYardDearthBtn.addEventListener("click", () => {
-      const yn = currentYardName();
-      if (!yn) { alert("Set Current Yard first."); return; }
-      const data = promptDearth(null);
-      if (!data) return;
-      YardMeta.update(yn, (y) => {
-        y.dearths = Array.isArray(y.dearths) ? y.dearths : [];
-        y.dearths.unshift({ id: Utils.uuid(), ...data });
-        return y;
-      });
-      UI.renderYardPurposeCard(yn);
-      UI.status("Dearth added");
-    });
-
-    document.addEventListener("click", (e) => {
-      const b1 = e.target && e.target.closest && e.target.closest("[data-yard-nectar-action]");
-      if (b1) {
-        const action = b1.getAttribute("data-yard-nectar-action");
-        const yn = b1.getAttribute("data-yard") || "";
-        const id = b1.getAttribute("data-id") || "";
-        if (!yn || !id) return;
-        if (action === "delete") {
-          if (!confirm("Delete this nectar source?")) return;
-          YardMeta.update(yn, (y) => {
-            y.nectarSources = (y.nectarSources || []).filter(s => s.id !== id);
-            return y;
-          });
-          UI.renderYardPurposeCard(yn);
-          return;
-        }
-        if (action === "edit") {
-          const meta = YardMeta.get(yn) || {};
-          const src = (meta.nectarSources || []).find(s => s.id === id);
-          const data = promptNectarSource(src);
-          if (!data) return;
-          YardMeta.update(yn, (y) => {
-            y.nectarSources = Array.isArray(y.nectarSources) ? y.nectarSources : [];
-            const s = y.nectarSources.find(x => x.id === id);
-            if (!s) return y;
-            Object.assign(s, data);
-            return y;
-          });
-          UI.renderYardPurposeCard(yn);
-          return;
-        }
-      }
-
-      const b2 = e.target && e.target.closest && e.target.closest("[data-yard-dearth-action]");
-      if (b2) {
-        const action = b2.getAttribute("data-yard-dearth-action");
-        const yn = b2.getAttribute("data-yard") || "";
-        const id = b2.getAttribute("data-id") || "";
-        if (!yn || !id) return;
-        if (action === "delete") {
-          if (!confirm("Delete this dearth period?")) return;
-          YardMeta.update(yn, (y) => {
-            y.dearths = (y.dearths || []).filter(d => d.id !== id);
-            return y;
-          });
-          UI.renderYardPurposeCard(yn);
-          return;
-        }
-        if (action === "edit") {
-          const meta = YardMeta.get(yn) || {};
-          const d0 = (meta.dearths || []).find(d => d.id === id);
-          const data = promptDearth(d0);
-          if (!data) return;
-          YardMeta.update(yn, (y) => {
-            y.dearths = Array.isArray(y.dearths) ? y.dearths : [];
-            const d = y.dearths.find(x => x.id === id);
-            if (!d) return y;
-            Object.assign(d, data);
-            return y;
-          });
-          UI.renderYardPurposeCard(yn);
-          return;
-        }
-      }
-    });
-
-
   }
 
   // =========================================================
@@ -8317,8 +7771,6 @@ el.importZipInput.addEventListener("change", async () => {
     Rearing.setVisible(false);
       try { Milestones.renderUI(); } catch (_) {}
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     }
 
     renderUserSelect();
@@ -8339,8 +7791,6 @@ el.importZipInput.addEventListener("change", async () => {
       UI.applyYardPurposeToHiveForm("");
     Rearing.setVisible(false);
     Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
 
     // Wire profile switch
     el.userSelect.addEventListener("change", () => {
@@ -8429,8 +7879,6 @@ Type a new team name to add, or leave blank to cancel:`);
       if (el.mapPanel) el.mapPanel.classList.add("hidden");
       if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
       Reminders.render();
-      try { UI.renderSwarmRemovalList(); } catch (_) {}
-      try { UI.renderNectarUI(); } catch (_) {}
     });
     el.lookupBtn.addEventListener("click", () => {
       el.lookupPanel.classList.toggle("hidden");
