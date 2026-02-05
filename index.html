@@ -7891,7 +7891,8 @@ Type a new team name to add, or leave blank to cancel:`);
     // Cloud backup (Supabase)
     if (el.cloudBtn && el.cloudPanel) {
       el.cloudBtn.addEventListener("click", () => {
-        el.cloudPanel.classList.toggle("hidden");
+        console.log("Cloud button clicked");
+        el.cloudPanel.classList.remove("hidden");
         el.exportPanel.classList.add("hidden");
         el.remindersPanel.classList.add("hidden");
         el.lookupPanel.classList.add("hidden");
