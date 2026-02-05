@@ -820,7 +820,7 @@ button:not(.primary):not(.danger), .btn:not(.primary):not(.danger) {
       </div>
 
       <label for="activeBoxSelect" style="margin-top:0.75rem;">Active Box</label>
-      <select id="activeBoxSelect" class="box-select"></select>\1
+      <select id="activeBoxSelect" class="box-select"></select>
 
       <div class="card" style="margin-top:0.6rem;">
         <strong>Reorder boxes</strong>
@@ -1047,7 +1047,44 @@ button:not(.primary):not(.danger), .btn:not(.primary):not(.danger) {
       <div id="photoGallery" class="gallery"></div>
     </div>
 
-    <h2>Inspection History</h2>
+    
+    <h2>Field Card (Latest)</h2>
+    <div id="fieldCard" class="card" style="margin:0 0 0.75rem 0;">
+      <div class="small" id="fieldCardSummary">Open a hive to view the latest field card.</div>
+
+      <div class="card" style="margin-top:0.6rem;">
+        <strong>👑 Queen Timeline</strong>
+        <div id="fieldQueen" class="small" style="margin-top:0.35rem;"></div>
+      </div>
+
+      <div class="card" style="margin-top:0.6rem;">
+        <strong>🐜 Mite Treatment</strong>
+        <div id="fieldMite" class="small" style="margin-top:0.35rem;"></div>
+      </div>
+
+      <div class="card" style="margin-top:0.6rem;">
+        <strong>🧬 Brood Pattern (quick)</strong>
+        <div class="row" style="margin-top:0.5rem; gap:0.5rem; flex-wrap:wrap;">
+          <button id="fieldBroodSolid" type="button" class="btn">✅ Solid</button>
+          <button id="fieldBroodSpotty" type="button" class="btn">🟡 Spotty</button>
+          <button id="fieldBroodNone" type="button" class="btn">🔴 None</button>
+          <button id="fieldBroodClear" type="button" class="btn">✖ Clear</button>
+        </div>
+        <div id="fieldBroodStatus" class="small" style="margin-top:0.4rem;"></div>
+      </div>
+
+      <div class="card" style="margin-top:0.6rem;">
+        <strong>📝 Quick Field Notes</strong>
+        <textarea id="fieldNotes" placeholder="Short notes for the latest inspection…"></textarea>
+        <div class="row" style="margin-top:0.5rem; gap:0.5rem;">
+          <button id="fieldNotesSave" type="button" class="btn primary grow">Save Notes</button>
+          <button id="fieldNotesClear" type="button" class="btn">Clear</button>
+        </div>
+        <div id="fieldNotesStatus" class="small" style="margin-top:0.35rem;"></div>
+      </div>
+    </div>
+
+<h2>Inspection History</h2>
     <div id="history" class="card" style="margin:0;"></div>
   </div>
 
@@ -2540,6 +2577,21 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     rearingEditor: document.getElementById("rearingEditor"),
     rearingCalendar: document.getElementById("rearingCalendar"),
 
+    // Field Card
+    fieldCard: document.getElementById("fieldCard"),
+    fieldCardSummary: document.getElementById("fieldCardSummary"),
+    fieldQueen: document.getElementById("fieldQueen"),
+    fieldMite: document.getElementById("fieldMite"),
+    fieldBroodSolid: document.getElementById("fieldBroodSolid"),
+    fieldBroodSpotty: document.getElementById("fieldBroodSpotty"),
+    fieldBroodNone: document.getElementById("fieldBroodNone"),
+    fieldBroodClear: document.getElementById("fieldBroodClear"),
+    fieldBroodStatus: document.getElementById("fieldBroodStatus"),
+    fieldNotes: document.getElementById("fieldNotes"),
+    fieldNotesSave: document.getElementById("fieldNotesSave"),
+    fieldNotesClear: document.getElementById("fieldNotesClear"),
+    fieldNotesStatus: document.getElementById("fieldNotesStatus"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3982,6 +4034,13 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         row.appendChild(delBtn);
         el.history.appendChild(row);
       });
+
+      // Keep Field Card in sync with the latest inspection
+      try {
+        const latest = (hive.inspections && hive.inspections[0]) ? hive.inspections[0] : null;
+        if (latest) this.renderFieldCard(hive, latest);
+      } catch (_) {}
+
     },
 
     refreshYardUI() {
@@ -6990,6 +7049,53 @@ el.importZipInput.addEventListener("change", async () => {
       if (!file) return;
       await handleImportZipFromFile(file);
     });
+
+    // -------------------------
+    // Field Card wiring (latest inspection only)
+    // -------------------------
+    function saveFieldCardPatch(patchFn) {
+      if (!State.currentHiveId) { alert("Load a hive first."); return false; }
+      const hives = Storage.loadHives();
+      const hive = hives[State.currentHiveId];
+      if (!hive || !Array.isArray(hive.inspections) || hive.inspections.length === 0) { alert("No inspections yet."); return false; }
+      hive.inspections.sort((a,b) => (b.date||"").localeCompare(a.date||""));
+      const insp = hive.inspections[0];
+      UI.ensureInspectionDefaults(insp);
+      insp.fieldCard = insp.fieldCard || {};
+      patchFn(insp.fieldCard, insp);
+      insp.fieldCard.updatedAt = Date.now();
+      const res = Storage.saveHives(hives);
+      if (!res.ok) { alert("Save failed (storage full?) — export ZIP backup!"); return false; }
+      UI.renderHistory(hive); // also updates field card via renderHistory hook
+      UI.status("Field card saved");
+      return true;
+    }
+
+    if (el.fieldBroodSolid) el.fieldBroodSolid.addEventListener("click", () => {
+      saveFieldCardPatch((fc) => { fc.broodPattern = "solid"; });
+    });
+    if (el.fieldBroodSpotty) el.fieldBroodSpotty.addEventListener("click", () => {
+      saveFieldCardPatch((fc) => { fc.broodPattern = "spotty"; });
+    });
+    if (el.fieldBroodNone) el.fieldBroodNone.addEventListener("click", () => {
+      saveFieldCardPatch((fc) => { fc.broodPattern = "none"; });
+    });
+    if (el.fieldBroodClear) el.fieldBroodClear.addEventListener("click", () => {
+      saveFieldCardPatch((fc) => { fc.broodPattern = ""; });
+    });
+
+    if (el.fieldNotesSave) el.fieldNotesSave.addEventListener("click", () => {
+      saveFieldCardPatch((fc) => { fc.notes = (el.fieldNotes?.value || "").trim(); });
+      if (el.fieldNotesStatus) el.fieldNotesStatus.textContent = "Saved.";
+    });
+
+    if (el.fieldNotesClear) el.fieldNotesClear.addEventListener("click", () => {
+      if (!confirm("Clear field notes on the latest inspection?")) return;
+      saveFieldCardPatch((fc) => { fc.notes = ""; });
+      if (el.fieldNotes) el.fieldNotes.value = "";
+      if (el.fieldNotesStatus) el.fieldNotesStatus.textContent = "Cleared.";
+    });
+
   }
 
   // =========================================================
