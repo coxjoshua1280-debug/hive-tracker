@@ -758,7 +758,22 @@ button.primary, .btn.primary {
 <button id="mapCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
         </div>
         <div id="mapStatus" class="small" style="margin:0.5rem 0;"></div>
-        <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
+        
+        <div class="row" style="margin:0.4rem 0 0.6rem;">
+          <div class="grow">
+            <label style="margin:0 0 0.2rem;"><span class="small">Scope</span></label>
+            <select id="mapScopeSelect">
+              <option value="current">Current yard</option>
+              <option value="all">All yards</option>
+              <option value="pick">Choose yard…</option>
+            </select>
+          </div>
+          <div class="grow">
+            <label style="margin:0 0 0.2rem;"><span class="small">Yard</span></label>
+            <select id="mapYardSelect"></select>
+          </div>
+        </div>
+<div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
         <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
       </div>
 
@@ -1737,71 +1752,172 @@ Reminders.render();
       }
     },
 
-    _pushBackup(reason, changedKey) {
-      try {
-        const ring = this.load(this.BACKUP_KEY, []);
-        const entry = {
-          ts: Date.now(),
-          reason: reason || "auto",
-          changedKey: changedKey || "",
-          version: this.VERSION,
-          snapshot: this._coreSnapshot(),
-        };
-        ring.unshift(entry);
-        while (ring.length > this.MAX_BACKUPS) ring.pop();
-        this.save(this.BACKUP_KEY, ring);
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e };
-      }
-    },
 
-    restoreLatestBackup() {
-      const ring = this.load(this.BACKUP_KEY, []);
-      const latest = ring && ring[0];
-      if (!latest || !latest.snapshot) return { ok: false, error: new Error("No backups available") };
-      const s = latest.snapshot;
-      // Write snapshot back (bypasses Lock because this is recovery)
-      try {
-        localStorage.setItem(User.key("hives"), JSON.stringify(s.hives || {}));
-        localStorage.setItem(User.key("yards"), JSON.stringify(s.yards || {}));
-        localStorage.setItem(User.key("teams"), JSON.stringify(s.teams || { teams: [] }));
-        localStorage.setItem(User.key("meta"), JSON.stringify(s.meta || { version: 1 }));
-        this._writeChecksum();
-        return { ok: true, restoredTs: latest.ts };
-      } catch (e) {
-        return { ok: false, error: e };
-      }
-    },
+_pushBackup(reason, changedKey) {
+  try {
+    const ring = this.load(this.BACKUP_KEY, []);
+    const snapshot = this._coreSnapshot();
+    const canon = Utils.stableStringify(snapshot);
+    const hash = Utils.hashString(canon);
+    const entry = {
+      ts: Date.now(),
+      reason: reason || "auto",
+      changedKey: changedKey || "",
+      version: this.VERSION,
+      hash,
+      bytes: canon.length,
+      snapshot,
+    };
+    ring.unshift(entry);
+    if (ring.length > this.MAX_BACKUPS) ring.length = this.MAX_BACKUPS;
+    this.save(this.BACKUP_KEY, ring);
+    return { ok: true, entry };
+  } catch (e) {
+    // Backups should never block core flow
+    console.warn("Backup push failed", e);
+    return { ok: false, error: e };
+  }
+},
 
-    validateOrRecoverOnBoot() {
-      const stored = this._readChecksum();
-      // If we've never written a checksum, establish one and continue.
-      if (!stored || !stored.hash) {
-        this._writeChecksum();
-        return { ok: true, action: "checksum_initialized" };
-      }
-      try {
-        const snap = this._coreSnapshot();
-        const canon = Utils.stableStringify(snap);
-        const hash = Utils.hashString(canon);
-        if (hash === stored.hash) return { ok: true, action: "checksum_ok" };
 
-        console.warn("Data checksum mismatch – attempting recovery from latest backup");
-        const rec = this.restoreLatestBackup();
-        if (rec.ok) {
-          alert("BroodNote detected possible data corruption and restored the latest automatic backup.");
-          return { ok: true, action: "restored_backup", restoredTs: rec.restoredTs };
-        }
-        // No backup available: keep data but re-seal checksum so app can boot.
-        console.warn("No backup available to restore; continuing with current data");
-        this._writeChecksum();
-        return { ok: true, action: "checksum_reset_no_backup" };
-      } catch (e) {
-        console.warn("Checksum validation failed", e);
-        return { ok: true, action: "checksum_validation_failed" };
+
+_validateBackupEntry(entry) {
+  try {
+    if (!entry || !entry.snapshot) return { ok: false, error: new Error("Missing snapshot") };
+    const canon = Utils.stableStringify(entry.snapshot);
+    const hash = Utils.hashString(canon);
+    if (entry.hash && hash !== entry.hash) {
+      return { ok: false, error: new Error("Backup checksum mismatch"), hash, expected: entry.hash };
+    }
+    return { ok: true, hash };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+},
+
+listBackups() {
+  const ring = this.load(this.BACKUP_KEY, []);
+  // annotate validity without throwing
+  return (ring || []).map((b, idx) => {
+    const v = this._validateBackupEntry(b);
+    return {
+      idx,
+      ts: b && b.ts,
+      reason: b && b.reason,
+      changedKey: b && b.changedKey,
+      version: b && b.version,
+      bytes: b && b.bytes,
+      hash: b && b.hash,
+      valid: !!v.ok,
+      computedHash: v.ok ? v.hash : null,
+      error: v.ok ? null : (v.error ? (v.error.message || String(v.error)) : "invalid"),
+    };
+  });
+},
+
+_restoreSnapshot(snapshot) {
+  // Write snapshot back (bypasses Lock because this is recovery)
+  try {
+    localStorage.setItem(User.key("hives"), JSON.stringify(snapshot.hives || {}));
+    localStorage.setItem(User.key("yards"), JSON.stringify(snapshot.yards || {}));
+    localStorage.setItem(User.key("teams"), JSON.stringify(snapshot.teams || { teams: [] }));
+    localStorage.setItem(User.key("meta"), JSON.stringify(snapshot.meta || { version: this.VERSION }));
+    this._writeChecksum();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+},
+
+restoreBackupAt(index) {
+  const ring = this.load(this.BACKUP_KEY, []);
+  const entry = ring && ring[index];
+  if (!entry) return { ok: false, error: new Error("Backup not found") };
+  const v = this._validateBackupEntry(entry);
+  if (!v.ok) return { ok: false, error: v.error };
+  const res = this._restoreSnapshot(entry.snapshot);
+  if (!res.ok) return res;
+  return { ok: true, restoredTs: entry.ts, restoredIndex: index, reason: entry.reason || "" };
+},
+
+restoreLatestBackup() {
+  return this.restoreBackupAt(0);
+},
+
+
+
+validateOrRecoverOnBoot() {
+  // Returns {ok, action, ...}
+  const stored = this._readChecksum();
+  if (!stored || !stored.hash) {
+    this._writeChecksum();
+    return { ok: true, action: "checksum_initialized" };
+  }
+
+  // Step 1: validate current store
+  try {
+    const snap = this._coreSnapshot();
+    const canon = Utils.stableStringify(snap);
+    const hash = Utils.hashString(canon);
+    if (hash === stored.hash) return { ok: true, action: "checksum_ok" };
+
+    // Step 2+: corruption detected – attempt recovery ladder across backup ring
+    console.warn("Data checksum mismatch – attempting recovery ladder");
+    const ring = this.load(this.BACKUP_KEY, []) || [];
+    let restored = null;
+
+    for (let i = 0; i < ring.length; i++) {
+      const entry = ring[i];
+      const v = this._validateBackupEntry(entry);
+      if (!v.ok) continue;
+      const res = this._restoreSnapshot(entry.snapshot);
+      if (res.ok) {
+        restored = { index: i, ts: entry.ts, reason: entry.reason || "" };
+        break;
       }
-    },
+    }
+
+    if (restored) {
+      // Show recovery screen (non-blocking) so the user knows what happened and can choose another backup.
+      if (typeof RecoveryUI !== "undefined" && RecoveryUI && RecoveryUI.show) {
+        RecoveryUI.show({
+          mode: "recovered",
+          message: "BroodNote detected possible data corruption and automatically restored a backup.",
+          restored,
+          currentHash: hash,
+          storedHash: stored.hash,
+          backups: this.listBackups(),
+        });
+      } else {
+        alert("BroodNote detected possible data corruption and restored an automatic backup.");
+      }
+      return { ok: true, action: "restored_backup", restoredTs: restored.ts, restoredIndex: restored.index };
+    }
+
+    // No valid backups — present recovery screen with options
+    console.warn("No valid backups available; launching recovery UI");
+    if (typeof RecoveryUI !== "undefined" && RecoveryUI && RecoveryUI.show) {
+      RecoveryUI.show({
+        mode: "needs_user",
+        message: "BroodNote detected possible data corruption, but could not automatically restore a valid backup.",
+        restored: null,
+        currentHash: hash,
+        storedHash: stored.hash,
+        backups: this.listBackups(),
+      });
+      // Do not reseal checksum here; user must choose.
+      return { ok: true, action: "corruption_detected_user_prompted" };
+    }
+
+    // Fallback: keep data but re-seal checksum so app can boot.
+    this._writeChecksum();
+    return { ok: true, action: "checksum_reset_no_backup" };
+  } catch (e) {
+    console.warn("Checksum validation failed", e);
+    return { ok: true, action: "checksum_validation_failed" };
+  }
+},
+
 
     // ---- Box schema ----
     // Each inspection stores "boxes" instead of a single frameMap:
@@ -2702,7 +2818,238 @@ Reminders.render();
       StorageRaw.save(this.lastFiredKey, last);
     }
   };
-  // =========================================================
+  
+// =========================================================
+// 2B) RECOVERY UI (Full-screen backup chooser)
+// =========================================================
+const RecoveryUI = {
+  _root: null,
+
+  _ensure() {
+    if (this._root) return this._root;
+
+    const root = document.createElement("div");
+    root.id = "bnRecoveryRoot";
+    root.style.position = "fixed";
+    root.style.inset = "0";
+    root.style.zIndex = "999999";
+    root.style.background = "rgba(0,0,0,0.55)";
+    root.style.display = "none";
+    root.style.padding = "18px";
+    root.style.boxSizing = "border-box";
+    root.style.overflow = "auto";
+
+    const card = document.createElement("div");
+    card.style.maxWidth = "980px";
+    card.style.margin = "24px auto";
+    card.style.background = "var(--bn-paper, #F5F1E8)";
+    card.style.border = "2px solid rgba(0,0,0,0.15)";
+    card.style.borderRadius = "14px";
+    card.style.boxShadow = "0 18px 40px rgba(0,0,0,0.25)";
+    card.style.padding = "18px";
+    card.style.boxSizing = "border-box";
+
+    card.innerHTML = `
+      <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:20px;font-weight:800;letter-spacing:0.2px;">Data Recovery</div>
+          <div id="bnRecSummary" style="margin-top:6px;opacity:0.9;"></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <button id="bnRecUseCurrent" class="primary" style="min-width:170px;">Use current data</button>
+          <button id="bnRecResetEmpty" style="min-width:170px;">Reset to empty</button>
+          <button id="bnRecClose" style="min-width:110px;">Close</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;padding:12px;border-radius:12px;background:rgba(0,0,0,0.06);">
+        <div style="font-weight:700;">What happened</div>
+        <div id="bnRecDetails" style="margin-top:6px;line-height:1.35;"></div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button id="bnRecDownloadCorrupt">Download current data (for support)</button>
+          <button id="bnRecDownloadBackups">Download backups index</button>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div style="font-weight:800;">Available backups</div>
+        <div style="opacity:0.85;margin-top:4px;">Pick a backup to restore. Invalid backups are disabled.</div>
+        <div id="bnRecBackups" style="margin-top:10px;"></div>
+      </div>
+    `;
+
+    root.appendChild(card);
+    document.body.appendChild(root);
+    this._root = root;
+
+    // Wire buttons (safe, no throws)
+    const close = card.querySelector("#bnRecClose");
+    const useCurrent = card.querySelector("#bnRecUseCurrent");
+    const resetEmpty = card.querySelector("#bnRecResetEmpty");
+    const dlCorrupt = card.querySelector("#bnRecDownloadCorrupt");
+    const dlBackups = card.querySelector("#bnRecDownloadBackups");
+
+    if (close) close.addEventListener("click", () => this.hide());
+    if (useCurrent) useCurrent.addEventListener("click", () => {
+      try {
+        Storage._writeChecksum();
+        this._setSummary("Checksum reset. Continuing with current data.");
+        setTimeout(() => this.hide(), 350);
+      } catch (e) {
+        alert("Could not reseal checksum: " + (e && e.message ? e.message : e));
+      }
+    });
+
+    if (resetEmpty) resetEmpty.addEventListener("click", () => {
+      if (!confirm("Reset ALL local data to empty? This cannot be undone (but you can restore a backup if available).")) return;
+      try {
+        localStorage.setItem(User.key("hives"), JSON.stringify({}));
+        localStorage.setItem(User.key("yards"), JSON.stringify({ yards: [] }));
+        localStorage.setItem(User.key("teams"), JSON.stringify({ teams: [] }));
+        localStorage.setItem(User.key("meta"), JSON.stringify({ version: Storage.VERSION }));
+        Storage._writeChecksum();
+        Storage._pushBackup("reset_empty", "all");
+        this._setSummary("Data reset to empty.");
+        setTimeout(() => location.reload(), 250);
+      } catch (e) {
+        alert("Reset failed: " + (e && e.message ? e.message : e));
+      }
+    });
+
+    const downloadJson = (filename, obj) => {
+      try {
+        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      } catch (e) {
+        alert("Download failed: " + (e && e.message ? e.message : e));
+      }
+    };
+
+    if (dlCorrupt) dlCorrupt.addEventListener("click", () => {
+      const snap = Storage._coreSnapshot();
+      downloadJson("broodnote_current_data.json", {
+        export_meta: { kind: "current_data", ts: Date.now(), version: Storage.VERSION },
+        snapshot: snap
+      });
+    });
+
+    if (dlBackups) dlBackups.addEventListener("click", () => {
+      downloadJson("broodnote_backups_index.json", { ts: Date.now(), backups: Storage.listBackups() });
+    });
+
+    return root;
+  },
+
+  _fmtTs(ts) {
+    try { return ts ? new Date(ts).toLocaleString() : "—"; } catch { return "—"; }
+  },
+
+  _setSummary(text) {
+    const root = this._ensure();
+    const el = root.querySelector("#bnRecSummary");
+    if (el) el.textContent = text || "";
+  },
+
+  _setDetails(text) {
+    const root = this._ensure();
+    const el = root.querySelector("#bnRecDetails");
+    if (el) el.textContent = text || "";
+  },
+
+  _renderBackups(backups) {
+    const root = this._ensure();
+    const holder = root.querySelector("#bnRecBackups");
+    if (!holder) return;
+    holder.innerHTML = "";
+
+    if (!backups || !backups.length) {
+      holder.innerHTML = `<div style="padding:10px;border-radius:10px;background:rgba(0,0,0,0.06);">No backups found.</div>`;
+      return;
+    }
+
+    const table = document.createElement("div");
+    table.style.display = "grid";
+    table.style.gap = "10px";
+
+    backups.forEach((b) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "1fr auto";
+      row.style.gap = "10px";
+      row.style.alignItems = "center";
+      row.style.padding = "10px";
+      row.style.borderRadius = "12px";
+      row.style.background = b.valid ? "rgba(0,0,0,0.05)" : "rgba(180,0,0,0.08)";
+      row.style.border = b.valid ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(180,0,0,0.18)";
+
+      const left = document.createElement("div");
+      left.innerHTML = `
+        <div style="font-weight:800;">${this._fmtTs(b.ts)} <span style="font-weight:600;opacity:0.85;">(index ${b.idx})</span></div>
+        <div style="opacity:0.9;margin-top:3px;">Reason: <b>${(b.reason || "auto")}</b> • Changed: ${(b.changedKey || "—")} • Version: ${(b.version || "—")}</div>
+        <div style="opacity:0.75;margin-top:3px;">${b.valid ? "Valid" : ("Invalid: " + (b.error || "unknown"))}</div>
+      `;
+
+      const right = document.createElement("div");
+      const btn = document.createElement("button");
+      btn.textContent = b.valid ? "Restore" : "Disabled";
+      btn.disabled = !b.valid;
+      btn.style.minWidth = "120px";
+      btn.addEventListener("click", () => {
+        if (!confirm("Restore backup from " + this._fmtTs(b.ts) + "? This will overwrite current local data.")) return;
+        const res = Storage.restoreBackupAt(b.idx);
+        if (res.ok) {
+          Storage._pushBackup("restore_backup", "all");
+          this._setSummary("Restored backup from " + this._fmtTs(b.ts) + ". Reloading...");
+          setTimeout(() => location.reload(), 300);
+        } else {
+          alert("Restore failed: " + (res.error && res.error.message ? res.error.message : res.error));
+        }
+      });
+      right.appendChild(btn);
+
+      row.appendChild(left);
+      row.appendChild(right);
+      table.appendChild(row);
+    });
+
+    holder.appendChild(table);
+  },
+
+  show(payload) {
+    const root = this._ensure();
+    const mode = payload && payload.mode ? payload.mode : "needs_user";
+    const msg = payload && payload.message ? payload.message : "BroodNote detected a data issue.";
+
+    const restored = payload && payload.restored ? payload.restored : null;
+    const details = [];
+    details.push(msg);
+
+    if (payload && payload.storedHash && payload.currentHash) {
+      details.push("Stored checksum: " + payload.storedHash + " • Current checksum: " + payload.currentHash);
+    }
+    if (restored) {
+      details.push("Auto-restored backup index " + restored.index + " from " + this._fmtTs(restored.ts) + (restored.reason ? (" • Reason: " + restored.reason) : ""));
+    } else if (mode === "needs_user") {
+      details.push("Choose a backup below, or use current data to continue (not recommended if you suspect corruption).");
+    }
+
+    this._setSummary(mode === "recovered" ? "Recovery completed" : "Recovery required");
+    this._setDetails(details.join("  "));
+    this._renderBackups(payload && payload.backups ? payload.backups : []);
+    root.style.display = "block";
+  },
+
+  hide() {
+    const root = this._ensure();
+    root.style.display = "none";
+  }
+};
+
+// =========================================================
   // 3) PHOTOS (IndexedDB)
   // =========================================================
 
@@ -3141,6 +3488,8 @@ Reminders.render();
     cloudPanel: document.getElementById("cloudPanel"),
     yardMap: document.getElementById("yardMap"),
     mapStatus: document.getElementById("mapStatus"),
+    mapScopeSelect: document.getElementById("mapScopeSelect"),
+    mapYardSelect: document.getElementById("mapYardSelect"),
     mapCloseBtn: document.getElementById("mapCloseBtn"),
     lookupSearch: document.getElementById("lookupSearch"),
     lookupYard: document.getElementById("lookupYard"),
@@ -3517,9 +3866,16 @@ for (const [k, v] of Object.entries(el)) {
   // =========================================================
   // 3.5) YARD MAP (Leaflet)
   // =========================================================
+  
   const MapView = {
     map: null,
     markers: null,
+    _controlsWired: false,
+    state: { scope: "current", yard: "" }, // scope: current | all | pick
+
+    _getCurrentYardName() {
+      return (el.currentYard?.value || "").trim();
+    },
 
     buildCounts() {
       const hives = Storage.loadHives() || {};
@@ -3532,143 +3888,226 @@ for (const [k, v] of Object.entries(el)) {
       return counts;
     },
 
+    _wireControlsOnce() {
+      if (this._controlsWired) return;
+      this._controlsWired = true;
+
+      if (el.mapScopeSelect) {
+        el.mapScopeSelect.onchange = () => {
+          this.state.scope = (el.mapScopeSelect.value || "current");
+          // If we switch away from pick, keep the last picked yard but it won't be used.
+          this.render();
+        };
+      }
+      if (el.mapYardSelect) {
+        el.mapYardSelect.onchange = () => {
+          this.state.yard = (el.mapYardSelect.value || "").trim();
+          this.render();
+        };
+      }
+    },
+
+    _syncControls(yardNames) {
+      // Scope default: current (unless no current yard)
+      const cy = this._getCurrentYardName();
+      if (!this.state.scope) this.state.scope = "current";
+      if (this.state.scope === "current" && !cy) this.state.scope = "all";
+
+      if (el.mapScopeSelect) {
+        el.mapScopeSelect.value = this.state.scope;
+      }
+
+      if (el.mapYardSelect) {
+        // Populate yard list
+        const prev = el.mapYardSelect.value;
+        el.mapYardSelect.innerHTML = "";
+        yardNames.forEach(n => {
+          const opt = document.createElement("option");
+          opt.value = n;
+          opt.textContent = n;
+          el.mapYardSelect.appendChild(opt);
+        });
+
+        const desired = (this.state.yard || cy || prev || yardNames[0] || "").trim();
+        if (desired && yardNames.includes(desired)) el.mapYardSelect.value = desired;
+        this.state.yard = (el.mapYardSelect.value || "").trim();
+
+        // Only enable yard picker when scope === pick
+        const pick = (this.state.scope === "pick");
+        el.mapYardSelect.disabled = !pick;
+        el.mapYardSelect.style.opacity = pick ? "1" : "0.65";
+      }
+    },
+
+    _getScopeYards(yards, yardNames) {
+      const cy = this._getCurrentYardName();
+      const scope = (this.state.scope || "current");
+      if (scope === "all") return yardNames.slice();
+
+      if (scope === "pick") {
+        const yn = (this.state.yard || cy || "").trim();
+        return yn ? [yn] : yardNames.slice();
+      }
+
+      // current
+      return cy ? [cy] : yardNames.slice();
+    },
+
     render() {
       if (!el.mapPanel || !el.yardMap || el.mapPanel.classList.contains("hidden")) return;
 
       const yards = Storage.loadYards() || {};
-      const yardNames = Object.keys(yards);
+      const yardNames = Object.keys(yards).sort((a,b) => a.localeCompare(b));
       if (!yardNames.length) {
-        el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
+        if (el.mapStatus) el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
         el.yardMap.innerHTML = "";
+        if (el.mapMissingGps) el.mapMissingGps.innerHTML = "";
         return;
       }
 
+      this._wireControlsOnce();
+      this._syncControls(yardNames);
+
       if (typeof L === "undefined") {
-        el.mapStatus.innerHTML = "<em>Map library not loaded. Connect to the internet once so the map can load (Leaflet + OpenStreetMap tiles).</em>";
+        if (el.mapStatus) el.mapStatus.innerHTML =
+          "<em>Map library not loaded. Connect to the internet once so the map can load (Leaflet + OpenStreetMap tiles).</em>";
         el.yardMap.innerHTML = "";
         return;
       }
 
       const counts = this.buildCounts();
+      const scopeYards = this._getScopeYards(yards, yardNames);
 
-      // Gather points
+      // Gather points (yard home points only)
       const pts = [];
-      yardNames.forEach(name => {
+      scopeYards.forEach(name => {
         const y = yards[name];
         if (y && typeof y.lat === "number" && typeof y.lon === "number") {
           pts.push([y.lat, y.lon, name]);
         }
       });
 
-      
-// Render missing GPS yards list (desktop-friendly)
-const missing = yardNames.filter(name => {
-  const y = yards[name];
-  return !(y && typeof y.lat === "number" && typeof y.lon === "number");
-});
+      // Render missing GPS yards list (scoped)
+      const missing = scopeYards.filter(name => {
+        const y = yards[name];
+        return !(y && typeof y.lat === "number" && typeof y.lon === "number");
+      });
 
-if (el.mapMissingGps) {
-  if (!missing.length) {
-    el.mapMissingGps.textContent = "";
-  } else {
-    const unlocked = Lock.isUnlocked();
-    const rows = missing.map(name => {
-      const c = counts[name] || 0;
-      const ymeta = YardMeta.get(name) || {};
-      const purpose = (ymeta.purpose || "standard");
-      const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
-      const btnLabel = unlocked ? "Set location" : "Unlock to set";
-      const dis = unlocked ? "" : "disabled";
-      return `
-        <div class="card" style="margin:0.35rem 0; padding:0.65rem;">
-          <div class="row" style="align-items:center;">
-            <div class="grow">
-              <div><strong>${Utils.escapeHtml(name)}</strong></div>
-              <div class="small">${purposeLabel} • ${c} hive(s)</div>
-            </div>
-            <button type="button" class="btn btn-muted" style="width:auto;" data-setgps="${encodeURIComponent(name)}" ${dis}>${btnLabel}</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-    el.mapMissingGps.innerHTML = `
-      <div style="margin-top:0.25rem;"><strong>Missing yard GPS</strong> <span class="small">(home point)</span></div>
-      <div class="small">These yards won’t appear on the map until a home point is saved.</div>
-      ${rows}
-    `;
+      if (el.mapMissingGps) {
+        if (!missing.length) {
+          el.mapMissingGps.textContent = "";
+        } else {
+          const unlocked = Lock.isUnlocked();
+          const rows = missing.map(name => {
+            const c = counts[name] || 0;
+            const ymeta = YardMeta.get(name) || {};
+            const purpose = (ymeta.purpose || "standard");
+            const purposeLabel = purpose === "queen" ? "Queen yard" : (purpose === "split" ? "Split yard" : "Standard yard");
+            const btnLabel = unlocked ? "Set location" : "Unlock to set";
+            const dis = unlocked ? "" : "disabled";
+            return `
+              <div class="card" style="margin:0.35rem 0; padding:0.65rem;">
+                <div class="row" style="align-items:center;">
+                  <div class="grow">
+                    <div><strong>${Utils.escapeHtml(name)}</strong></div>
+                    <div class="small">${purposeLabel} • ${c} hive(s)</div>
+                  </div>
+                  <button type="button" class="btn btn-muted" style="width:auto;" data-setgps="${encodeURIComponent(name)}" ${dis}>${btnLabel}</button>
+                </div>
+              </div>
+            `;
+          }).join("");
 
-    // Wire buttons
-    el.mapMissingGps.querySelectorAll("button[data-setgps]").forEach(btn => {
-      btn.onclick = () => {
-        const yn = decodeURIComponent(btn.getAttribute("data-setgps") || "");
-        if (!yn) return;
-        if (!Lock.requireUnlocked()) return;
+          el.mapMissingGps.innerHTML = `
+            <div style="margin-top:0.25rem;"><strong>Missing yard GPS</strong> <span class="small">(home point)</span></div>
+            <div class="small">These yards won’t appear on the map until a home point is saved.</div>
+            ${rows}
+          `;
 
-        const pick = prompt(
-          `Set yard home point for "${yn}"\n\n1 = Use my current location\n2 = Enter coordinates\n\nType 1 or 2:`,
-          "1"
-        );
-        if (pick === null) return;
+          // Wire buttons
+          el.mapMissingGps.querySelectorAll("button[data-setgps]").forEach(btn => {
+            btn.onclick = () => {
+              const yn = decodeURIComponent(btn.getAttribute("data-setgps") || "");
+              if (!yn) return;
+              if (!Lock.requireUnlocked()) return;
 
-        const setCoords = (lat, lon) => {
-          const yards2 = Storage.loadYards() || {};
-          yards2[yn] = yards2[yn] || {};
-          yards2[yn].lat = lat;
-          yards2[yn].lon = lon;
-          Storage.saveYards(yards2);
-          UI.status("Yard GPS saved");
-          this.render();
-        };
+              const pick = prompt(
+                `Set yard home point for "${yn}"\n\n1 = Use my current location\n2 = Enter coordinates\n\nType 1 or 2:`,
+                "1"
+              );
+              if (pick === null) return;
 
-        if (String(pick).trim() === "1") {
-          if (!navigator.geolocation) {
-            alert("Geolocation not available on this device/browser. Choose option 2 to enter coordinates.");
-            return;
-          }
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const lat = pos?.coords?.latitude;
-              const lon = pos?.coords?.longitude;
-              if (typeof lat !== "number" || typeof lon !== "number") {
-                alert("Could not read location.");
+              const setCoords = (lat, lon) => {
+                const yards2 = Storage.loadYards() || {};
+                yards2[yn] = yards2[yn] || {};
+                yards2[yn].lat = lat;
+                yards2[yn].lon = lon;
+                Storage.saveYards(yards2);
+                UI.status("Yard GPS saved");
+                this.render();
+              };
+
+              if (String(pick).trim() === "1") {
+                if (!navigator.geolocation) {
+                  alert("Geolocation not available on this device/browser. Choose option 2 to enter coordinates.");
+                  return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    const lat = pos?.coords?.latitude;
+                    const lon = pos?.coords?.longitude;
+                    if (typeof lat !== "number" || typeof lon !== "number") {
+                      alert("Could not read location.");
+                      return;
+                    }
+                    setCoords(lat, lon);
+                  },
+                  (err) => {
+                    alert("Location error: " + (err && err.message ? err.message : err));
+                  },
+                  { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+                );
                 return;
               }
+
+              // Option 2: manual entry
+              const raw = prompt("Enter coordinates as: lat, lon", "");
+              if (raw === null) return;
+              const parts = String(raw).split(",").map(s => s.trim()).filter(Boolean);
+              if (parts.length < 2) { alert("Please enter in the format: lat, lon"); return; }
+              const lat = parseFloat(parts[0]);
+              const lon = parseFloat(parts[1]);
+              if (!isFinite(lat) || !isFinite(lon)) { alert("Invalid coordinates."); return; }
               setCoords(lat, lon);
-            },
-            (err) => {
-              alert("Location error: " + (err && err.message ? err.message : err));
-            },
-            { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-          );
-          return;
+            };
+          });
         }
+      }
 
-        // Option 2: manual entry
-        const raw = prompt("Enter coordinates as: lat, lon", "");
-        if (raw === null) return;
-        const parts = String(raw).split(",").map(s => s.trim()).filter(Boolean);
-        if (parts.length < 2) { alert("Please enter in the format: lat, lon"); return; }
-        const lat = parseFloat(parts[0]);
-        const lon = parseFloat(parts[1]);
-        if (!isFinite(lat) || !isFinite(lon)) { alert("Invalid coordinates."); return; }
-        setCoords(lat, lon);
-      };
-    });
-  }
-}
+      const scopeLabel = (this.state.scope === "all")
+        ? "All yards"
+        : (this.state.scope === "pick" ? `Yard: ${Utils.escapeHtml(this.state.yard || "")}` : `Current yard: ${Utils.escapeHtml(this._getCurrentYardName() || "")}`);
 
-if (!pts.length) {
-        el.mapStatus.innerHTML = "<em>No yard GPS points saved yet. Use the Yard GPS capture on mobile to save a yard home point.</em>";
+      if (!pts.length) {
+        if (el.mapStatus) el.mapStatus.innerHTML =
+          `<em>No yard GPS points available for this scope.</em><div class="small" style="margin-top:4px;">${scopeLabel}</div>`;
         el.yardMap.innerHTML = "";
         return;
       }
 
-      el.mapStatus.innerHTML = `${pts.length} yard(s) with GPS • Click a marker to jump to that yard` +
-        ` <span style="margin-left:10px; display:inline-flex; gap:10px; align-items:center; flex-wrap:wrap;">`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-standard);display:inline-block;"></span><span class="small">Standard</span></span>`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-queen);display:inline-block;"></span><span class="small">Queen</span></span>`
-        + `<span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-split);display:inline-block;"></span><span class="small">Split</span></span>`
-        + `</span>`;
+      // Status + legend
+      if (el.mapStatus) {
+        el.mapStatus.innerHTML =
+          `<div class="small">${scopeLabel} • Tap a yard dot for details.</div>` +
+          `<div class="small" style="margin-top:4px; opacity:0.9;">
+             Dot size = hive count
+           </div>` +
+          `<span style="display:inline-flex;gap:10px; flex-wrap:wrap; margin-top:6px;">
+             <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-standard);display:inline-block;"></span><span class="small">Standard</span></span>
+             <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-queen);display:inline-block;"></span><span class="small">Queen</span></span>
+             <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:10px;height:10px;border-radius:999px;background:var(--purpose-split);display:inline-block;"></span><span class="small">Split</span></span>
+           </span>`;
+      }
 
       // Init map once
       if (!this.map) {
@@ -3685,7 +4124,7 @@ if (!pts.length) {
 
       // Fit bounds
       const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
-      try { this.map.fitBounds(bounds.pad(0.2)); } catch (_) {}
+      try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
 
       pts.forEach(([lat, lon, name]) => {
         const c = counts[name] || 0;
@@ -3712,423 +4151,43 @@ if (!pts.length) {
           fillOpacity: 0.55
         });
 
+        const popupId = "bnGoYard_" + Utils.hashString(name).slice(0, 10);
+
         const popup = `
           <div style="min-width:220px;">
             <div><strong>${Utils.escapeHtml(name)}</strong></div>
-            <div class="small">${purposeLabel} • ${c} hive(s)</div>
-            <div class="small">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
-            <div style="margin-top:6px;">
-              <button type="button" data-yard="${encodeURIComponent(name)}" style="width:100%; padding:8px 10px; border-radius:12px; border:1px solid rgba(0,0,0,0.2); background:#fff; cursor:pointer;">
-                Open yard
-              </button>
+            <div class="small">${purposeLabel}</div>
+            <div class="small" style="margin-top:6px;">Hives: <strong>${c}</strong></div>
+            <div class="small" style="margin-top:6px;">Home point: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
+            <div style="margin-top:10px;">
+              <button id="${popupId}" type="button" class="btn btn-primary" style="width:100%;">Go to yard</button>
             </div>
           </div>
         `;
-        marker.bindPopup(popup);
+
+        marker.bindPopup(popup, { closeButton: true });
+
+        marker.on("popupopen", () => {
+          const btn = document.getElementById(popupId);
+          if (!btn) return;
+          btn.onclick = () => {
+            // Set current yard + close map to "navigate"
+            if (el.currentYard) {
+              el.currentYard.value = name;
+              try { UI.refreshYardUI(); } catch (_) {}
+              try { UI.renderYardExtras(name); } catch (_) {}
+              try { Reminders.render(); } catch (_) {}
+              UI.status(`Switched to "${name}"`);
+            }
+            if (el.mapPanel) el.mapPanel.classList.add("hidden");
+          };
+        });
+
         marker.addTo(this.markers);
-
-        marker.on("popupopen", (e) => {
-          const root = e.popup && e.popup.getElement ? e.popup.getElement() : null;
-          const btn = root ? root.querySelector("button[data-yard]") : null;
-          if (btn) {
-            btn.onclick = () => {
-              const yn = decodeURIComponent(btn.getAttribute("data-yard") || "");
-              try {
-                el.currentYard.value = yn;
-                UI.refreshYardUI();
-                UI.renderYardGps(yn);
-                UI.renderYardPurposeCard(yn);
-                el.mapPanel.classList.add("hidden");
-              } catch (_) {}
-            };
-          }
-        });
-      });
-
-      // Leaflet needs a resize after panel show
-      setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 150);
-    }
-  };
-
-
-
-
-  // =========================================================
-  // Field Card (read-only latest inspection per hive)
-  // =========================================================
-  const FieldCard = {
-    isOpen: false,
-
-    open() {
-      this.isOpen = true;
-      if (el.fieldCardPanel) el.fieldCardPanel.classList.remove("hidden");
-      this.render();
-      try { el.fieldCardSearch && el.fieldCardSearch.focus(); } catch (_) {}
-    },
-
-    close() {
-      this.isOpen = false;
-      if (el.fieldCardPanel) el.fieldCardPanel.classList.add("hidden");
-    },
-
-    getLatestInspection(hive) {
-      const arr = Array.isArray(hive.inspections) ? hive.inspections : [];
-      if (arr.length === 0) return null;
-      const sorted = [...arr].sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
-      return sorted[0];
-    },
-
-    summarizeInsp(insp) {
-      if (!insp) return { date:"", queen:"", mites:"", brood:"", notes:"" };
-      const date = insp.date || "";
-      const notes = (insp.notes || insp.note || "").trim();
-
-      // Queen (best effort)
-      let queen = "";
-      if (insp.queenStatus) queen = insp.queenStatus;
-      else if (insp.queen && insp.queen.status) queen = insp.queen.status;
-      else if (insp.queen && insp.queen.method) queen = insp.queen.method;
-      else if (insp.queenSeen !== undefined) queen = insp.queenSeen ? "queen seen" : "queen not seen";
-
-      // Mites (best effort)
-      let mites = "";
-      const mt = insp.miteTreatment || insp.mites || null;
-      if (mt && typeof mt === "object") {
-        const type = (mt.type || "").trim();
-        const due = (mt.due || mt.nextDue || "").trim();
-        mites = type ? type : "";
-        if (due) mites = mites ? `${mites} (due ${due})` : `due ${due}`;
-      } else if (typeof mt === "string") {
-        mites = mt;
-      }
-
-      // Brood (best effort)
-      let brood = "";
-      if (insp.broodPattern) brood = insp.broodPattern;
-      else if (insp.brood && typeof insp.brood === "object") brood = insp.brood.pattern || "";
-      else if (insp.broodPresent !== undefined) brood = insp.broodPresent ? "brood present" : "no brood";
-
-      return { date, queen, mites, brood, notes };
-    },
-
-    buildRows() {
-      const hives = Storage.loadHives() || {};
-      const rows = [];
-      Object.keys(hives).forEach(id => {
-        const hive = hives[id];
-        if (!hive) return;
-        const insp = this.getLatestInspection(hive);
-        const s = this.summarizeInsp(insp);
-        rows.push({
-          id,
-          name: hive.name || "",
-          yard: hive.yard || hive.location || "",
-          lastDate: s.date || "",
-          queen: s.queen || "",
-          mites: s.mites || "",
-          brood: s.brood || "",
-          notes: s.notes || "",
-        });
-      });
-      rows.sort((a,b) => (a.yard||"").localeCompare(b.yard||"") || (a.name||"").localeCompare(b.name||"") || a.id.localeCompare(b.id));
-      return rows;
-    },
-
-    matches(row, q) {
-      if (!q) return true;
-      const hay = [row.id,row.name,row.yard,row.lastDate,row.queen,row.mites,row.brood,row.notes].join(" ").toLowerCase();
-      return hay.includes(q.toLowerCase());
-    },
-
-    render() {
-      const q = (el.fieldCardSearch?.value || "").trim();
-      const all = this.buildRows();
-      const rows = all.filter(r => this.matches(r, q));
-
-      if (el.fieldCardStats) el.fieldCardStats.textContent = `${rows.length} of ${all.length} hives shown`;
-
-      if (!el.fieldCardList) return;
-      if (rows.length === 0) {
-        el.fieldCardList.innerHTML = "<div class=\"small\"><em>No matching hives.</em></div>";
-        return;
-      }
-
-      el.fieldCardList.innerHTML = rows.map(r => {
-        const title = `${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}`;
-        const yard = r.yard ? `<div class="small"><strong>Yard:</strong> ${Utils.escapeHtml(r.yard)}</div>` : "";
-        const date = `<div class="small"><strong>Latest:</strong> ${Utils.escapeHtml(r.lastDate || "(no inspections)")}</div>`;
-        const queen = r.queen ? `<div class="small"><strong>Queen:</strong> ${Utils.escapeHtml(r.queen)}</div>` : "";
-        const mites = r.mites ? `<div class="small"><strong>Mites:</strong> ${Utils.escapeHtml(r.mites)}</div>` : "";
-        const brood = r.brood ? `<div class="small"><strong>Brood:</strong> ${Utils.escapeHtml(r.brood)}</div>` : "";
-        const notes = r.notes ? `<div class="small"><strong>Notes:</strong> ${Utils.escapeHtml(r.notes)}</div>` : "";
-
-        return `<div class="card" style="margin-top:0.6rem; padding:0.7rem;">
-          <div><strong>${title}</strong></div>
-          ${yard}
-          ${date}
-          ${queen}
-          ${mites}
-          ${brood}
-          ${notes}
-        </div>`;
-      }).join("");
-    },
-
-    print() {
-      const q = (el.fieldCardSearch?.value || "").trim();
-      const rows = this.buildRows().filter(r => this.matches(r, q));
-
-      const w = window.open("", "_blank");
-      if (!w) { alert("Pop-up blocked. Allow pop-ups to print."); return; }
-
-      const body = `
-        <h2 style="margin:0 0 12px;">BroodNote Field Card</h2>
-        <div style="font-size:12px;color:#333;margin-bottom:10px;">${Utils.escapeHtml(new Date().toLocaleString())}</div>
-        ${rows.map(r => `
-          <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:10px;">
-            <div style="font-weight:bold;font-size:16px;">${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}</div>
-            ${r.yard ? `<div>Yard: ${Utils.escapeHtml(r.yard)}</div>` : ""}
-            <div>Latest: ${Utils.escapeHtml(r.lastDate || "(none)")}</div>
-            ${r.queen ? `<div>Queen: ${Utils.escapeHtml(r.queen)}</div>` : ""}
-            ${r.mites ? `<div>Mites: ${Utils.escapeHtml(r.mites)}</div>` : ""}
-            ${r.brood ? `<div>Brood: ${Utils.escapeHtml(r.brood)}</div>` : ""}
-            ${r.notes ? `<div>Notes: ${Utils.escapeHtml(r.notes)}</div>` : ""}
-          </div>
-        `).join("")}
-      `;
-
-      w.document.open();
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8" />
-        <title>BroodNote Field Card</title>
-        <style>body{font-family:Arial,sans-serif;padding:16px;}</style>
-      </head><body>${body}</body></html>`);
-      w.document.close();
-
-      // IMPORTANT: no <script> tags in the written HTML (prevents parser break in main app).
-      // Trigger print after load:
-      w.onload = () => {
-        try { w.focus(); w.print(); } catch (_) {}
-      };
-    }
-  };
-
-
-  // =========================================================
-  // Geo helper
-  // =========================================================
-  const Geo = {
-    async getCurrent() {
-      if (!navigator.geolocation) return null;
-      return new Promise((resolve) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
-          () => resolve(null),
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-        );
       });
     }
   };
 
-  // =========================================================
-  // Swarm traps (per yard)
-  // =========================================================
-  const SwarmTraps = {
-    async add(yard) {
-      const name = prompt("Trap name/ID (e.g., Trap 1 / Oak tree):", "");
-      if (name === null) return;
-      const tied = prompt("Tied to hive tag ID (optional):", "");
-      if (tied === null) return;
-      const gps = await Geo.getCurrent();
-      YardMeta.update(yard, (y) => {
-        y.traps = Array.isArray(y.traps) ? y.traps : [];
-        y.traps.unshift({
-          id: Utils.uuid(),
-          name: (name||"").trim() || "Trap",
-          tiedHiveId: (tied||"").trim(),
-          gps,
-          created: Utils.todayISO(),
-          lastCheck: "",
-          status: "set" // set | caught | removed
-        });
-        return y;
-      });
-      UI.renderYardExtras(yard);
-      UI.status("Trap added");
-    },
-
-    async updateGps(yard) {
-      const gps = await Geo.getCurrent();
-      if (!gps) { alert("GPS unavailable."); return; }
-      YardMeta.update(yard, (y) => {
-        y.traps = Array.isArray(y.traps) ? y.traps : [];
-        y.traps.forEach(t => { if (t.status !== "removed") t.gps = gps; });
-        return y;
-      });
-      UI.renderYardExtras(yard);
-      UI.status("Trap GPS updated");
-    },
-
-    toggleCaught(yard, id) {
-      YardMeta.update(yard, (y) => {
-        const t = (y.traps||[]).find(x => x.id === id);
-        if (!t) return y;
-        t.status = (t.status === "caught") ? "set" : "caught";
-        t.lastCheck = Utils.todayISO();
-        return y;
-      });
-      UI.renderYardExtras(yard);
-    },
-
-    check(yard, id) {
-      YardMeta.update(yard, (y) => {
-        const t = (y.traps||[]).find(x => x.id === id);
-        if (!t) return y;
-        t.lastCheck = Utils.todayISO();
-        return y;
-      });
-      UI.renderYardExtras(yard);
-    },
-
-    remove(yard, id) {
-      if (!confirm("Remove this trap from the list?")) return;
-      YardMeta.update(yard, (y) => {
-        y.traps = (y.traps||[]).filter(t => t.id !== id);
-        return y;
-      });
-      UI.renderYardExtras(yard);
-    }
-  };
-
-  // =========================================================
-  // Swarm & removal events (per yard)
-  // =========================================================
-  const SwarmRemoval = {
-    async add(yard, kind) {
-      const gps = await Geo.getCurrent();
-      const size = prompt("Size: small / medium / large", "medium");
-      if (size === null) return;
-      const attitude = prompt("Attitude: calm / normal / hot", "normal");
-      if (attitude === null) return;
-      const tied = prompt("Tied to hive tag ID (optional):", "");
-      if (tied === null) return;
-      const notes = prompt("Notes (optional):", "");
-      if (notes === null) return;
-
-      YardMeta.update(yard, (y) => {
-        y.events = Array.isArray(y.events) ? y.events : [];
-        y.events.unshift({
-          id: Utils.uuid(),
-          kind,
-          date: Utils.todayISO(),
-          gps,
-          size: (size||"").trim(),
-          attitude: (attitude||"").trim(),
-          tiedHiveId: (tied||"").trim(),
-          notes: (notes||"").trim()
-        });
-        return y;
-      });
-
-      UI.renderYardExtras(yard);
-      UI.status(kind === "swarm" ? "Swarm logged" : "Removal logged");
-    },
-
-    remove(yard, id) {
-      if (!confirm("Delete this event?")) return;
-      YardMeta.update(yard, (y) => {
-        y.events = (y.events||[]).filter(e => e.id !== id);
-        return y;
-      });
-      UI.renderYardExtras(yard);
-    }
-  };
-
-  // =========================================================
-  // Nectar & dearth (per yard) + season banner
-  // =========================================================
-  const Nectar = {
-    promptNectar(existing) {
-      const e = existing || {};
-      const source = prompt("Nectar source (e.g., Tulip poplar / Clover / Sourwood):", e.source || "");
-      if (source === null) return null;
-      const start = prompt("Flow start (month like Apr or date YYYY-MM-DD):", e.start || "");
-      if (start === null) return null;
-      const end = prompt("Flow end (month or date):", e.end || "");
-      if (end === null) return null;
-      const honey = prompt("Honey type (optional):", e.honey || "");
-      if (honey === null) return null;
-      const superOn = prompt("Add supers around (optional month/date):", e.superOn || "");
-      if (superOn === null) return null;
-      const superOff = prompt("Pull supers around (optional month/date):", e.superOff || "");
-      if (superOff === null) return null;
-      const notes = prompt("Notes (optional):", e.notes || "");
-      if (notes === null) return null;
-      return { source:(source||"").trim(), start:(start||"").trim(), end:(end||"").trim(),
-               honey:(honey||"").trim(), superOn:(superOn||"").trim(), superOff:(superOff||"").trim(), notes:(notes||"").trim() };
-    },
-
-    promptDearth(existing) {
-      const e = existing || {};
-      const start = prompt("Dearth start (month or date):", e.start || "");
-      if (start === null) return null;
-      const end = prompt("Dearth end (month or date):", e.end || "");
-      if (end === null) return null;
-      const notes = prompt("Notes (optional):", e.notes || "");
-      if (notes === null) return null;
-      return { start:(start||"").trim(), end:(end||"").trim(), notes:(notes||"").trim() };
-    },
-
-    parseMonthOrISO(s) {
-      const v = String(s||"").trim();
-      if (!v) return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { kind:"date", date:v };
-      const map = {jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
-      const key = v.toLowerCase().replace(".","").trim();
-      if (map[key]) return { kind:"month", month: map[key] };
-      return null;
-    },
-
-    toRange(startStr, endStr) {
-      const y = new Date(Utils.todayISO()+"T00:00:00").getFullYear();
-      const s = this.parseMonthOrISO(startStr);
-      const e = this.parseMonthOrISO(endStr);
-      if (!s || !e) return null;
-
-      const mk = (obj, isEnd) => {
-        if (obj.kind === "date") return obj.date;
-        const m = obj.month;
-        const day = isEnd ? new Date(y, m, 0).getDate() : 1;
-        return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-      };
-
-      const sISO = mk(s, false);
-      let eISO = mk(e, true);
-      if (eISO < sISO) {
-        const d = new Date(eISO+"T00:00:00");
-        const ny = y + 1;
-        eISO = `${ny}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      }
-      return { startISO: sISO, endISO: eISO };
-    },
-
-    isTodayIn(rng) {
-      if (!rng) return false;
-      const t = new Date(Utils.todayISO()+"T00:00:00").getTime();
-      const a = new Date(rng.startISO+"T00:00:00").getTime();
-      const b = new Date(rng.endISO+"T00:00:00").getTime();
-      return t >= a && t <= b;
-    },
-
-    rel(iso) {
-      if (!iso) return "";
-      const t = new Date(Utils.todayISO()+"T00:00:00").getTime();
-      const d = new Date(iso+"T00:00:00").getTime();
-      const diff = Math.round((d - t)/86400000);
-      if (diff === 0) return "today";
-      if (diff > 0) return `in ${diff}d`;
-      return `${Math.abs(diff)}d ago`;
-    }
-  };
 
 const UI = {
     status(text) {
