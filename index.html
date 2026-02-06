@@ -3540,7 +3540,7 @@ if (!pts.length) {
 
 
   // =========================================================
-  // Field Card (latest inspection per hive)
+  // Field Card (read-only latest inspection per hive)
   // =========================================================
   const FieldCard = {
     isOpen: false,
@@ -3560,7 +3560,6 @@ if (!pts.length) {
     getLatestInspection(hive) {
       const arr = Array.isArray(hive.inspections) ? hive.inspections : [];
       if (arr.length === 0) return null;
-      // Prefer newest by date if present
       const sorted = [...arr].sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
       return sorted[0];
     },
@@ -3570,7 +3569,7 @@ if (!pts.length) {
       const date = insp.date || "";
       const notes = (insp.notes || insp.note || "").trim();
 
-      // Queen (best effort across versions)
+      // Queen (best effort)
       let queen = "";
       if (insp.queenStatus) queen = insp.queenStatus;
       else if (insp.queen && insp.queen.status) queen = insp.queen.status;
@@ -3615,31 +3614,24 @@ if (!pts.length) {
           mites: s.mites || "",
           brood: s.brood || "",
           notes: s.notes || "",
-          _hive: hive,
-          _insp: insp
         });
       });
-      // Sort by yard then hive name then id
       rows.sort((a,b) => (a.yard||"").localeCompare(b.yard||"") || (a.name||"").localeCompare(b.name||"") || a.id.localeCompare(b.id));
       return rows;
     },
 
     matches(row, q) {
       if (!q) return true;
-      const hay = [
-        row.id, row.name, row.yard, row.lastDate, row.queen, row.mites, row.brood, row.notes
-      ].join(" ").toLowerCase();
+      const hay = [row.id,row.name,row.yard,row.lastDate,row.queen,row.mites,row.brood,row.notes].join(" ").toLowerCase();
       return hay.includes(q.toLowerCase());
     },
 
     render() {
       const q = (el.fieldCardSearch?.value || "").trim();
-      const rows = this.buildRows().filter(r => this.matches(r, q));
+      const all = this.buildRows();
+      const rows = all.filter(r => this.matches(r, q));
 
-      if (el.fieldCardStats) {
-        const total = Object.keys(Storage.loadHives() || {}).length;
-        el.fieldCardStats.textContent = `${rows.length} of ${total} hives shown`;
-      }
+      if (el.fieldCardStats) el.fieldCardStats.textContent = `${rows.length} of ${all.length} hives shown`;
 
       if (!el.fieldCardList) return;
       if (rows.length === 0) {
@@ -3650,7 +3642,7 @@ if (!pts.length) {
       el.fieldCardList.innerHTML = rows.map(r => {
         const title = `${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}`;
         const yard = r.yard ? `<div class="small"><strong>Yard:</strong> ${Utils.escapeHtml(r.yard)}</div>` : "";
-        const date = r.lastDate ? `<div class="small"><strong>Latest:</strong> ${Utils.escapeHtml(r.lastDate)}</div>` : `<div class="small"><strong>Latest:</strong> (no inspections)</div>`;
+        const date = `<div class="small"><strong>Latest:</strong> ${Utils.escapeHtml(r.lastDate || "(no inspections)")}</div>`;
         const queen = r.queen ? `<div class="small"><strong>Queen:</strong> ${Utils.escapeHtml(r.queen)}</div>` : "";
         const mites = r.mites ? `<div class="small"><strong>Mites:</strong> ${Utils.escapeHtml(r.mites)}</div>` : "";
         const brood = r.brood ? `<div class="small"><strong>Brood:</strong> ${Utils.escapeHtml(r.brood)}</div>` : "";
@@ -3664,42 +3656,45 @@ if (!pts.length) {
           ${mites}
           ${brood}
           ${notes}
-          <div class="row" style="gap:0.4rem; flex-wrap:wrap; margin-top:0.5rem;">
-            <button class="btn" data-fc-open="${Utils.escapeHtml(r.id)}">Open hive</button>
-          </div>
         </div>`;
       }).join("");
     },
 
     print() {
-      // Simple print: open a new window with the list HTML
-      const rows = this.buildRows().filter(r => this.matches(r, (el.fieldCardSearch?.value||"").trim()));
-      const htmlRows = rows.map(r => {
-        return `<div style="border:1px solid #ddd;padding:10px;margin:10px 0;">
-          <div style="font-weight:bold;font-size:16px;">${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}</div>
-          ${r.yard ? `<div>Yard: ${Utils.escapeHtml(r.yard)}</div>` : ""}
-          <div>Latest: ${Utils.escapeHtml(r.lastDate || "(none)")}</div>
-          ${r.queen ? `<div>Queen: ${Utils.escapeHtml(r.queen)}</div>` : ""}
-          ${r.mites ? `<div>Mites: ${Utils.escapeHtml(r.mites)}</div>` : ""}
-          ${r.brood ? `<div>Brood: ${Utils.escapeHtml(r.brood)}</div>` : ""}
-          ${r.notes ? `<div>Notes: ${Utils.escapeHtml(r.notes)}</div>` : ""}
-        </div>`;
-      }).join("");
+      const q = (el.fieldCardSearch?.value || "").trim();
+      const rows = this.buildRows().filter(r => this.matches(r, q));
 
       const w = window.open("", "_blank");
       if (!w) { alert("Pop-up blocked. Allow pop-ups to print."); return; }
+
+      const body = `
+        <h2 style="margin:0 0 12px;">BroodNote Field Card</h2>
+        <div style="font-size:12px;color:#333;margin-bottom:10px;">${Utils.escapeHtml(new Date().toLocaleString())}</div>
+        ${rows.map(r => `
+          <div style="border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:10px;">
+            <div style="font-weight:bold;font-size:16px;">${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}</div>
+            ${r.yard ? `<div>Yard: ${Utils.escapeHtml(r.yard)}</div>` : ""}
+            <div>Latest: ${Utils.escapeHtml(r.lastDate || "(none)")}</div>
+            ${r.queen ? `<div>Queen: ${Utils.escapeHtml(r.queen)}</div>` : ""}
+            ${r.mites ? `<div>Mites: ${Utils.escapeHtml(r.mites)}</div>` : ""}
+            ${r.brood ? `<div>Brood: ${Utils.escapeHtml(r.brood)}</div>` : ""}
+            ${r.notes ? `<div>Notes: ${Utils.escapeHtml(r.notes)}</div>` : ""}
+          </div>
+        `).join("")}
+      `;
+
       w.document.open();
-      w.document.write(`<!doctype html><html><head><title>BroodNote Field Card</title>
-        <meta charset="utf-8" />
-        <style>
-          body{font-family:Arial,sans-serif;padding:16px;}
-        </style>
-      </head><body>
-        <h2>BroodNote Field Card</h2>
-        <div>${htmlRows}</div>
-        <script>window.onload=()=>{window.print();};</script>
-      </body></html>`);
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+        <title>BroodNote Field Card</title>
+        <style>body{font-family:Arial,sans-serif;padding:16px;}</style>
+      </head><body>${body}</body></html>`);
       w.document.close();
+
+      // IMPORTANT: no <script> tags in the written HTML (prevents parser break in main app).
+      // Trigger print after load:
+      w.onload = () => {
+        try { w.focus(); w.print(); } catch (_) {}
+      };
     }
   };
 
@@ -7919,40 +7914,11 @@ el.importZipInput.addEventListener("change", async () => {
     // -------------------------
     // Field Card wiring
     // -------------------------
-    if (el.fieldCardBtn) el.fieldCardBtn.addEventListener("click", () => {
-      FieldCard.open();
-    });
+    if (el.fieldCardBtn) el.fieldCardBtn.addEventListener("click", () => FieldCard.open());
     if (el.fieldCardCloseBtn) el.fieldCardCloseBtn.addEventListener("click", () => FieldCard.close());
     if (el.fieldCardRefreshBtn) el.fieldCardRefreshBtn.addEventListener("click", () => FieldCard.render());
     if (el.fieldCardPrintBtn) el.fieldCardPrintBtn.addEventListener("click", () => FieldCard.print());
     if (el.fieldCardSearch) el.fieldCardSearch.addEventListener("input", () => FieldCard.render());
-
-    document.addEventListener("click", (e) => {
-      const b = e.target && e.target.closest && e.target.closest("[data-fc-open]");
-      if (!b) return;
-      const id = b.getAttribute("data-fc-open");
-      if (!id) return;
-
-      // Close field card and open the hive using existing load logic (search + open)
-      try { FieldCard.close(); } catch (_) {}
-      try {
-        // Prefer the search field if present
-        if (el.searchHiveInput) {
-          el.searchHiveInput.value = id;
-          el.searchHiveInput.dispatchEvent(new Event("input"));
-        }
-      } catch (_) {}
-
-      // If there's a direct load function accessible, attempt it
-      try {
-        if (typeof loadHiveById === "function") {
-          loadHiveById(id);
-          return;
-        }
-      } catch (_) {}
-
-      alert("Field Card: copied ID to search. Use the normal Load/Open flow if it didn't auto-open.");
-    });
 
 
   }
@@ -8236,7 +8202,7 @@ Type a new team name to add, or leave blank to cancel:`);
     <div class="row" style="gap:0.5rem; align-items:flex-start;">
       <div class="grow">
         <strong>🗂️ Field Card</strong>
-        <div class="small">Fast, read-only snapshot of the latest inspection per hive (great for desktop review).</div>
+        <div class="small">Read-only snapshot of the latest inspection per hive (great for desktop review).</div>
       </div>
       <button id="fieldCardCloseBtn" type="button" class="btn">Close</button>
     </div>
