@@ -489,7 +489,9 @@ button.primary, .btn.primary {
       <option value="standard">Standard (everything)</option>
       <option value="queen">Queen rearing / mating</option>
       <option value="split">Nuc / split growing yard</option>
-    </select>
+    
+      <option value="swarmtrap">🪤 Swarm trap yard</option>
+</select>
 
     <div id="yardSplitPanel" class="card hidden" style="margin-top:0.75rem; background: var(--muted);">
       <div class="row" style="gap:0.5rem; align-items:flex-start;">
@@ -788,6 +790,46 @@ button.primary, .btn.primary {
   <div id="yardHives" class="card"></div>
   <div id="status" class="small"></div>
 
+
+  <div id="swarmTrapsCard" class="card hidden" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>🪤 Swarm Traps</strong>
+        <div class="small">Track trap GPS and link traps to a source hive.</div>
+      </div>
+      <button id="addTrapBtn" type="button" class="btn">➕ Add trap</button>
+      <button id="refreshTrapGpsBtn" type="button" class="btn">📍 Update GPS</button>
+    </div>
+    <div id="swarmTrapsList" class="small" style="margin-top:0.6rem;"></div>
+  </div>
+
+  <div id="swarmRemovalCard" class="card" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>🐝 Swarms & 🏠 Removals</strong>
+        <div class="small">Log captures and removals (GPS + size + attitude). Shows on the Events map.</div>
+      </div>
+      <button id="addSwarmEventBtn" type="button" class="btn">🐝 Add swarm</button>
+      <button id="addRemovalEventBtn" type="button" class="btn">🏠 Add removal</button>
+    </div>
+    <div id="swarmRemovalList" class="small" style="margin-top:0.6rem;"></div>
+  </div>
+
+  <div id="yardNectarPanel" class="card" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>🍯 Yard Nectar & Dearth</strong>
+        <div class="small">Track flows, honey types, super timing, and local dearth periods for this yard.</div>
+      </div>
+      <button id="addYardNectarBtn" type="button" class="btn">➕ Nectar source</button>
+      <button id="addYardDearthBtn" type="button" class="btn">➕ Dearth</button>
+    </div>
+    <div id="yardNectarBanner" class="card" style="margin-top:0.6rem; padding:0.6rem; border:1px solid rgba(47,36,24,0.12);">
+      <div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>
+    </div>
+    <div id="yardNectarList" class="small" style="margin-top:0.6rem;"></div>
+    <div id="yardDearthList" class="small" style="margin-top:0.6rem;"></div>
+  </div>
   <div id="hiveForm" class="hidden card">
     <p style="margin-top:0;"><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
 
@@ -1521,7 +1563,8 @@ document.addEventListener("DOMContentLoaded", () => {
         this.setStatus("Restore complete.");
         alert("Restore complete. The app will refresh the yard list now.");
         UI.refreshYardUI();
-        Reminders.render();
+            try { UI.renderYardExtras((el.currentYard?.value||\"\").trim()); } catch (_) {}
+Reminders.render();
         if (el.lookupPanel && !el.lookupPanel.classList.contains("hidden")) Lookup.render();
         if (el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render();
       } catch (e) {
@@ -3063,6 +3106,28 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     fieldCardStats: document.getElementById("fieldCardStats"),
     fieldCardList: document.getElementById("fieldCardList"),
 
+    // Swarm traps + swarms/removals + nectar
+    swarmTrapsCard: document.getElementById("swarmTrapsCard"),
+    addTrapBtn: document.getElementById("addTrapBtn"),
+    refreshTrapGpsBtn: document.getElementById("refreshTrapGpsBtn"),
+    swarmTrapsList: document.getElementById("swarmTrapsList"),
+    swarmRemovalCard: document.getElementById("swarmRemovalCard"),
+    addSwarmEventBtn: document.getElementById("addSwarmEventBtn"),
+    addRemovalEventBtn: document.getElementById("addRemovalEventBtn"),
+    swarmRemovalList: document.getElementById("swarmRemovalList"),
+    yardNectarPanel: document.getElementById("yardNectarPanel"),
+    yardNectarBanner: document.getElementById("yardNectarBanner"),
+    addYardNectarBtn: document.getElementById("addYardNectarBtn"),
+    addYardDearthBtn: document.getElementById("addYardDearthBtn"),
+    yardNectarList: document.getElementById("yardNectarList"),
+    yardDearthList: document.getElementById("yardDearthList"),
+
+    // Events panel
+    eventsBtn: document.getElementById("eventsBtn"),
+    eventsPanel: document.getElementById("eventsPanel"),
+    eventsCloseBtn: document.getElementById("eventsCloseBtn"),
+    eventsHotspots: document.getElementById("eventsHotspots"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3698,12 +3763,405 @@ if (!pts.length) {
     }
   };
 
+
+  // =========================================================
+  // Geo helper
+  // =========================================================
+  const Geo = {
+    async getCurrent() {
+      if (!navigator.geolocation) return null;
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+      });
+    }
+  };
+
+  // =========================================================
+  // Swarm traps (per yard)
+  // =========================================================
+  const SwarmTraps = {
+    async add(yard) {
+      const name = prompt("Trap name/ID (e.g., Trap 1 / Oak tree):", "");
+      if (name === null) return;
+      const tied = prompt("Tied to hive tag ID (optional):", "");
+      if (tied === null) return;
+      const gps = await Geo.getCurrent();
+      YardMeta.update(yard, (y) => {
+        y.traps = Array.isArray(y.traps) ? y.traps : [];
+        y.traps.unshift({
+          id: Utils.uuid(),
+          name: (name||"").trim() || "Trap",
+          tiedHiveId: (tied||"").trim(),
+          gps,
+          created: Utils.todayISO(),
+          lastCheck: "",
+          status: "set" // set | caught | removed
+        });
+        return y;
+      });
+      UI.renderYardExtras(yard);
+      UI.status("Trap added");
+    },
+
+    async updateGps(yard) {
+      const gps = await Geo.getCurrent();
+      if (!gps) { alert("GPS unavailable."); return; }
+      YardMeta.update(yard, (y) => {
+        y.traps = Array.isArray(y.traps) ? y.traps : [];
+        y.traps.forEach(t => { if (t.status !== "removed") t.gps = gps; });
+        return y;
+      });
+      UI.renderYardExtras(yard);
+      UI.status("Trap GPS updated");
+    },
+
+    toggleCaught(yard, id) {
+      YardMeta.update(yard, (y) => {
+        const t = (y.traps||[]).find(x => x.id === id);
+        if (!t) return y;
+        t.status = (t.status === "caught") ? "set" : "caught";
+        t.lastCheck = Utils.todayISO();
+        return y;
+      });
+      UI.renderYardExtras(yard);
+    },
+
+    check(yard, id) {
+      YardMeta.update(yard, (y) => {
+        const t = (y.traps||[]).find(x => x.id === id);
+        if (!t) return y;
+        t.lastCheck = Utils.todayISO();
+        return y;
+      });
+      UI.renderYardExtras(yard);
+    },
+
+    remove(yard, id) {
+      if (!confirm("Remove this trap from the list?")) return;
+      YardMeta.update(yard, (y) => {
+        y.traps = (y.traps||[]).filter(t => t.id !== id);
+        return y;
+      });
+      UI.renderYardExtras(yard);
+    }
+  };
+
+  // =========================================================
+  // Swarm & removal events (per yard)
+  // =========================================================
+  const SwarmRemoval = {
+    async add(yard, kind) {
+      const gps = await Geo.getCurrent();
+      const size = prompt("Size: small / medium / large", "medium");
+      if (size === null) return;
+      const attitude = prompt("Attitude: calm / normal / hot", "normal");
+      if (attitude === null) return;
+      const tied = prompt("Tied to hive tag ID (optional):", "");
+      if (tied === null) return;
+      const notes = prompt("Notes (optional):", "");
+      if (notes === null) return;
+
+      YardMeta.update(yard, (y) => {
+        y.events = Array.isArray(y.events) ? y.events : [];
+        y.events.unshift({
+          id: Utils.uuid(),
+          kind,
+          date: Utils.todayISO(),
+          gps,
+          size: (size||"").trim(),
+          attitude: (attitude||"").trim(),
+          tiedHiveId: (tied||"").trim(),
+          notes: (notes||"").trim()
+        });
+        return y;
+      });
+
+      UI.renderYardExtras(yard);
+      UI.status(kind === "swarm" ? "Swarm logged" : "Removal logged");
+    },
+
+    remove(yard, id) {
+      if (!confirm("Delete this event?")) return;
+      YardMeta.update(yard, (y) => {
+        y.events = (y.events||[]).filter(e => e.id !== id);
+        return y;
+      });
+      UI.renderYardExtras(yard);
+    }
+  };
+
+  // =========================================================
+  // Nectar & dearth (per yard) + season banner
+  // =========================================================
+  const Nectar = {
+    promptNectar(existing) {
+      const e = existing || {};
+      const source = prompt("Nectar source (e.g., Tulip poplar / Clover / Sourwood):", e.source || "");
+      if (source === null) return null;
+      const start = prompt("Flow start (month like Apr or date YYYY-MM-DD):", e.start || "");
+      if (start === null) return null;
+      const end = prompt("Flow end (month or date):", e.end || "");
+      if (end === null) return null;
+      const honey = prompt("Honey type (optional):", e.honey || "");
+      if (honey === null) return null;
+      const superOn = prompt("Add supers around (optional month/date):", e.superOn || "");
+      if (superOn === null) return null;
+      const superOff = prompt("Pull supers around (optional month/date):", e.superOff || "");
+      if (superOff === null) return null;
+      const notes = prompt("Notes (optional):", e.notes || "");
+      if (notes === null) return null;
+      return { source:(source||"").trim(), start:(start||"").trim(), end:(end||"").trim(),
+               honey:(honey||"").trim(), superOn:(superOn||"").trim(), superOff:(superOff||"").trim(), notes:(notes||"").trim() };
+    },
+
+    promptDearth(existing) {
+      const e = existing || {};
+      const start = prompt("Dearth start (month or date):", e.start || "");
+      if (start === null) return null;
+      const end = prompt("Dearth end (month or date):", e.end || "");
+      if (end === null) return null;
+      const notes = prompt("Notes (optional):", e.notes || "");
+      if (notes === null) return null;
+      return { start:(start||"").trim(), end:(end||"").trim(), notes:(notes||"").trim() };
+    },
+
+    parseMonthOrISO(s) {
+      const v = String(s||"").trim();
+      if (!v) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return { kind:"date", date:v };
+      const map = {jan:1,january:1,feb:2,february:2,mar:3,march:3,apr:4,april:4,may:5,jun:6,june:6,jul:7,july:7,aug:8,august:8,sep:9,sept:9,september:9,oct:10,october:10,nov:11,november:11,dec:12,december:12};
+      const key = v.toLowerCase().replace(".","").trim();
+      if (map[key]) return { kind:"month", month: map[key] };
+      return null;
+    },
+
+    toRange(startStr, endStr) {
+      const y = new Date(Utils.todayISO()+"T00:00:00").getFullYear();
+      const s = this.parseMonthOrISO(startStr);
+      const e = this.parseMonthOrISO(endStr);
+      if (!s || !e) return null;
+
+      const mk = (obj, isEnd) => {
+        if (obj.kind === "date") return obj.date;
+        const m = obj.month;
+        const day = isEnd ? new Date(y, m, 0).getDate() : 1;
+        return `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+      };
+
+      const sISO = mk(s, false);
+      let eISO = mk(e, true);
+      if (eISO < sISO) {
+        const d = new Date(eISO+"T00:00:00");
+        const ny = y + 1;
+        eISO = `${ny}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      }
+      return { startISO: sISO, endISO: eISO };
+    },
+
+    isTodayIn(rng) {
+      if (!rng) return false;
+      const t = new Date(Utils.todayISO()+"T00:00:00").getTime();
+      const a = new Date(rng.startISO+"T00:00:00").getTime();
+      const b = new Date(rng.endISO+"T00:00:00").getTime();
+      return t >= a && t <= b;
+    },
+
+    rel(iso) {
+      if (!iso) return "";
+      const t = new Date(Utils.todayISO()+"T00:00:00").getTime();
+      const d = new Date(iso+"T00:00:00").getTime();
+      const diff = Math.round((d - t)/86400000);
+      if (diff === 0) return "today";
+      if (diff > 0) return `in ${diff}d`;
+      return `${Math.abs(diff)}d ago`;
+    }
+  };
+
 const UI = {
     status(text) {
       el.status.textContent = text || "";
       // Keep debug stats fresh without spamming the console panel.
       if (typeof Debug !== "undefined" && Debug.isOn && Debug.isOn()) Debug.renderStats();
     },
+    renderEventsHotspots() {
+      if (!el.eventsHotspots) return;
+      // Aggregate events across all yards
+      const all = YardMeta._load ? YardMeta._load() : {};
+      const buckets = [];
+      Object.keys(all).forEach(yard => {
+        const meta = all[yard] || {};
+        const ev = Array.isArray(meta.events) ? meta.events : [];
+        if (ev.length === 0) return;
+        // compute crude centroid from gps points
+        const pts = ev.filter(e => e.gps && typeof e.gps.lat === "number" && typeof e.gps.lng === "number").map(e => e.gps);
+        const lat = pts.length ? (pts.reduce((a,p)=>a+p.lat,0)/pts.length) : null;
+        const lng = pts.length ? (pts.reduce((a,p)=>a+p.lng,0)/pts.length) : null;
+        const count = ev.length;
+        const swarmCount = ev.filter(e=>e.kind==="swarm").length;
+        const removalCount = ev.filter(e=>e.kind==="removal").length;
+        buckets.push({ yard, count, swarmCount, removalCount, lat, lng });
+      });
+      buckets.sort((a,b)=>b.count-a.count);
+
+      if (buckets.length === 0) {
+        el.eventsHotspots.innerHTML = "<div class=\"small\"><em>No events logged yet.</em></div>";
+        return;
+      }
+
+      el.eventsHotspots.innerHTML = buckets.map(b => {
+        const gps = (b.lat!=null && b.lng!=null) ? `${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}` : "(no GPS)";
+        const size = Math.min(44, 14 + b.count*6);
+        return `<div class="card" style="margin-top:0.6rem;padding:0.7rem;display:flex;gap:0.8rem;align-items:center;">
+          <div style="width:${size}px;height:${size}px;border-radius:${size}px;background:rgba(198,146,20,0.25);border:1px solid rgba(47,36,24,0.2);"></div>
+          <div class="grow">
+            <div><strong>${Utils.escapeHtml(b.yard)}</strong> • ${b.count} events</div>
+            <div class="small">🐝 ${b.swarmCount} swarms • 🏠 ${b.removalCount} removals • GPS: ${Utils.escapeHtml(gps)}</div>
+          </div>
+        </div>`;
+      }).join("");
+    },
+
+    renderYardExtras(yardName) {
+      const name = (yardName || (el.currentYard?.value||"")).trim();
+      if (!name) return;
+      const meta = YardMeta.ensure(name);
+
+      // Purpose driven visibility
+      const purpose = (meta.purpose || "").trim();
+      if (el.swarmTrapsCard) {
+        if (purpose === "swarmtrap") el.swarmTrapsCard.classList.remove("hidden");
+        else el.swarmTrapsCard.classList.add("hidden");
+      }
+
+      // Swarm traps list
+      if (el.swarmTrapsList) {
+        const traps = Array.isArray(meta.traps) ? meta.traps : [];
+        if (purpose !== "swarmtrap") {
+          el.swarmTrapsList.innerHTML = "";
+        } else if (traps.length === 0) {
+          el.swarmTrapsList.innerHTML = "<em>No traps yet.</em>";
+        } else {
+          el.swarmTrapsList.innerHTML = traps.map(t => {
+            const gps = t.gps ? `${(t.gps.lat||0).toFixed(5)}, ${(t.gps.lng||0).toFixed(5)}` : "(no GPS)";
+            const tied = t.tiedHiveId ? ` • tied: <strong>${Utils.escapeHtml(t.tiedHiveId)}</strong>` : "";
+            const status = t.status === "caught" ? "✅ caught" : "🪤 set";
+            const last = t.lastCheck ? ` • last check ${Utils.escapeHtml(t.lastCheck)}` : "";
+            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
+              <div><strong>${Utils.escapeHtml(t.name||"Trap")}</strong> • ${status}${tied}</div>
+              <div class="small">GPS: ${Utils.escapeHtml(gps)}${last}</div>
+              <div class="row" style="gap:0.4rem;flex-wrap:wrap;margin-top:0.4rem;">
+                <button class="btn" data-trap-action="check" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Check</button>
+                <button class="btn" data-trap-action="toggleCaught" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Toggle caught</button>
+                <button class="btn" data-trap-action="remove" data-yard="${Utils.escapeHtml(name)}" data-id="${t.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+      }
+
+      // Swarm/Removal list (always visible, yard-scoped)
+      if (el.swarmRemovalList) {
+        const ev = Array.isArray(meta.events) ? meta.events : [];
+        if (ev.length === 0) {
+          el.swarmRemovalList.innerHTML = "<em>No events yet.</em>";
+        } else {
+          el.swarmRemovalList.innerHTML = ev.map(e => {
+            const gps = e.gps ? `${(e.gps.lat||0).toFixed(5)}, ${(e.gps.lng||0).toFixed(5)}` : "(no GPS)";
+            const tie = e.tiedHiveId ? ` • tied: <strong>${Utils.escapeHtml(e.tiedHiveId)}</strong>` : "";
+            const kind = e.kind === "swarm" ? "🐝 Swarm" : "🏠 Removal";
+            const size = e.size ? ` • size ${Utils.escapeHtml(e.size)}` : "";
+            const att = e.attitude ? ` • attitude ${Utils.escapeHtml(e.attitude)}` : "";
+            const notes = e.notes ? `<div class="small">${Utils.escapeHtml(e.notes)}</div>` : "";
+            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
+              <div><strong>${kind}</strong> • ${Utils.escapeHtml(e.date||"")}${size}${att}${tie}</div>
+              <div class="small">GPS: ${Utils.escapeHtml(gps)}</div>
+              ${notes}
+              <div class="row" style="gap:0.4rem;margin-top:0.4rem;">
+                <button class="btn" data-ev-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${e.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+      }
+
+      // Nectar lists + banner
+      if (el.yardNectarList && el.yardDearthList && el.yardNectarBanner) {
+        const sources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
+        const dearths = Array.isArray(meta.dearths) ? meta.dearths : [];
+
+        // Banner
+        const flowsToday = sources.map(s => ({ s, rng: Nectar.toRange(s.start, s.end) })).filter(x => x.rng && Nectar.isTodayIn(x.rng));
+        const dearthToday = dearths.map(d => ({ d, rng: Nectar.toRange(d.start, d.end) })).filter(x => x.rng && Nectar.isTodayIn(x.rng));
+
+        if (dearthToday.length > 0) {
+          const d0 = dearthToday[0];
+          const note = d0.d.notes ? ` • ${Utils.escapeHtml(d0.d.notes)}` : "";
+          el.yardNectarBanner.innerHTML = `<div><strong>🔻 Dearth right now</strong> (${Utils.escapeHtml(d0.rng.startISO)} → ${Utils.escapeHtml(d0.rng.endISO)})${note}</div>
+            <div class="small" style="margin-top:0.25rem;">Consider: feed if needed, watch robbing, minimize open time.</div>`;
+        } else if (flowsToday.length > 0) {
+          const top = flowsToday.slice(0,3).map(x => Utils.escapeHtml(x.s.source||"Source")).join(", ");
+          const honeys = [...new Set(flowsToday.map(x => (x.s.honey||"").trim()).filter(Boolean))].slice(0,3);
+          const honeyLine = honeys.length ? `Honey: <strong>${honeys.map(Utils.escapeHtml).join(", ")}</strong>` : "";
+          const withSupers = flowsToday.find(x => (x.s.superOn || x.s.superOff));
+          let superLine = "";
+          if (withSupers) {
+            const onR = Nectar.toRange(withSupers.s.superOn, withSupers.s.superOn);
+            const offR = Nectar.toRange(withSupers.s.superOff, withSupers.s.superOff);
+            const onISO = onR ? onR.startISO : "";
+            const offISO = offR ? offR.startISO : "";
+            superLine = `${onISO ? `Add supers: <strong>${Utils.escapeHtml(onISO)}</strong> (${Utils.escapeHtml(Nectar.rel(onISO))})` : ""}` +
+                        `${(onISO && offISO) ? " • " : ""}` +
+                        `${offISO ? `Pull supers: <strong>${Utils.escapeHtml(offISO)}</strong> (${Utils.escapeHtml(Nectar.rel(offISO))})` : ""}`;
+          }
+          el.yardNectarBanner.innerHTML = `<div><strong>🟢 Flow right now</strong> • ${top}</div>
+            ${honeyLine ? `<div class="small" style="margin-top:0.25rem;">${honeyLine}</div>` : ""}
+            ${superLine ? `<div class="small" style="margin-top:0.25rem;">${superLine}</div>` : `<div class="small" style="margin-top:0.25rem;">Tip: add “supers on/off” inside a nectar source to show super timing here.</div>`}`;
+        } else {
+          el.yardNectarBanner.innerHTML = `<div class="small"><strong>🟡 No active flow/dearth today</strong> — add sources/dearths to get seasonal guidance here.</div>`;
+        }
+
+        // Nectar sources list
+        if (sources.length === 0) {
+          el.yardNectarList.innerHTML = "<em>No nectar sources listed for this yard yet.</em>";
+        } else {
+          el.yardNectarList.innerHTML = "<strong>Nectar sources</strong>" + sources.map(s => {
+            const when = `${Utils.escapeHtml(s.start||"?")} → ${Utils.escapeHtml(s.end||"?")}`;
+            const honey = s.honey ? ` • honey: <strong>${Utils.escapeHtml(s.honey)}</strong>` : "";
+            const supers = (s.superOn || s.superOff) ? ` • supers: ${Utils.escapeHtml(s.superOn||"?")} → <strong>${Utils.escapeHtml(s.superOff||"?")}</strong>` : "";
+            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
+              <div><strong>${Utils.escapeHtml(s.source||"Source")}</strong> • ${when}${honey}${supers}</div>
+              ${s.notes ? `<div class="small">${Utils.escapeHtml(s.notes)}</div>` : ""}
+              <div class="row" style="gap:0.4rem;margin-top:0.4rem;flex-wrap:wrap;">
+                <button class="btn" data-nectar-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Edit</button>
+                <button class="btn" data-nectar-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${s.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+
+        // Dearth list
+        if (dearths.length === 0) {
+          el.yardDearthList.innerHTML = "<em>No dearth periods listed for this yard yet.</em>";
+        } else {
+          el.yardDearthList.innerHTML = "<strong>Dearth periods</strong>" + dearths.map(d => {
+            const when = `${Utils.escapeHtml(d.start||"?")} → ${Utils.escapeHtml(d.end||"?")}`;
+            const note = d.notes ? ` • ${Utils.escapeHtml(d.notes)}` : "";
+            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
+              <div><strong>Dearth</strong> • ${when}${note}</div>
+              <div class="row" style="gap:0.4rem;margin-top:0.4rem;">
+                <button class="btn" data-dearth-action="edit" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Edit</button>
+                <button class="btn" data-dearth-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${d.id}">Delete</button>
+              </div>
+            </div>`;
+          }).join("");
+        }
+      }
+    },
+
 
     renderSyncCard() {
       if (!el.syncStatus || !el.syncEnabled || !el.syncEmail) return;
@@ -4956,6 +5414,8 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         b.addEventListener("click", () => App.handleHiveLoad(h.id));
         container.appendChild(b);
       });
+    
+      try { this.renderYardExtras((el.currentYard?.value||"").trim()); } catch (_) {}
     },
 
     renderYardPurposeCard(yardName) {
@@ -7921,6 +8381,154 @@ el.importZipInput.addEventListener("change", async () => {
     if (el.fieldCardSearch) el.fieldCardSearch.addEventListener("input", () => FieldCard.render());
 
 
+
+    // -------------------------
+    // Swarm/Nectar wiring
+    // -------------------------
+    if (el.yardPurposeSelect) {
+      el.yardPurposeSelect.addEventListener("change", () => {
+        const yard = (el.currentYard?.value || "").trim();
+        if (!yard) return;
+        YardMeta.update(yard, (y) => { y.purpose = el.yardPurposeSelect.value || ""; return y; });
+        UI.renderYardExtras(yard);
+      });
+    }
+
+    if (el.addTrapBtn) el.addTrapBtn.addEventListener("click", async () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      await SwarmTraps.add(yard);
+    });
+
+    if (el.refreshTrapGpsBtn) el.refreshTrapGpsBtn.addEventListener("click", async () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      await SwarmTraps.updateGps(yard);
+    });
+
+    if (el.addSwarmEventBtn) el.addSwarmEventBtn.addEventListener("click", async () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      await SwarmRemoval.add(yard, "swarm");
+    });
+
+    if (el.addRemovalEventBtn) el.addRemovalEventBtn.addEventListener("click", async () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      await SwarmRemoval.add(yard, "removal");
+    });
+
+    if (el.addYardNectarBtn) el.addYardNectarBtn.addEventListener("click", () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      const data = Nectar.promptNectar(null);
+      if (!data) return;
+      YardMeta.update(yard, (y) => {
+        y.nectarSources = Array.isArray(y.nectarSources) ? y.nectarSources : [];
+        y.nectarSources.unshift({ id: Utils.uuid(), ...data });
+        return y;
+      });
+      UI.renderYardExtras(yard);
+      UI.status("Nectar source added");
+    });
+
+    if (el.addYardDearthBtn) el.addYardDearthBtn.addEventListener("click", () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      const data = Nectar.promptDearth(null);
+      if (!data) return;
+      YardMeta.update(yard, (y) => {
+        y.dearths = Array.isArray(y.dearths) ? y.dearths : [];
+        y.dearths.unshift({ id: Utils.uuid(), ...data });
+        return y;
+      });
+      UI.renderYardExtras(yard);
+      UI.status("Dearth added");
+    });
+
+    // Delegated buttons
+    document.addEventListener("click", (e) => {
+      const trap = e.target && e.target.closest && e.target.closest("[data-trap-action]");
+      if (trap) {
+        const action = trap.getAttribute("data-trap-action");
+        const yard = trap.getAttribute("data-yard");
+        const id = trap.getAttribute("data-id");
+        if (action === "check") SwarmTraps.check(yard, id);
+        if (action === "toggleCaught") SwarmTraps.toggleCaught(yard, id);
+        if (action === "remove") SwarmTraps.remove(yard, id);
+        return;
+      }
+
+      const ev = e.target && e.target.closest && e.target.closest("[data-ev-action]");
+      if (ev) {
+        const action = ev.getAttribute("data-ev-action");
+        const yard = ev.getAttribute("data-yard");
+        const id = ev.getAttribute("data-id");
+        if (action === "delete") SwarmRemoval.remove(yard, id);
+        return;
+      }
+
+      const nectarBtn = e.target && e.target.closest && e.target.closest("[data-nectar-action]");
+      if (nectarBtn) {
+        const action = nectarBtn.getAttribute("data-nectar-action");
+        const yard = nectarBtn.getAttribute("data-yard");
+        const id = nectarBtn.getAttribute("data-id");
+        if (!yard || !id) return;
+        if (action === "delete") {
+          if (!confirm("Delete this nectar source?")) return;
+          YardMeta.update(yard, (y) => { y.nectarSources = (y.nectarSources||[]).filter(s => s.id !== id); return y; });
+          UI.renderYardExtras(yard);
+          return;
+        }
+        if (action === "edit") {
+          const meta = YardMeta.get(yard) || {};
+          const s0 = (meta.nectarSources||[]).find(s => s.id === id);
+          const data = Nectar.promptNectar(s0);
+          if (!data) return;
+          YardMeta.update(yard, (y) => { const s = (y.nectarSources||[]).find(x => x.id === id); if (s) Object.assign(s, data); return y; });
+          UI.renderYardExtras(yard);
+          return;
+        }
+      }
+
+      const dearthBtn = e.target && e.target.closest && e.target.closest("[data-dearth-action]");
+      if (dearthBtn) {
+        const action = dearthBtn.getAttribute("data-dearth-action");
+        const yard = dearthBtn.getAttribute("data-yard");
+        const id = dearthBtn.getAttribute("data-id");
+        if (!yard || !id) return;
+        if (action === "delete") {
+          if (!confirm("Delete this dearth period?")) return;
+          YardMeta.update(yard, (y) => { y.dearths = (y.dearths||[]).filter(d => d.id !== id); return y; });
+          UI.renderYardExtras(yard);
+          return;
+        }
+        if (action === "edit") {
+          const meta = YardMeta.get(yard) || {};
+          const d0 = (meta.dearths||[]).find(d => d.id === id);
+          const data = Nectar.promptDearth(d0);
+          if (!data) return;
+          YardMeta.update(yard, (y) => { const d = (y.dearths||[]).find(x => x.id === id); if (d) Object.assign(d, data); return y; });
+          UI.renderYardExtras(yard);
+          return;
+        }
+      }
+    });
+
+
+
+    // -------------------------
+    // Events panel wiring
+    // -------------------------
+    if (el.eventsBtn) el.eventsBtn.addEventListener("click", () => {
+      if (el.eventsPanel) el.eventsPanel.classList.toggle("hidden");
+      try { UI.renderEventsHotspots(); } catch (_) {}
+    });
+    if (el.eventsCloseBtn) el.eventsCloseBtn.addEventListener("click", () => {
+      if (el.eventsPanel) el.eventsPanel.classList.add("hidden");
+    });
+
+
   }
 
   // =========================================================
@@ -8215,6 +8823,18 @@ Type a new team name to add, or leave blank to cancel:`);
 
     <div id="fieldCardStats" class="small" style="margin-top:0.6rem;"></div>
     <div id="fieldCardList" style="margin-top:0.6rem;"></div>
+  </div>
+
+
+  <div id="eventsPanel" class="card hidden" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>📍 Events Map (Hotspots)</strong>
+        <div class="small">Desktop-friendly hotspot view: swarms + removals by yard.</div>
+      </div>
+      <button id="eventsCloseBtn" type="button" class="btn">Close</button>
+    </div>
+    <div id="eventsHotspots" style="margin-top:0.6rem;"></div>
   </div>
 
 </body>
