@@ -1399,6 +1399,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch (err) { console.error(err); alert('Map button error. See Console for details.'); }
   };
+  // Wire critical toolbar buttons (safe fallbacks)
+  try {
+    const eb = document.getElementById('exportMenuBtn');
+    if (eb) eb.addEventListener('click', window.__BN.toggleExportPanel);
+    const mb = document.getElementById('mapBtn');
+    if (mb) mb.addEventListener('click', window.__BN.openMapPanel);
+  } catch (_) {}
+
+
 // =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
@@ -4707,16 +4716,8 @@ for (const [k, v] of Object.entries(el)) {
         },
         onAdd(map) {
           this._map = map;
-          this._canvas = L.DomUtil.create("canvas", "bn-heat-ca
+          this._canvas = L.DomUtil.create("canvas", "bn-heat-canvas");
 
-  // Wire critical toolbar buttons with safe fallbacks early
-  try {
-    const eb = document.getElementById('exportMenuBtn');
-    if (eb) eb.onclick = window.__BN.toggleExportPanel;
-    const mb = document.getElementById('mapBtn');
-    if (mb) mb.onclick = window.__BN.openMapPanel;
-  } catch (_) {}
-nvas");
           this._canvas.style.position = "absolute";
           this._canvas.style.top = "0";
           this._canvas.style.left = "0";
