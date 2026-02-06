@@ -9726,20 +9726,36 @@ el.remindersBtn.addEventListener("click", () => {
 
       // Install prompt (where supported)
       let deferredPrompt = null;
+
+      // Hide install button if already installed / running standalone
+      const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+      if (isStandalone) {
+        installBtn?.classList.add("hidden");
+      }
+
+      // One click handler (avoid stacking listeners)
+      if (installBtn) {
+        installBtn.addEventListener("click", async () => {
+          if (!deferredPrompt) return;
+          try {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+          } catch (_) {}
+          deferredPrompt = null;
+          installBtn.classList.add("hidden");
+        });
+      }
+
       window.addEventListener("beforeinstallprompt", (e) => {
+        // We control the install UX, so prevent the mini-infobar and show our button instead.
         e.preventDefault();
         deferredPrompt = e;
-        if (installBtn){
-          installBtn.classList.remove("hidden");
-          installBtn.addEventListener("click", async () => {
-            try{
-              deferredPrompt.prompt();
-              await deferredPrompt.userChoice;
-            }catch{}
-            deferredPrompt = null;
-            installBtn.classList.add("hidden");
-          }, { once:true });
-        }
+        installBtn?.classList.remove("hidden");
+      });
+
+      window.addEventListener("appinstalled", () => {
+        deferredPrompt = null;
+        installBtn?.classList.add("hidden");
       });
 
       // Service worker registration + update UI
