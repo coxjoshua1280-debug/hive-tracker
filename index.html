@@ -588,6 +588,7 @@ button.primary, .btn.primary {
   <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
   <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
   <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
+    <button id="fieldCardBtn" type="button" class="btn">🗂️ Field Card</button>
     <button id="cloudBtn" type="button" class="btn grow">☁️ Cloud</button>
 <button id="lockBtn" type="button" class="btn btn-muted grow">🔒 Locked</button>
   <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
@@ -3052,6 +3053,16 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     rearingEditor: document.getElementById("rearingEditor"),
     rearingCalendar: document.getElementById("rearingCalendar"),
 
+    // Field Card
+    fieldCardBtn: document.getElementById("fieldCardBtn"),
+    fieldCardPanel: document.getElementById("fieldCardPanel"),
+    fieldCardCloseBtn: document.getElementById("fieldCardCloseBtn"),
+    fieldCardSearch: document.getElementById("fieldCardSearch"),
+    fieldCardRefreshBtn: document.getElementById("fieldCardRefreshBtn"),
+    fieldCardPrintBtn: document.getElementById("fieldCardPrintBtn"),
+    fieldCardStats: document.getElementById("fieldCardStats"),
+    fieldCardList: document.getElementById("fieldCardList"),
+
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
@@ -3526,6 +3537,171 @@ if (!pts.length) {
   };
 
 
+
+
+  // =========================================================
+  // Field Card (latest inspection per hive)
+  // =========================================================
+  const FieldCard = {
+    isOpen: false,
+
+    open() {
+      this.isOpen = true;
+      if (el.fieldCardPanel) el.fieldCardPanel.classList.remove("hidden");
+      this.render();
+      try { el.fieldCardSearch && el.fieldCardSearch.focus(); } catch (_) {}
+    },
+
+    close() {
+      this.isOpen = false;
+      if (el.fieldCardPanel) el.fieldCardPanel.classList.add("hidden");
+    },
+
+    getLatestInspection(hive) {
+      const arr = Array.isArray(hive.inspections) ? hive.inspections : [];
+      if (arr.length === 0) return null;
+      // Prefer newest by date if present
+      const sorted = [...arr].sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
+      return sorted[0];
+    },
+
+    summarizeInsp(insp) {
+      if (!insp) return { date:"", queen:"", mites:"", brood:"", notes:"" };
+      const date = insp.date || "";
+      const notes = (insp.notes || insp.note || "").trim();
+
+      // Queen (best effort across versions)
+      let queen = "";
+      if (insp.queenStatus) queen = insp.queenStatus;
+      else if (insp.queen && insp.queen.status) queen = insp.queen.status;
+      else if (insp.queen && insp.queen.method) queen = insp.queen.method;
+      else if (insp.queenSeen !== undefined) queen = insp.queenSeen ? "queen seen" : "queen not seen";
+
+      // Mites (best effort)
+      let mites = "";
+      const mt = insp.miteTreatment || insp.mites || null;
+      if (mt && typeof mt === "object") {
+        const type = (mt.type || "").trim();
+        const due = (mt.due || mt.nextDue || "").trim();
+        mites = type ? type : "";
+        if (due) mites = mites ? `${mites} (due ${due})` : `due ${due}`;
+      } else if (typeof mt === "string") {
+        mites = mt;
+      }
+
+      // Brood (best effort)
+      let brood = "";
+      if (insp.broodPattern) brood = insp.broodPattern;
+      else if (insp.brood && typeof insp.brood === "object") brood = insp.brood.pattern || "";
+      else if (insp.broodPresent !== undefined) brood = insp.broodPresent ? "brood present" : "no brood";
+
+      return { date, queen, mites, brood, notes };
+    },
+
+    buildRows() {
+      const hives = Storage.loadHives() || {};
+      const rows = [];
+      Object.keys(hives).forEach(id => {
+        const hive = hives[id];
+        if (!hive) return;
+        const insp = this.getLatestInspection(hive);
+        const s = this.summarizeInsp(insp);
+        rows.push({
+          id,
+          name: hive.name || "",
+          yard: hive.yard || hive.location || "",
+          lastDate: s.date || "",
+          queen: s.queen || "",
+          mites: s.mites || "",
+          brood: s.brood || "",
+          notes: s.notes || "",
+          _hive: hive,
+          _insp: insp
+        });
+      });
+      // Sort by yard then hive name then id
+      rows.sort((a,b) => (a.yard||"").localeCompare(b.yard||"") || (a.name||"").localeCompare(b.name||"") || a.id.localeCompare(b.id));
+      return rows;
+    },
+
+    matches(row, q) {
+      if (!q) return true;
+      const hay = [
+        row.id, row.name, row.yard, row.lastDate, row.queen, row.mites, row.brood, row.notes
+      ].join(" ").toLowerCase();
+      return hay.includes(q.toLowerCase());
+    },
+
+    render() {
+      const q = (el.fieldCardSearch?.value || "").trim();
+      const rows = this.buildRows().filter(r => this.matches(r, q));
+
+      if (el.fieldCardStats) {
+        const total = Object.keys(Storage.loadHives() || {}).length;
+        el.fieldCardStats.textContent = `${rows.length} of ${total} hives shown`;
+      }
+
+      if (!el.fieldCardList) return;
+      if (rows.length === 0) {
+        el.fieldCardList.innerHTML = "<div class=\"small\"><em>No matching hives.</em></div>";
+        return;
+      }
+
+      el.fieldCardList.innerHTML = rows.map(r => {
+        const title = `${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}`;
+        const yard = r.yard ? `<div class="small"><strong>Yard:</strong> ${Utils.escapeHtml(r.yard)}</div>` : "";
+        const date = r.lastDate ? `<div class="small"><strong>Latest:</strong> ${Utils.escapeHtml(r.lastDate)}</div>` : `<div class="small"><strong>Latest:</strong> (no inspections)</div>`;
+        const queen = r.queen ? `<div class="small"><strong>Queen:</strong> ${Utils.escapeHtml(r.queen)}</div>` : "";
+        const mites = r.mites ? `<div class="small"><strong>Mites:</strong> ${Utils.escapeHtml(r.mites)}</div>` : "";
+        const brood = r.brood ? `<div class="small"><strong>Brood:</strong> ${Utils.escapeHtml(r.brood)}</div>` : "";
+        const notes = r.notes ? `<div class="small"><strong>Notes:</strong> ${Utils.escapeHtml(r.notes)}</div>` : "";
+
+        return `<div class="card" style="margin-top:0.6rem; padding:0.7rem;">
+          <div><strong>${title}</strong></div>
+          ${yard}
+          ${date}
+          ${queen}
+          ${mites}
+          ${brood}
+          ${notes}
+          <div class="row" style="gap:0.4rem; flex-wrap:wrap; margin-top:0.5rem;">
+            <button class="btn" data-fc-open="${Utils.escapeHtml(r.id)}">Open hive</button>
+          </div>
+        </div>`;
+      }).join("");
+    },
+
+    print() {
+      // Simple print: open a new window with the list HTML
+      const rows = this.buildRows().filter(r => this.matches(r, (el.fieldCardSearch?.value||"").trim()));
+      const htmlRows = rows.map(r => {
+        return `<div style="border:1px solid #ddd;padding:10px;margin:10px 0;">
+          <div style="font-weight:bold;font-size:16px;">${Utils.escapeHtml(r.id)}${r.name ? " • " + Utils.escapeHtml(r.name) : ""}</div>
+          ${r.yard ? `<div>Yard: ${Utils.escapeHtml(r.yard)}</div>` : ""}
+          <div>Latest: ${Utils.escapeHtml(r.lastDate || "(none)")}</div>
+          ${r.queen ? `<div>Queen: ${Utils.escapeHtml(r.queen)}</div>` : ""}
+          ${r.mites ? `<div>Mites: ${Utils.escapeHtml(r.mites)}</div>` : ""}
+          ${r.brood ? `<div>Brood: ${Utils.escapeHtml(r.brood)}</div>` : ""}
+          ${r.notes ? `<div>Notes: ${Utils.escapeHtml(r.notes)}</div>` : ""}
+        </div>`;
+      }).join("");
+
+      const w = window.open("", "_blank");
+      if (!w) { alert("Pop-up blocked. Allow pop-ups to print."); return; }
+      w.document.open();
+      w.document.write(`<!doctype html><html><head><title>BroodNote Field Card</title>
+        <meta charset="utf-8" />
+        <style>
+          body{font-family:Arial,sans-serif;padding:16px;}
+        </style>
+      </head><body>
+        <h2>BroodNote Field Card</h2>
+        <div>${htmlRows}</div>
+        <script>window.onload=()=>{window.print();};</script>
+      </body></html>`);
+      w.document.close();
+    }
+  };
 
 const UI = {
     status(text) {
@@ -7739,6 +7915,46 @@ el.importZipInput.addEventListener("change", async () => {
       if (!file) return;
       await handleImportZipFromFile(file);
     });
+
+    // -------------------------
+    // Field Card wiring
+    // -------------------------
+    if (el.fieldCardBtn) el.fieldCardBtn.addEventListener("click", () => {
+      FieldCard.open();
+    });
+    if (el.fieldCardCloseBtn) el.fieldCardCloseBtn.addEventListener("click", () => FieldCard.close());
+    if (el.fieldCardRefreshBtn) el.fieldCardRefreshBtn.addEventListener("click", () => FieldCard.render());
+    if (el.fieldCardPrintBtn) el.fieldCardPrintBtn.addEventListener("click", () => FieldCard.print());
+    if (el.fieldCardSearch) el.fieldCardSearch.addEventListener("input", () => FieldCard.render());
+
+    document.addEventListener("click", (e) => {
+      const b = e.target && e.target.closest && e.target.closest("[data-fc-open]");
+      if (!b) return;
+      const id = b.getAttribute("data-fc-open");
+      if (!id) return;
+
+      // Close field card and open the hive using existing load logic (search + open)
+      try { FieldCard.close(); } catch (_) {}
+      try {
+        // Prefer the search field if present
+        if (el.searchHiveInput) {
+          el.searchHiveInput.value = id;
+          el.searchHiveInput.dispatchEvent(new Event("input"));
+        }
+      } catch (_) {}
+
+      // If there's a direct load function accessible, attempt it
+      try {
+        if (typeof loadHiveById === "function") {
+          loadHiveById(id);
+          return;
+        }
+      } catch (_) {}
+
+      alert("Field Card: copied ID to search. Use the normal Load/Open flow if it didn't auto-open.");
+    });
+
+
   }
 
   // =========================================================
@@ -8014,6 +8230,26 @@ Type a new team name to add, or leave blank to cancel:`);
       });
     }
   </script>
+
+
+  <div id="fieldCardPanel" class="card hidden" style="margin-top:0.75rem;">
+    <div class="row" style="gap:0.5rem; align-items:flex-start;">
+      <div class="grow">
+        <strong>🗂️ Field Card</strong>
+        <div class="small">Fast, read-only snapshot of the latest inspection per hive (great for desktop review).</div>
+      </div>
+      <button id="fieldCardCloseBtn" type="button" class="btn">Close</button>
+    </div>
+
+    <div class="row" style="gap:0.5rem; flex-wrap:wrap; margin-top:0.6rem;">
+      <input id="fieldCardSearch" type="text" placeholder="Search by tag ID, hive name, yard, notes…" />
+      <button id="fieldCardRefreshBtn" type="button" class="btn">Refresh</button>
+      <button id="fieldCardPrintBtn" type="button" class="btn">Print</button>
+    </div>
+
+    <div id="fieldCardStats" class="small" style="margin-top:0.6rem;"></div>
+    <div id="fieldCardList" style="margin-top:0.6rem;"></div>
+  </div>
 
 </body>
 </html>
