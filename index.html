@@ -49,6 +49,18 @@ button.primary, .btn.primary {
     input, textarea, button, select { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
     textarea { min-height: 120px; }
     .hidden { display: none; }
+
+    .bootfallback{
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: radial-gradient(circle at 20% 10%, var(--bg1), var(--bg2));
+      z-index: 10000;
+    }
+
     .checkbox-label { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-top: 0.75rem; }
     input[type="checkbox"] { width: 28px; height: 28px; }
     #status { margin: 0.75rem 0 1rem; }
@@ -9735,6 +9747,19 @@ el.remindersBtn.addEventListener("click", () => {
       if (!NO_SW && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
         window.addEventListener("load", async () => {
           try{
+            const url = new URL(location.href);
+            const noSw = url.searchParams.get("nosw")==="1";
+            if (noSw) {
+              // Try to unregister any existing SW and clear caches (best-effort)
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister().catch(()=>{})));
+              if (caches?.keys) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(k => caches.delete(k).catch(()=>{})));
+              }
+              console.warn("Service worker bypassed via ?nosw=1");
+              return;
+            }
             const reg = await navigator.serviceWorker.register("./sw.js");
             // If there's an updated worker waiting, show update pill
             function showUpdate(){

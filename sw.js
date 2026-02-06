@@ -1,5 +1,5 @@
 /* BroodNote Service Worker */
-const CACHE_NAME = "broodnote-v3-fix12";
+const CACHE_NAME = "broodnote-v3-fix12c";
 const RUNTIME_CACHE = "broodnote-runtime-v1";
 const TILE_CACHE = "broodnote-tiles-v1";
 
@@ -47,6 +47,12 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
+
+  // Kill-switch: if ?nosw=1 is present, bypass the service worker entirely
+  if (url.searchParams && url.searchParams.get("nosw") === "1") {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   // Navigation: network-first with offline fallback to cached shell
   if (isNavigationRequest(req)) {
