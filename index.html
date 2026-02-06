@@ -48,7 +48,7 @@ button.primary, .btn.primary {
     label { font-weight: bold; display: block; margin: 0.75rem 0 0.25rem; }
     input, textarea, button, select { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
     textarea { min-height: 120px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
 
     .bootfallback{
       position: fixed;
@@ -222,14 +222,13 @@ button.primary, .btn.primary {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.55);
-      display: none;
+      display: flex;
       align-items: flex-start;
       justify-content: center;
       z-index: 9998;
       padding: 1rem;
       overflow: auto;
     }
-    #yardOverridesModal.show { display: flex; }
     #yardOverridesCard {
       width: min(760px, 100%);
       margin-top: 1rem;
@@ -522,7 +521,7 @@ button.primary, .btn.primary {
       .statusbar{ margin: 0 0 0.75rem 0; }
     }
 
-\1
+  </style>
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111111" />
@@ -944,7 +943,7 @@ button.primary, .btn.primary {
         <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
       </div>
         <div class="small">Export CSV or a full ZIP backup (includes photos). Import merges into the current profile.</div>
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
           <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
           <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
@@ -1063,7 +1062,7 @@ button.primary, .btn.primary {
       </div>
 
       <label for="activeBoxSelect" style="margin-top:0.75rem;">Active Box</label>
-      <select id="activeBoxSelect" class="box-select"></select>\1
+      <select id="activeBoxSelect" class="box-select"></select>
 
       <div class="card" style="margin-top:0.6rem;">
         <strong>Reorder boxes</strong>
@@ -1142,7 +1141,7 @@ button.primary, .btn.primary {
         <label for="queenNotes" style="margin-top:0.75rem;">Queen Notes</label>
         <textarea id="queenNotes" rows="3" placeholder="Lineage notes, source hive, breeder, temperament…"></textarea>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="queenSaveBtn" type="button" class="btn btn-primary grow">Save Queen</button>
           <button id="queenCancelBtn" type="button" class="btn btn-muted grow">Cancel</button>
         </div>
@@ -1171,7 +1170,7 @@ button.primary, .btn.primary {
         <div id="lineageHeatmap" class="card" style="margin-top:0.5rem;"></div>
         <div id="cellRaiserDash" class="card" style="margin-top:0.5rem;"></div>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="exportBreederReportBtn" type="button" class="btn grow">⬇️ Export breeder report</button>
         </div>
       </div>
@@ -6976,7 +6975,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
         ` : ""}
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="rearing_saveBtn" type="button" class="btn btn-primary grow">Save</button>
           <button id="rearing_closeBtn" type="button" class="btn grow">Close</button>
         </div>
