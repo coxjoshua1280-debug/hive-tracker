@@ -9243,36 +9243,46 @@ if (action === "confirmLaying") {
     }
 
     // Yard GPS capture
-    el.captureYardGps.addEventListener("click", async () => {
-      const yardName = (el.currentYard.value || "").trim();
-      if (!yardName) { alert("Enter a yard name first."); return; }
+ captureYardGpsBtn?.addEventListener("click", async () => {
+  if (!navigator.geolocation) {
+    alert("GPS not supported on this device.");
+    return;
+  }
 
-      try {
-        UI.status("Getting GPS…");
-        const pos = await GPS.getCurrentPositionOnce();
-        State.lastPosition = pos;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
 
-        const yards = Storage.loadYards();
-        const existing = yards[yardName] || {};
-        yards[yardName] = Object.assign({}, existing, {
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          timestamp: Date.now()
-        });
-        const res = Storage.saveYards(yards);
-        if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export ZIP backup!");
+    // 🔴 Get current yard record
+    const yardName = currentYardInput?.value?.trim();
+    if (!yardName) {
+      alert("Set a yard name first.");
+      return;
+    }
 
-        UI.status(`Saved GPS for ${yardName}`);
-        UI.renderYardGps(yardName);
-        UI.refreshYardUI();
-        UI.renderHiveYardGps();
-      UI.applyYardPurposeToHiveForm("");
-      } catch (err) {
-        alert("GPS error: " + (err.message || err));
-        UI.status("Ready");
-      }
-    });
+    const yards = Store.get("yards", {});
+    const yard = yards[yardName] || {};
+
+    // ✅ SAVE GPS INTO YARD OBJECT
+    yard.lat = lat;
+    yard.lon = lon;
+    yard.updated = Date.now();
+
+    yards[yardName] = yard;
+
+    // ✅ Persist to storage
+    Store.set("yards", yards);
+
+    // ✅ Re-render UI + map
+    renderYardGps();
+    Map?.refresh?.();
+
+    console.log("Yard GPS saved:", yardName, lat, lon);
+  }, (err) => {
+    alert("GPS error: " + err.message);
+  });
+});
+
 
     // Nearest yard detection
     el.detectNearestYard.addEventListener("click", async () => {
