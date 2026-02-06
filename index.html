@@ -1437,6 +1437,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
       return s;
     },
+    escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
     async compressImageFileToJpegBlob(file, maxDim = 1600, quality = 0.72) {
       const dataUrl = await new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -4449,6 +4457,97 @@ for (const [k, v] of Object.entries(el)) {
   // 3.5) YARD MAP (Leaflet)
   // =========================================================
   
+  // =========================================================
+  // Field Card (printable yard/hive list)
+  // =========================================================
+  const FieldCard = {
+    open() {
+      if (!el.fieldCardPanel) { alert("Field Card panel missing."); return; }
+      el.fieldCardPanel.classList.remove("hidden");
+      // hide other panels
+      el.yardsPanel?.classList.add("hidden");
+      el.remindersPanel?.classList.add("hidden");
+      el.lookupPanel?.classList.add("hidden");
+      el.mapPanel?.classList.add("hidden");
+      el.cloudPanel?.classList.add("hidden");
+      el.exportPanel?.classList.add("hidden");
+      try { el.fieldCardPanel.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (_) {}
+      this.render();
+    },
+    close() {
+      el.fieldCardPanel?.classList.add("hidden");
+    },
+    _rows() {
+      const hives = Storage.loadHives() || {};
+      const term = (el.fieldCardSearch?.value || "").trim().toLowerCase();
+      const rows = Object.values(hives).map(h => ({
+        id: h.id,
+        name: h.name || "",
+        yard: h.location || "",
+        last: h.lastInspection || "",
+        notes: h.notes || "",
+        tag: h.tagSerial || h.nfcTag || ""
+      }));
+      const filtered = !term ? rows : rows.filter(r => (
+        (r.id||"").toLowerCase().includes(term) ||
+        (r.name||"").toLowerCase().includes(term) ||
+        (r.yard||"").toLowerCase().includes(term) ||
+        (r.tag||"").toLowerCase().includes(term) ||
+        (r.notes||"").toLowerCase().includes(term)
+      ));
+      filtered.sort((a,b) => (a.yard||"").localeCompare(b.yard||"") || (a.name||"").localeCompare(b.name||"") || (a.id||"").localeCompare(b.id||""));
+      return filtered;
+    },
+    render() {
+      if (!el.fieldCardPanel || !el.fieldCardList) return;
+      const rows = this._rows();
+      const total = rows.length;
+      const yards = new Set(rows.map(r => (r.yard||"").trim()).filter(Boolean));
+      if (el.fieldCardStats) {
+        el.fieldCardStats.innerHTML = `<strong>${total}</strong> hive${total===1?"":"s"} • <strong>${yards.size}</strong> yard${yards.size===1?"":"s"}`;
+      }
+      if (!rows.length) {
+        el.fieldCardList.innerHTML = `<div class="small">No matches.</div>`;
+        return;
+      }
+      el.fieldCardList.innerHTML = rows.map(r => {
+        const title = Utils.escapeHtml(r.name ? `${r.name} (${r.id})` : r.id);
+        const yard = Utils.escapeHtml(r.yard || "");
+        const last = Utils.escapeHtml(r.last || "");
+        const tag = Utils.escapeHtml(r.tag || "");
+        return `
+          <div class="card" style="margin:0.5rem 0;">
+            <div><strong>${title}</strong></div>
+            <div class="small">Yard: <strong>${yard||"—"}</strong></div>
+            <div class="small">Tag: ${tag||"—"}</div>
+            <div class="small">Last insp: ${last||"—"}</div>
+          </div>`;
+      }).join("");
+    },
+    print() {
+      const rows = this._rows();
+      const htmlRows = rows.map(r => {
+        const title = Utils.escapeHtml(r.name ? `${r.name} (${r.id})` : r.id);
+        const yard = Utils.escapeHtml(r.yard || "");
+        const last = Utils.escapeHtml(r.last || "");
+        const tag = Utils.escapeHtml(r.tag || "");
+        return `<tr><td>${yard||"—"}</td><td>${title}</td><td>${tag||"—"}</td><td>${last||"—"}</td></tr>`;
+      }).join("");
+      const w = window.open("", "bn_fieldcard_print");
+      if (!w) { alert("Popup blocked — allow popups to print."); return; }
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>BroodNote Field Card</title>
+        <style>body{font-family:Arial,sans-serif;padding:18px;} h1{margin:0 0 10px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px;} th{background:#f2f2f2;} .small{font-size:12px;opacity:.8}</style>
+      </head><body>
+        <h1>🐝 BroodNote — Field Card</h1>
+        <div class="small">Generated: ${new Date().toLocaleString()}</div>
+        <table style="margin-top:12px;"><thead><tr><th>Yard</th><th>Hive</th><th>Tag</th><th>Last insp</th></tr></thead><tbody>${htmlRows}</tbody></table>
+      </body></html>`);
+      w.document.close();
+      w.focus();
+      w.print();
+    }
+  };
+
   const MapView = {
     map: null,
     markers: null,
@@ -4855,6 +4954,9 @@ for (const [k, v] of Object.entries(el)) {
         }).addTo(this.map);
 
         this.markers = L.layerGroup().addTo(this.map);
+
+        // When a map container was previously hidden, Leaflet may need a resize tick
+        setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 60);
       } else {
         this.markers.clearLayers();
       }
@@ -10442,4 +10544,3 @@ el.remindersBtn.addEventListener("click", () => {
 
 </body>
 </html>
-
