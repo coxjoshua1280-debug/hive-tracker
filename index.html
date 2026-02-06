@@ -4904,9 +4904,7 @@ for (const [k, v] of Object.entries(el)) {
       const yardNames = Object.keys(yards).sort((a,b) => a.localeCompare(b));
       if (!yardNames.length) {
         if (el.mapStatus) el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
-        el.yardMap.innerHTML = "";
-        if (el.mapMissingGps) el.mapMissingGps.innerHTML = "";
-        return;
+        // Still allow the base map to render (helps with GPS capture + future yard setup)
       }
 
       this._wireControlsOnce();
@@ -5069,9 +5067,14 @@ for (const [k, v] of Object.entries(el)) {
         this.markers.clearLayers();
       }
 
-      // Fit bounds
-      const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
-      try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
+      // Fit bounds (or default view if no yard GPS yet)
+      if (pts.length) {
+        const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
+        try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
+      } else {
+        // Default: Florida-ish (good for your use case); adjust later if desired
+        try { this.map.setView([27.8, -81.6], 6); } catch (_) {}
+      }
 
       // Heatmap (swarm density)
       this._renderHeatmapFromCache(false);
