@@ -1533,6 +1533,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return out;
       };
 
+  
+
+
+      return JSON.stringify(walk(value));
+    },
+    // Fast non-crypto hash (FNV-1a 32-bit) – good for corruption detection, not security
+    hashString(str) {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+      }
+      // unsigned 32-bit to hex
+      return ("00000000" + (h >>> 0).toString(16)).slice(-8);
+    }
+
+  };
+
+
   // =========================================================
   // NECTAR FINDER (v1 — coarse offline guide)
   // =========================================================
@@ -1686,23 +1705,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.NectarFinder = window.NectarFinder || NectarFinder;
 
 
-      return JSON.stringify(walk(value));
-    },
-    // Fast non-crypto hash (FNV-1a 32-bit) – good for corruption detection, not security
-    hashString(str) {
-      let h = 0x811c9dc5;
-      for (let i = 0; i < str.length; i++) {
-        h ^= str.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-      }
-      // unsigned 32-bit to hex
-      return ("00000000" + (h >>> 0).toString(16)).slice(-8);
-    }
-
-  };
-
-
-  // =========================================================
+// =========================================================
   // 2A) CLOUD BACKUP (Supabase) — manual backups + restore
   // =========================================================
   const CloudBackup = {
