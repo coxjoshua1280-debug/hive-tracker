@@ -529,6 +529,23 @@ button.primary, .btn.primary {
     <button id="installBtn" class="pillbtn hidden" type="button">Install</button>
   </div>
 
+
+  <div id="bootFallback" class="bootfallback">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+        <img src="assets/broodnote-logo.png" alt="BroodNote" style="width:44px;height:44px;border-radius:12px;object-fit:contain;">
+        <strong>Loading BroodNote…</strong>
+      </div>
+      <div class="small" id="bootFallbackMsg">If this doesn’t load in a moment, the app hit a startup error.</div>
+      <div style="margin-top:0.75rem;" class="row">
+        <button type="button" class="btn btn-muted" id="bootBypassSWBtn" style="width:auto;">Try without offline cache</button>
+        <button type="button" class="btn" id="bootReloadBtn" style="width:auto;">Reload</button>
+      </div>
+      <div class="small" style="margin-top:0.5rem;">Tip: open DevTools → Console for the exact error.</div>
+    </div>
+  </div>
+
+
   <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.25rem;"><img src="assets/broodnote-logo.png" alt="BroodNote logo" style="width:44px;height:44px;border-radius:12px;object-fit:contain;box-shadow:0 2px 10px rgba(47,36,24,0.12);"><h1 id="appTitle">🐝 BroodNote</h1></div>
 
   <div class="card" id="userCard" style="margin-top:0.5rem;">
@@ -9678,6 +9695,7 @@ el.remindersBtn.addEventListener("click", () => {
   <script>
     // PWA + Offline UX
     (function(){
+      const NO_SW = new URLSearchParams(location.search).has("nosw");
       const statusBar = document.getElementById("statusBar");
       const offlinePill = document.getElementById("offlinePill");
       const updatePill = document.getElementById("updatePill");
@@ -9714,7 +9732,7 @@ el.remindersBtn.addEventListener("click", () => {
       });
 
       // Service worker registration + update UI
-      if ("serviceWorker" in navigator) {
+      if (!NO_SW && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
         window.addEventListener("load", async () => {
           try{
             const reg = await navigator.serviceWorker.register("./sw.js");
@@ -9737,7 +9755,7 @@ el.remindersBtn.addEventListener("click", () => {
             });
             reloadBtn?.addEventListener("click", () => window.location.reload());
           }catch{}
-        });
+        }).catch(() => {});
       }
     })();
   </script>
@@ -9772,6 +9790,45 @@ el.remindersBtn.addEventListener("click", () => {
     </div>
     <div id="eventsHotspots" style="margin-top:0.6rem;"></div>
   </div>
+
+
+  <script>
+    (function(){
+      const fb = document.getElementById("bootFallback");
+      const msg = document.getElementById("bootFallbackMsg");
+      const reloadBtn = document.getElementById("bootReloadBtn");
+      const bypassBtn = document.getElementById("bootBypassSWBtn");
+      reloadBtn?.addEventListener("click", () => location.reload());
+      bypassBtn?.addEventListener("click", () => {
+        const url = new URL(location.href);
+        url.searchParams.set("nosw","1");
+        location.href = url.toString();
+      });
+
+      function tryHide(){
+        // If any core UI element is present and visible-ish, consider boot OK
+        const scan = document.getElementById("scanNfc");
+        if (scan && scan.offsetParent !== null) {
+          fb?.classList.add("hidden");
+          return true;
+        }
+        return false;
+      }
+
+      window.addEventListener("error", (e) => {
+        if (!fb) return;
+        fb.classList.remove("hidden");
+        msg.textContent = "Startup error: " + (e?.message || "Unknown error");
+      });
+
+      // After 2 seconds, if the app looks alive, hide the fallback
+      setTimeout(() => {
+        if (!tryHide() && msg) {
+          msg.textContent = "BroodNote didn’t finish loading. Click “Try without offline cache” or check the Console.";
+        }
+      }, 2000);
+    })();
+  </script>
 
 </body>
 </html>
