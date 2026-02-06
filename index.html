@@ -1563,7 +1563,7 @@ document.addEventListener("DOMContentLoaded", () => {
         this.setStatus("Restore complete.");
         alert("Restore complete. The app will refresh the yard list now.");
         UI.refreshYardUI();
-            try { UI.renderYardExtras((el.currentYard?.value||\"\").trim()); } catch (_) {}
+            try { UI.renderYardExtras((el.currentYard?.value||"").trim()); } catch (_) {}
 Reminders.render();
         if (el.lookupPanel && !el.lookupPanel.classList.contains("hidden")) Lookup.render();
         if (el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render();
