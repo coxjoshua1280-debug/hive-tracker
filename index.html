@@ -1366,7 +1366,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const APP_BUILD = "stable_v3_fix6_exportguard";
 
-  // =========================================================
+  
+
+  // ---- UI fallbacks (prevents dead buttons if later code throws) ----
+  window.__BN = window.__BN || {};
+  window.__BN.toggleExportPanel = () => {
+    try {
+      const panel = document.getElementById('exportPanel');
+      if (!panel) { console.warn('Export panel missing'); alert('Export panel is missing from the page.'); return; }
+      panel.classList.toggle('hidden');
+      document.getElementById('remindersPanel')?.classList.add('hidden');
+      document.getElementById('lookupPanel')?.classList.add('hidden');
+      document.getElementById('yardsPanel')?.classList.add('hidden');
+      document.getElementById('mapPanel')?.classList.add('hidden');
+      document.getElementById('cloudPanel')?.classList.add('hidden');
+      if (!panel.classList.contains('hidden')) { try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {} }
+    } catch (err) { console.error(err); alert('Export button error. See Console for details.'); }
+  };
+
+  window.__BN.openMapPanel = () => {
+    try {
+      const panel = document.getElementById('mapPanel');
+      if (!panel) return;
+      panel.classList.toggle('hidden');
+      document.getElementById('exportPanel')?.classList.add('hidden');
+      document.getElementById('remindersPanel')?.classList.add('hidden');
+      document.getElementById('lookupPanel')?.classList.add('hidden');
+      document.getElementById('cloudPanel')?.classList.add('hidden');
+      if (typeof MapView !== 'undefined' && MapView.render) {
+        MapView.render();
+        setTimeout(() => { try { if (MapView.map && MapView.map.invalidateSize) MapView.map.invalidateSize(); } catch (_) {} }, 250);
+      }
+    } catch (err) { console.error(err); alert('Map button error. See Console for details.'); }
+  };
+// =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
 
@@ -4674,7 +4707,16 @@ for (const [k, v] of Object.entries(el)) {
         },
         onAdd(map) {
           this._map = map;
-          this._canvas = L.DomUtil.create("canvas", "bn-heat-canvas");
+          this._canvas = L.DomUtil.create("canvas", "bn-heat-ca
+
+  // Wire critical toolbar buttons with safe fallbacks early
+  try {
+    const eb = document.getElementById('exportMenuBtn');
+    if (eb) eb.onclick = window.__BN.toggleExportPanel;
+    const mb = document.getElementById('mapBtn');
+    if (mb) mb.onclick = window.__BN.openMapPanel;
+  } catch (_) {}
+nvas");
           this._canvas.style.position = "absolute";
           this._canvas.style.top = "0";
           this._canvas.style.left = "0";
