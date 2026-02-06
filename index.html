@@ -1388,14 +1388,22 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const panel = document.getElementById('mapPanel');
       if (!panel) return;
-      panel.classList.toggle('hidden');
+
+      const willOpen = panel.classList.contains('hidden');
+      if (willOpen) panel.classList.remove('hidden');
+      else panel.classList.add('hidden');
+
       document.getElementById('exportPanel')?.classList.add('hidden');
       document.getElementById('remindersPanel')?.classList.add('hidden');
       document.getElementById('lookupPanel')?.classList.add('hidden');
       document.getElementById('cloudPanel')?.classList.add('hidden');
-      if (typeof MapView !== 'undefined' && MapView.render) {
-        MapView.render();
-        setTimeout(() => { try { if (MapView.map && MapView.map.invalidateSize) MapView.map.invalidateSize(); } catch (_) {} }, 250);
+
+      if (willOpen) {
+        try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+        if (typeof MapView !== 'undefined' && MapView.render) {
+          MapView.render();
+          setTimeout(() => { try { if (MapView.map && MapView.map.invalidateSize) MapView.map.invalidateSize(); } catch (_) {} }, 250);
+        }
       }
     } catch (err) { console.error(err); alert('Map button error. See Console for details.'); }
   };
@@ -1405,6 +1413,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (eb) eb.addEventListener('click', window.__BN.toggleExportPanel);
     const mb = document.getElementById('mapBtn');
     if (mb) mb.addEventListener('click', window.__BN.openMapPanel);
+    window.__BN._mapHandlerWired = true;
   } catch (_) {}
 
 
@@ -10289,7 +10298,7 @@ el.remindersBtn.addEventListener("click", () => {
     }
 
     // Yard map (desktop-friendly)
-    if (el.mapBtn && el.mapPanel) {
+    if (el.mapBtn && el.mapPanel && !(window.__BN && window.__BN._mapHandlerWired)) {
       el.mapBtn.addEventListener("click", () => {
         el.mapPanel.classList.toggle("hidden");
         el.exportPanel.classList.add("hidden");
