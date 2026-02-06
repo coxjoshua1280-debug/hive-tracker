@@ -1233,6 +1233,33 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!blob) throw new Error("Could not compress image.");
       return blob;
     }
+ 
+,
+    // Deterministic stringify (stable key order) for checksums/exports
+    stableStringify(value) {
+      const seen = new WeakSet();
+      const walk = (v) => {
+        if (v === null || typeof v !== "object") return v;
+        if (seen.has(v)) return "[Circular]";
+        seen.add(v);
+        if (Array.isArray(v)) return v.map(walk);
+        const out = {};
+        for (const k of Object.keys(v).sort()) out[k] = walk(v[k]);
+        return out;
+      };
+      return JSON.stringify(walk(value));
+    },
+    // Fast non-crypto hash (FNV-1a 32-bit) – good for corruption detection, not security
+    hashString(str) {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+      }
+      // unsigned 32-bit to hex
+      return ("00000000" + (h >>> 0).toString(16)).slice(-8);
+    }
+
   };
 
 
@@ -1675,6 +1702,105 @@ Reminders.render();
   const Storage = {
     VERSION: 5,
 
+    BACKUP_KEY: "backups_v1",
+    CHECKSUM_KEY: "data_checksum_v1",
+    MAX_BACKUPS: 10,
+
+    _coreSnapshot() {
+      return {
+        hives: this.loadHives(),
+        yards: this.loadYards(),
+        teams: this.loadTeams(),
+        meta: this.loadMeta(),
+      };
+    },
+
+    _writeChecksum() {
+      try {
+        const snap = this._coreSnapshot();
+        const canon = Utils.stableStringify(snap);
+        const hash = Utils.hashString(canon);
+        localStorage.setItem(User.key(this.CHECKSUM_KEY), JSON.stringify({ ts: Date.now(), hash }));
+        return { ok: true, hash };
+      } catch (e) {
+        return { ok: false, error: e };
+      }
+    },
+
+    _readChecksum() {
+      try {
+        return JSON.parse(localStorage.getItem(User.key(this.CHECKSUM_KEY)) || "null");
+      } catch (_) {
+        return null;
+      }
+    },
+
+    _pushBackup(reason, changedKey) {
+      try {
+        const ring = this.load(this.BACKUP_KEY, []);
+        const entry = {
+          ts: Date.now(),
+          reason: reason || "auto",
+          changedKey: changedKey || "",
+          version: this.VERSION,
+          snapshot: this._coreSnapshot(),
+        };
+        ring.unshift(entry);
+        while (ring.length > this.MAX_BACKUPS) ring.pop();
+        this.save(this.BACKUP_KEY, ring);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e };
+      }
+    },
+
+    restoreLatestBackup() {
+      const ring = this.load(this.BACKUP_KEY, []);
+      const latest = ring && ring[0];
+      if (!latest || !latest.snapshot) return { ok: false, error: new Error("No backups available") };
+      const s = latest.snapshot;
+      // Write snapshot back (bypasses Lock because this is recovery)
+      try {
+        localStorage.setItem(User.key("hives"), JSON.stringify(s.hives || {}));
+        localStorage.setItem(User.key("yards"), JSON.stringify(s.yards || {}));
+        localStorage.setItem(User.key("teams"), JSON.stringify(s.teams || { teams: [] }));
+        localStorage.setItem(User.key("meta"), JSON.stringify(s.meta || { version: 1 }));
+        this._writeChecksum();
+        return { ok: true, restoredTs: latest.ts };
+      } catch (e) {
+        return { ok: false, error: e };
+      }
+    },
+
+    validateOrRecoverOnBoot() {
+      const stored = this._readChecksum();
+      // If we've never written a checksum, establish one and continue.
+      if (!stored || !stored.hash) {
+        this._writeChecksum();
+        return { ok: true, action: "checksum_initialized" };
+      }
+      try {
+        const snap = this._coreSnapshot();
+        const canon = Utils.stableStringify(snap);
+        const hash = Utils.hashString(canon);
+        if (hash === stored.hash) return { ok: true, action: "checksum_ok" };
+
+        console.warn("Data checksum mismatch – attempting recovery from latest backup");
+        const rec = this.restoreLatestBackup();
+        if (rec.ok) {
+          alert("BroodNote detected possible data corruption and restored the latest automatic backup.");
+          return { ok: true, action: "restored_backup", restoredTs: rec.restoredTs };
+        }
+        // No backup available: keep data but re-seal checksum so app can boot.
+        console.warn("No backup available to restore; continuing with current data");
+        this._writeChecksum();
+        return { ok: true, action: "checksum_reset_no_backup" };
+      } catch (e) {
+        console.warn("Checksum validation failed", e);
+        return { ok: true, action: "checksum_validation_failed" };
+      }
+    },
+
     // ---- Box schema ----
     // Each inspection stores "boxes" instead of a single frameMap:
     // insp.boxes = [{ id, type: "deep"|"super", framesCount, frameMap }]
@@ -1702,12 +1828,24 @@ Reminders.render();
 
     save(key, value) {
       try {
+        // Auto-backup before overwriting core datasets
+        if (key === "hives" || key === "yards" || key === "teams" || key === "meta") {
+          this._pushBackup("auto", key);
+        }
+
         localStorage.setItem(User.key(key), JSON.stringify(value));
+
+        // Re-seal checksum after core writes (corruption detection)
+        if (key === "hives" || key === "yards" || key === "teams" || key === "meta") {
+          this._writeChecksum();
+        }
+
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e };
       }
     },
+
 
     loadHives() { return this.load("hives", {}); },
     saveHives(hives) { if (!Lock.requireUnlocked()) return false; return this.save("hives", hives); },
@@ -3131,28 +3269,25 @@ hiveYardGps: document.getElementById("hiveYardGps"),
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
-  // NOTE: Some UI is intentionally optional (e.g., Events panel) so the app can still boot.
-  const OPTIONAL_KEYS = new Set([
-    "eventsBtn",
-    "eventsPanel",
-    "eventsCloseBtn",
-    "eventsHotspots",
-  ]);
+// Boot-safety: some UI sections are optional; missing them should not brick the app.
+const OPTIONAL_KEYS = new Set([
+  "eventsBtn",
+  "eventsPanel",
+  "eventsCloseBtn",
+  "eventsHotspots",
+]);
 
-  for (const [k, v] of Object.entries(el)) {
-    if (!v) {
-      if (OPTIONAL_KEYS.has(k)) {
-        console.warn(`Optional HTML element missing: ${k} (feature will be disabled)`);
-        continue;
-      }
-      alert(`Missing required HTML element: ${k}`);
-      return;
+for (const [k, v] of Object.entries(el)) {
+  if (!v) {
+    if (OPTIONAL_KEYS.has(k)) {
+      console.warn(`Optional HTML element missing: ${k} (feature disabled)`);
+      continue;
     }
+    alert(`Missing required HTML element: ${k}`);
+    return;
   }
-
-  
-
-  // =========================================================
+}
+// =========================================================
   // 4B) DEBUG (Optional)
   //     - Toggle on to see quick stats + an on-page console.
   //     - Safe: if you don't use it, it stays hidden.
@@ -7210,6 +7345,7 @@ async function handleImportZipFromFile(file) {
 
     // Ensure schema is up to date
     Storage.migrateIfNeeded();
+    Storage.validateOrRecoverOnBoot();
 
     // Refresh UI
     UI.refreshYardUI();
