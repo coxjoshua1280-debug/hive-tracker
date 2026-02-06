@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>BroodNote</title>
   <style>
 :root {
@@ -443,7 +443,74 @@ button.primary, .btn.primary {
   
     /* Edit lock */
     body.editing-locked .edit-only { opacity: 0.55; pointer-events: none; }
-</style>
+
+    /* --- Release-ready polish: status + mobile toolbar --- */
+    .statusbar{
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display:flex;
+      gap:0.5rem;
+      align-items:center;
+      justify-content:flex-start;
+      padding:0.5rem 0.75rem;
+      margin: -0.5rem 0 0.75rem 0;
+      background: rgba(255, 253, 244, 0.92);
+      backdrop-filter: blur(6px);
+      border:1px solid var(--border);
+      border-radius: 12px;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:0.4rem;
+      padding:0.35rem 0.6rem;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: var(--muted);
+      font-weight:700;
+      font-size:0.95rem;
+      white-space:nowrap;
+    }
+    .pill.danger{ background:#ffe3e3; border-color:#fda4af; }
+    .pillbtn{
+      display:inline-flex;
+      align-items:center;
+      padding:0.35rem 0.6rem;
+      border-radius:999px;
+      border:1px solid var(--accent2);
+      background: var(--accent2);
+      color:#fff;
+      font-weight:700;
+      font-size:0.95rem;
+      white-space:nowrap;
+    }
+    .toolbar{ 
+      gap:0.5rem;
+    }
+    @media (max-width: 720px){
+      body{ padding: 0.75rem; padding-bottom: calc(5.25rem + env(safe-area-inset-bottom)); }
+      .toolbar{
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 60;
+        margin: 0;
+        padding: 0.6rem 0.6rem calc(0.6rem + env(safe-area-inset-bottom)) 0.6rem;
+        background: rgba(245, 241, 232, 0.96);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid var(--border);
+        border-radius: 0;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .toolbar .btn{ flex: 0 0 auto; min-width: 9.5rem; }
+      .statusbar{ margin: 0 0 0.75rem 0; }
+    }
+
+\1
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#111111" />
@@ -455,6 +522,13 @@ button.primary, .btn.primary {
 </head>
 
 <body>
+  <div id="statusBar" class="statusbar hidden">
+    <span id="offlinePill" class="pill danger hidden">Offline</span>
+    <span id="updatePill" class="pill hidden">Update available</span>
+    <button id="reloadBtn" class="pillbtn hidden" type="button">Reload</button>
+    <button id="installBtn" class="pillbtn hidden" type="button">Install</button>
+  </div>
+
   <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.25rem;"><img src="assets/broodnote-logo.png" alt="BroodNote logo" style="width:44px;height:44px;border-radius:12px;object-fit:contain;box-shadow:0 2px 10px rgba(47,36,24,0.12);"><h1 id="appTitle">🐝 BroodNote</h1></div>
 
   <div class="card" id="userCard" style="margin-top:0.5rem;">
@@ -586,7 +660,7 @@ button.primary, .btn.primary {
   </div>
 
     
-<div class="row" style="margin-top:0.75rem;">
+<div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
   <button id="yardsBtn" type="button" class="btn grow">🏡 Yards</button>
   <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
   <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
@@ -841,7 +915,7 @@ button.primary, .btn.primary {
         <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
       </div>
         <div class="small">Export CSV or a full ZIP backup (includes photos). Import merges into the current profile.</div>
-        <div class="row" style="margin-top:0.75rem;">
+        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
           <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
           <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
@@ -1039,7 +1113,7 @@ button.primary, .btn.primary {
         <label for="queenNotes" style="margin-top:0.75rem;">Queen Notes</label>
         <textarea id="queenNotes" rows="3" placeholder="Lineage notes, source hive, breeder, temperament…"></textarea>
 
-        <div class="row" style="margin-top:0.75rem;">
+        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="queenSaveBtn" type="button" class="btn btn-primary grow">Save Queen</button>
           <button id="queenCancelBtn" type="button" class="btn btn-muted grow">Cancel</button>
         </div>
@@ -1068,7 +1142,7 @@ button.primary, .btn.primary {
         <div id="lineageHeatmap" class="card" style="margin-top:0.5rem;"></div>
         <div id="cellRaiserDash" class="card" style="margin-top:0.5rem;"></div>
 
-        <div class="row" style="margin-top:0.75rem;">
+        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="exportBreederReportBtn" type="button" class="btn grow">⬇️ Export breeder report</button>
         </div>
       </div>
@@ -6873,7 +6947,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
         ` : ""}
 
-        <div class="row" style="margin-top:0.75rem;">
+        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="rearing_saveBtn" type="button" class="btn btn-primary grow">Save</button>
           <button id="rearing_closeBtn" type="button" class="btn grow">Close</button>
         </div>
@@ -9600,17 +9674,75 @@ el.remindersBtn.addEventListener("click", () => {
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  
   <script>
-    // PWA: register service worker (safe no-op on unsupported browsers)
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+    // PWA + Offline UX
+    (function(){
+      const statusBar = document.getElementById("statusBar");
+      const offlinePill = document.getElementById("offlinePill");
+      const updatePill = document.getElementById("updatePill");
+      const reloadBtn = document.getElementById("reloadBtn");
+      const installBtn = document.getElementById("installBtn");
+
+      function setOnlineUI(){
+        const online = navigator.onLine !== false;
+        if (!statusBar) return;
+        statusBar.classList.remove("hidden");
+        if (online) offlinePill?.classList.add("hidden");
+        else offlinePill?.classList.remove("hidden");
+      }
+      window.addEventListener("online", setOnlineUI);
+      window.addEventListener("offline", setOnlineUI);
+      setOnlineUI();
+
+      // Install prompt (where supported)
+      let deferredPrompt = null;
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (installBtn){
+          installBtn.classList.remove("hidden");
+          installBtn.addEventListener("click", async () => {
+            try{
+              deferredPrompt.prompt();
+              await deferredPrompt.userChoice;
+            }catch{}
+            deferredPrompt = null;
+            installBtn.classList.add("hidden");
+          }, { once:true });
+        }
       });
-    }
+
+      // Service worker registration + update UI
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", async () => {
+          try{
+            const reg = await navigator.serviceWorker.register("./sw.js");
+            // If there's an updated worker waiting, show update pill
+            function showUpdate(){
+              if (!statusBar) return;
+              statusBar.classList.remove("hidden");
+              updatePill?.classList.remove("hidden");
+              reloadBtn?.classList.remove("hidden");
+            }
+            if (reg.waiting) showUpdate();
+            reg.addEventListener("updatefound", () => {
+              const newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener("statechange", () => {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  showUpdate();
+                }
+              });
+            });
+            reloadBtn?.addEventListener("click", () => window.location.reload());
+          }catch{}
+        });
+      }
+    })();
   </script>
 
-
-  <div id="fieldCardPanel" class="card hidden" style="margin-top:0.75rem;">
+<div id="fieldCardPanel" class="card hidden" style="margin-top:0.75rem;">
     <div class="row" style="gap:0.5rem; align-items:flex-start;">
       <div class="grow">
         <strong>🗂️ Field Card</strong>
