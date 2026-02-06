@@ -1632,6 +1632,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   };
+  // expose NectarFinder globally for UI handlers
+  window.NectarFinder = window.NectarFinder || NectarFinder;
+
 
       return JSON.stringify(walk(value));
     },
@@ -2634,7 +2637,9 @@ validateOrRecoverOnBoot() {
     applyUI() {
       if (!el || !el.lockBtn) return;
       const desktop = this.isDesktop();
-      el.lockBtn.style.display = desktop ? "" : "none";
+      // Always show the lock button so users can see state.
+      // We only *enforce* the lock on desktop (mobile stays fast in the field).
+      el.lockBtn.style.display = "";
       const unlocked = desktop ? this.isUnlocked() : true;
 
       el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
@@ -9998,13 +10003,29 @@ Type a new team name to add, or leave blank to cancel:`);
     });
 
     // Toggle panels
-    el.exportMenuBtn.addEventListener("click", () => {
-      el.exportPanel.classList.toggle("hidden");
-      el.remindersPanel.classList.add("hidden");
-      el.lookupPanel.classList.add("hidden");
-      if (el.mapPanel) el.mapPanel.classList.add("hidden");
-      if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
-    });
+    if (el.exportMenuBtn) {
+      el.exportMenuBtn.addEventListener("click", () => {
+        try {
+          if (!el.exportPanel) {
+            console.warn("Export panel missing");
+            alert("Export panel is missing from the page.");
+            return;
+          }
+          el.exportPanel.classList.toggle("hidden");
+          el.remindersPanel?.classList.add("hidden");
+          el.lookupPanel?.classList.add("hidden");
+          el.yardsPanel?.classList.add("hidden");
+          el.mapPanel?.classList.add("hidden");
+          el.cloudPanel?.classList.add("hidden");
+          if (!el.exportPanel.classList.contains("hidden")) {
+            try { el.exportPanel.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (_) {}
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Export button error. See Console for details.");
+        }
+      });
+    }
     
     // Yards navigation panel
     if (el.yardsBtn && el.yardsPanel) {
@@ -10139,31 +10160,31 @@ el.remindersBtn.addEventListener("click", () => {
         el.lookupPanel.classList.add("hidden");
         if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
         if (!el.nectarFinderPanel.classList.contains("hidden")) {
-          await NectarFinder.open();
+          await window.NectarFinder.open();
         }
       });
       if (el.nectarFinderCloseBtn) el.nectarFinderCloseBtn.addEventListener("click", () => {
-        NectarFinder.close();
+        window.NectarFinder.close();
       });
       if (el.nectarHoneySelect) el.nectarHoneySelect.addEventListener("change", () => {
-        NectarFinder.render();
-        NectarFinder.refreshMapLayers();
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
       });
       if (el.nectarApplyToYardBtn) el.nectarApplyToYardBtn.addEventListener("click", () => {
-        const h = NectarFinder.getHoney(el.nectarHoneySelect.value);
-        NectarFinder.addFlowToYard(h);
-        NectarFinder.render();
-        NectarFinder.refreshMapLayers();
+        const h = window.NectarFinder.getHoney(el.nectarHoneySelect.value);
+        window.NectarFinder.addFlowToYard(h);
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
       });
       if (el.nectarSuggestBtn) el.nectarSuggestBtn.addEventListener("click", () => {
-        const matches = NectarFinder.suggestForCurrentYard();
+        const matches = window.NectarFinder.suggestForCurrentYard();
         if (!el.nectarSuggestList) return;
         if (!matches.length) {
           el.nectarSuggestList.innerHTML = "<div class=\"small\">No location-based matches for this yard. (You can still add any honey type manually.)</div>";
           return;
         }
         el.nectarSuggestList.innerHTML = matches.map(h => {
-          const win = `${NectarFinder.monthLabel(h.window.start)}–${NectarFinder.monthLabel(h.window.end)}`;
+          const win = `${window.NectarFinder.monthLabel(h.window.start)}–${window.NectarFinder.monthLabel(h.window.end)}`;
           return `<div class="history-item">
             <div class="history-left"><strong>${Utils.escapeHtml(h.name)}</strong><div class="small">Estimated flow: ${win}</div></div>
             <button class="btn btn-primary" style="width:auto;" data-nf-add="${h.id}">Add</button>
@@ -10174,10 +10195,10 @@ el.remindersBtn.addEventListener("click", () => {
         const btn = ev.target && ev.target.closest ? ev.target.closest("[data-nf-add]") : null;
         const id = btn ? btn.getAttribute("data-nf-add") : null;
         if (!id) return;
-        const h = NectarFinder.getHoney(id);
-        NectarFinder.addFlowToYard(h);
-        NectarFinder.render();
-        NectarFinder.refreshMapLayers();
+        const h = window.NectarFinder.getHoney(id);
+        window.NectarFinder.addFlowToYard(h);
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
       });
 
 
@@ -10189,8 +10210,20 @@ el.remindersBtn.addEventListener("click", () => {
     // Edit lock (PIN)
     if (el.lockBtn) {
       el.lockBtn.addEventListener("click", async () => {
-        if (Lock.isUnlocked()) Lock.lockNow();
-        else await Lock.unlockWithPrompt();
+        try {
+          // On mobile we don't enforce editing locks (field speed), but we still
+          // show the button so the UI is consistent.
+          if (!Lock.isDesktop()) {
+            alert("Editing lock is a desktop safety feature. On mobile, editing stays enabled.");
+            return;
+          }
+          if (Lock.isUnlocked()) Lock.lockNow();
+          else await Lock.unlockWithPrompt();
+          Lock.applyUI();
+        } catch (err) {
+          console.error(err);
+          alert("Lock button error. See Console for details.");
+        }
       });
     }
 
