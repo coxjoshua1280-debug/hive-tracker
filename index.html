@@ -1131,6 +1131,8 @@ button.primary, .btn.primary {
 <script>
 document.addEventListener("DOMContentLoaded", () => {
 
+  const APP_BUILD = "stable_v3_fix6_exportguard";
+
   // =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
@@ -7102,6 +7104,97 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+
+// =========================================================
+// EXPORT GUARD (Validate -> Normalize -> Serialize)
+// Prevents exporting corrupted or inconsistent datasets.
+// =========================================================
+const ExportGuard = {
+  // Remove undefined/functions, normalize NaN/Infinity, and deep-clone into JSON-safe data.
+  sanitize(value) {
+    const seen = new WeakMap();
+    const walk = (v) => {
+      if (v === undefined) return null;
+      if (typeof v === "function") return null;
+      if (typeof v === "number" && !Number.isFinite(v)) return null;
+      if (v === null || typeof v !== "object") return v;
+
+      if (seen.has(v)) return "[Circular]";
+      // Preserve arrays vs objects
+      if (Array.isArray(v)) {
+        seen.set(v, true);
+        return v.map(walk);
+      }
+      seen.set(v, true);
+      const out = {};
+      for (const k of Object.keys(v)) {
+        const w = walk(v[k]);
+        if (w !== undefined) out[k] = w;
+      }
+      return out;
+    };
+    return walk(value);
+  },
+
+  validateCore({ hives, yards, meta, scopeLabel }) {
+    const problems = [];
+
+    if (!hives || typeof hives !== "object" || Array.isArray(hives)) problems.push("hives must be an object");
+    if (!yards || typeof yards !== "object" || Array.isArray(yards)) problems.push("yards must be an object");
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) problems.push("meta must be an object");
+
+    // Basic hive shape checks (lightweight, avoid being overly strict)
+    if (hives && typeof hives === "object" && !Array.isArray(hives)) {
+      for (const [key, hive] of Object.entries(hives)) {
+        if (!hive || typeof hive !== "object") { problems.push(`hive '${key}' is not an object`); continue; }
+        if (!hive.id || typeof hive.id !== "string") problems.push(`hive '${key}' missing string id`);
+        if (hive.inspections !== undefined && !Array.isArray(hive.inspections)) problems.push(`hive '${key}' inspections must be an array`);
+        const inspections = Array.isArray(hive.inspections) ? hive.inspections : [];
+        for (const insp of inspections) {
+          if (!insp || typeof insp !== "object") { problems.push(`inspection in hive '${key}' is not an object`); continue; }
+          if (insp.id !== undefined && typeof insp.id !== "string") problems.push(`inspection id in hive '${key}' must be a string`);
+          if (insp.photos !== undefined && !Array.isArray(insp.photos)) problems.push(`inspection photos in hive '${key}' must be an array`);
+        }
+      }
+    }
+
+    // If scope label is provided, include it in errors for clarity
+    if (problems.length) {
+      const scope = scopeLabel ? ` (${scopeLabel})` : "";
+      const msg = "Export blocked: data failed validation" + scope + "\n\n- " + problems.join("\n- ");
+      throw new Error(msg);
+    }
+    return true;
+  },
+
+  prepare({ hives, yards, meta, scopeLabel }) {
+    // 1) Validate BEFORE sanitizing (catches major structural issues)
+    this.validateCore({ hives, yards, meta, scopeLabel });
+
+    // 2) Sanitize / normalize
+    const hivesClean = this.sanitize(hives || {});
+    const yardsClean = this.sanitize(yards || {});
+    const metaClean  = this.sanitize(meta  || {});
+
+    // 3) Deterministic checksum for exported payload
+    const payload = { hives: hivesClean, yards: yardsClean, meta: metaClean };
+    const canon = Utils.stableStringify(payload);
+    const checksum = Utils.hashString(canon);
+
+    const exportMeta = {
+      app: "BroodNote",
+      build: (typeof APP_BUILD !== "undefined" ? APP_BUILD : ""),
+      exportedAt: new Date().toISOString(),
+      schemaVersion: (Storage && Storage.VERSION) ? Storage.VERSION : null,
+      scope: scopeLabel || "all",
+      checksumAlgo: "fnv1a32(stable-json)",
+      checksum,
+    };
+
+    return { hivesClean, yardsClean, metaClean, exportMeta };
+  }
+};
+
 function buildCsvRowsFromHives(hivesObj) {
   // One row per inspection (easiest to analyze later)
   const rows = [];
@@ -7151,6 +7244,7 @@ async function handleExportCsv() {
 
     const hivesAll = Storage.loadHives();
     const yardsAll = Storage.loadYards(); // not used in CSV by default, but available if you want later
+    const metaAll  = Storage.loadMeta();
 
     let hives = hivesAll;
     if (shouldFilterToCurrentYard()) {
@@ -7158,7 +7252,22 @@ async function handleExportCsv() {
       hives = filterHivesByYard(hivesAll, yard);
     }
 
-    const rows = buildCsvRowsFromHives(hives);
+    const scopeLabel = shouldFilterToCurrentYard()
+      ? (() => {
+          const y = getCurrentYardName();
+          if (!y) throw new Error("Export blocked: no yard selected for 'Export only current yard'.");
+          return "yard:" + y;
+        })()
+      : "all";
+
+    const prepared = ExportGuard.prepare({
+      hives,
+      yards: yardsAll,
+      meta: metaAll,
+      scopeLabel
+    });
+
+    const rows = buildCsvRowsFromHives(prepared.hivesClean);
 
     // If no inspections, still export headers
     const headers = [
@@ -7215,10 +7324,27 @@ async function handleExportZip() {
       yards = yard ? (yardsAll[yard] ? { [yard]: yardsAll[yard] } : {}) : {};
     }
 
+    // Export guard: validate + normalize + checksum + export metadata
+    const scopeLabel = shouldFilterToCurrentYard()
+      ? (() => {
+          const y = getCurrentYardName();
+          if (!y) throw new Error("Export blocked: no yard selected for 'Export only current yard'.");
+          return "yard:" + y;
+        })()
+      : "all";
+
+    const prepared = ExportGuard.prepare({
+      hives,
+      yards,
+      meta: metaAll,
+      scopeLabel
+    });
+
     // Core data
-    zip.file("hives.json", JSON.stringify(hives, null, 2));
-    zip.file("yards.json", JSON.stringify(yards, null, 2));
-    zip.file("meta.json", JSON.stringify(metaAll, null, 2));
+    zip.file("hives.json", JSON.stringify(prepared.hivesClean, null, 2));
+    zip.file("yards.json", JSON.stringify(prepared.yardsClean, null, 2));
+    zip.file("meta.json", JSON.stringify(prepared.metaClean, null, 2));
+    zip.file("export_meta.json", JSON.stringify(prepared.exportMeta, null, 2));
 
     // Photos
     const photoIds = collectPhotoIdsFromHives(hives);
