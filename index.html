@@ -3131,8 +3131,20 @@ hiveYardGps: document.getElementById("hiveYardGps"),
   };
 
   // Fail fast if IDs mismatch. Protects you from silent breakage.
+  // NOTE: Some UI is intentionally optional (e.g., Events panel) so the app can still boot.
+  const OPTIONAL_KEYS = new Set([
+    "eventsBtn",
+    "eventsPanel",
+    "eventsCloseBtn",
+    "eventsHotspots",
+  ]);
+
   for (const [k, v] of Object.entries(el)) {
     if (!v) {
+      if (OPTIONAL_KEYS.has(k)) {
+        console.warn(`Optional HTML element missing: ${k} (feature will be disabled)`);
+        continue;
+      }
       alert(`Missing required HTML element: ${k}`);
       return;
     }
