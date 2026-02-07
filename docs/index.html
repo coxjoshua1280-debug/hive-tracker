@@ -8643,6 +8643,8 @@ if (action === "confirmLaying") {
       const yardName = (el.currentYard.value || "").trim();
       if (!yardName) { alert("Enter a yard name first."); return; }
 
+      if (!Lock.requireUnlocked()) { UI.status("Ready"); return; }
+
       try {
         UI.status("Getting GPS…");
         const pos = await GPS.getCurrentPositionOnce();
