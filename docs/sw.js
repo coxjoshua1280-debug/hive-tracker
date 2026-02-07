@@ -1,5 +1,5 @@
 /* BroodNote Service Worker */
-const CACHE_NAME = "broodnote-v4-deterministic1";
+const CACHE_NAME = "broodnote-v5-offlinevendor1";
 const RUNTIME_CACHE = "broodnote-runtime-v1";
 const TILE_CACHE = "broodnote-tiles-v1";
 
@@ -8,7 +8,11 @@ const ASSETS = [
   "./index.html",
   "./manifest.json",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./vendor/leaflet.css",
+  "./vendor/leaflet.js",
+  "./vendor/jszip.min.js",
+  "./vendor/supabase.min.js"
 ];
 
 self.addEventListener("install", (event) => {
