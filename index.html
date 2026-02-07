@@ -9765,7 +9765,7 @@ el.remindersBtn.addEventListener("click", () => {
               console.warn("Service worker bypassed via ?nosw=1");
               return;
             }
-            const reg = await navigator.serviceWorker.register("./service-worker.js");
+            const reg = await navigator.serviceWorker.register("./sw.js");
             // If there's an updated worker waiting, show update pill
             function showUpdate(){
               if (!statusBar) return;
@@ -9862,3 +9862,4 @@ el.remindersBtn.addEventListener("click", () => {
 
 </body>
 </html>
+
