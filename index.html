@@ -48,7 +48,7 @@ button.primary, .btn.primary {
     label { font-weight: bold; display: block; margin: 0.75rem 0 0.25rem; }
     input, textarea, button, select { font-size: 1.05rem; width: 100%; box-sizing: border-box; }
     textarea { min-height: 120px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
 
     .bootfallback{
       position: fixed;
@@ -222,14 +222,13 @@ button.primary, .btn.primary {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.55);
-      display: none;
+      display: flex;
       align-items: flex-start;
       justify-content: center;
       z-index: 9998;
       padding: 1rem;
       overflow: auto;
     }
-    #yardOverridesModal.show { display: flex; }
     #yardOverridesCard {
       width: min(760px, 100%);
       margin-top: 1rem;
@@ -522,10 +521,17 @@ button.primary, .btn.primary {
       .statusbar{ margin: 0 0 0.75rem 0; }
     }
 
-\1
+  
+    .yard-select{ margin-top:0.35rem; }
+    .yard-select-hint{ margin-top:0.25rem; }
+    @media (min-width: 721px){
+      .yard-select.hidden, .yard-select-hint.hidden{ display:block; }
+    }
 
-  <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#111111" />
+  </style>
+
+  <link rel="manifest" href="/hive-tracker/manifest.json">
+<meta name="theme-color" content="#2F2418">
 
 
   <!-- Map (Leaflet + OpenStreetMap) -->
@@ -576,8 +582,12 @@ button.primary, .btn.primary {
 
   <button id="scanNfc" class="btn btn-primary">Scan Hive (NFC)</button>
 
+  <button id="newHiveBtn" class="btn btn-muted">➕ New Hive (no tag)</button>
+
   <label for="currentYard">Current Yard</label>
   <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
+  <select id="currentYardSelect" class="yard-select hidden"></select>
+  <div class="small yard-select-hint hidden" id="yardSelectHint">Desktop: choose from the dropdown, or type a new yard above.</div>
   <datalist id="yardList"></datalist>
 
   <div id="yardPurposeCard" class="card" style="margin-top:0.75rem;">
@@ -694,6 +704,7 @@ button.primary, .btn.primary {
   <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
   <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
   <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
+  <button id="nectarFinderBtn" type="button" class="btn grow">🍯 Nectar Finder</button>
     <button id="fieldCardBtn" type="button" class="btn">🗂️ Field Card</button>
     <button id="cloudBtn" type="button" class="btn grow">☁️ Cloud</button>
 <button id="lockBtn" type="button" class="btn btn-muted grow">🔒 Locked</button>
@@ -935,6 +946,41 @@ button.primary, .btn.primary {
         <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
       </div>
 
+
+<div id="nectarFinderPanel" class="card hidden" style="margin-top:0.5rem;">
+  <div class="row">
+    <div class="grow"><strong>🍯 Nectar Finder</strong></div>
+    <button id="nectarFinderCloseBtn" type="button" class="btn btn-muted" style="width:auto;">Close</button>
+  </div>
+  <div class="small" style="margin-top:0.35rem;">
+    Quick, offline-friendly bloom/flow estimates. This is a coarse guide—edit or add your own yard nectar sources for ground truth.
+  </div>
+
+  <div class="row" style="margin-top:0.6rem; gap:0.6rem; align-items:flex-end; flex-wrap:wrap;">
+    <div class="grow" style="min-width:220px;">
+      <label style="margin-top:0;">Honey type</label>
+      <select id="nectarHoneySelect"></select>
+    </div>
+    <div style="min-width:220px;">
+      <label style="margin-top:0;">Match for current yard</label>
+      <div id="nectarMatchHint" class="small"></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:0.6rem; gap:0.5rem; flex-wrap:wrap;">
+    <button id="nectarApplyToYardBtn" type="button" class="btn btn-primary">Add flow to current yard</button>
+    <button id="nectarSuggestBtn" type="button" class="btn">Suggest flows for this yard</button>
+  </div>
+
+  <div id="nectarSuggestList" style="margin-top:0.6rem;"></div>
+
+  <div class="card" style="margin-top:0.75rem;">
+    <strong>Map</strong>
+    <div class="small" style="margin-top:0.25rem;">Shows your yards and rough “where this honey is common”.</div>
+    <div id="nectarMap" style="width:100%; height:360px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12); margin-top:0.5rem;"></div>
+  </div>
+</div>
+
 <div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
 <div class="card" style="margin:0;">
         <label class="checkbox-label" style="margin:0;">
@@ -944,7 +990,7 @@ button.primary, .btn.primary {
         <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
       </div>
         <div class="small">Export CSV or a full ZIP backup (includes photos). Import merges into the current profile.</div>
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
           <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
           <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
@@ -1005,6 +1051,20 @@ button.primary, .btn.primary {
   </div>
   <div id="hiveForm" class="hidden card">
     <p style="margin-top:0;"><strong>Hive ID:</strong> <span id="hiveIdDisplay"></span></p>
+    <div class="card" style="margin-top:0.5rem; padding:0.6rem;">
+      <div class="small"><strong>NFC tag (optional)</strong></div>
+      <div class="small" style="margin-top:0.2rem; opacity:0.9;">If you couldn't scan in the field, create a temp hive and link the NFC tag later.</div>
+      <div class="row" style="margin-top:0.5rem; gap:0.5rem; align-items:flex-end; flex-wrap:wrap;">
+        <div class="grow" style="min-width:220px;">
+          <label for="hiveTagSerial" style="margin-top:0;">Tag serial</label>
+          <input id="hiveTagSerial" type="text" placeholder="Paste or type NFC serial…" autocomplete="off" />
+        </div>
+        <button id="scanLinkNfcBtn" type="button" class="btn" style="width:auto;">Scan to link</button>
+        <button id="linkNfcBtn" type="button" class="btn btn-primary" style="width:auto;">Link tag</button>
+      </div>
+      <div id="hiveTagHint" class="small" style="margin-top:0.35rem;"></div>
+    </div>
+
 
     <label for="hiveName">Hive Name</label>
     <input id="hiveName" type="text" placeholder="e.g. Yard A – Hive 12" />
@@ -1063,7 +1123,7 @@ button.primary, .btn.primary {
       </div>
 
       <label for="activeBoxSelect" style="margin-top:0.75rem;">Active Box</label>
-      <select id="activeBoxSelect" class="box-select"></select>\1
+      <select id="activeBoxSelect" class="box-select"></select>
 
       <div class="card" style="margin-top:0.6rem;">
         <strong>Reorder boxes</strong>
@@ -1142,7 +1202,7 @@ button.primary, .btn.primary {
         <label for="queenNotes" style="margin-top:0.75rem;">Queen Notes</label>
         <textarea id="queenNotes" rows="3" placeholder="Lineage notes, source hive, breeder, temperament…"></textarea>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="queenSaveBtn" type="button" class="btn btn-primary grow">Save Queen</button>
           <button id="queenCancelBtn" type="button" class="btn btn-muted grow">Cancel</button>
         </div>
@@ -1171,7 +1231,7 @@ button.primary, .btn.primary {
         <div id="lineageHeatmap" class="card" style="margin-top:0.5rem;"></div>
         <div id="cellRaiserDash" class="card" style="margin-top:0.5rem;"></div>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="exportBreederReportBtn" type="button" class="btn grow">⬇️ Export breeder report</button>
         </div>
       </div>
@@ -1306,7 +1366,111 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const APP_BUILD = "stable_v3_fix6_exportguard";
 
-  // =========================================================
+  
+
+  // ---- UI fallbacks (prevents dead buttons if later code throws) ----
+  window.__BN = window.__BN || {};
+  window.__BN.toggleExportPanel = () => {
+    try {
+      const panel = document.getElementById('exportPanel');
+      if (!panel) { console.warn('Export panel missing'); alert('Export panel is missing from the page.'); return; }
+      panel.classList.toggle('hidden');
+      document.getElementById('remindersPanel')?.classList.add('hidden');
+      document.getElementById('lookupPanel')?.classList.add('hidden');
+      document.getElementById('yardsPanel')?.classList.add('hidden');
+      document.getElementById('mapPanel')?.classList.add('hidden');
+      document.getElementById('cloudPanel')?.classList.add('hidden');
+      if (!panel.classList.contains('hidden')) { try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {} }
+    } catch (err) { console.error(err); alert('Export button error. See Console for details.'); }
+  };
+
+  window.__BN.openMapPanel = () => {
+    try {
+      const panel = document.getElementById('mapPanel');
+      if (!panel) return;
+
+      async function ensureLeafletReady() {
+        if (window.L) return true;
+        return await new Promise((resolve) => {
+          // If a Leaflet script tag is already in the document, wait briefly.
+          const existing = document.querySelector('script[src*="unpkg.com/leaflet"],script[src*="leaflet.js"]');
+          if (existing) {
+            const t = setTimeout(() => resolve(!!window.L), 1200);
+            existing.addEventListener('load', () => { clearTimeout(t); resolve(true); }, { once: true });
+            existing.addEventListener('error', () => { clearTimeout(t); resolve(false); }, { once: true });
+            return;
+          }
+
+          const s = document.createElement('script');
+          s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.head.appendChild(s);
+
+          // Safety timeout
+          setTimeout(() => resolve(!!window.L), 2200);
+        });
+      }
+
+      const willOpen = panel.classList.contains('hidden');
+      if (willOpen) panel.classList.remove('hidden');
+      else panel.classList.add('hidden');
+
+      document.getElementById('exportPanel')?.classList.add('hidden');
+      document.getElementById('remindersPanel')?.classList.add('hidden');
+      document.getElementById('lookupPanel')?.classList.add('hidden');
+      document.getElementById('cloudPanel')?.classList.add('hidden');
+
+      if (willOpen) {
+        try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+        (async () => {
+          await ensureLeafletReady();
+          if (typeof MapView !== 'undefined' && MapView.render) {
+            MapView.render();
+            setTimeout(() => { try { if (MapView.map && MapView.map.invalidateSize) MapView.map.invalidateSize(); } catch (_) {} }, 250);
+          }
+        })();
+      }
+    } catch (err) { console.error(err); alert('Map button error. See Console for details.'); }
+  };
+  // Wire critical toolbar buttons (safe fallbacks)
+  try {
+    const eb = document.getElementById('exportMenuBtn');
+    if (eb) eb.addEventListener('click', window.__BN.toggleExportPanel);
+    const mb = document.getElementById('mapBtn');
+    if (mb) mb.addEventListener('click', window.__BN.openMapPanel);
+
+    // Nectar Finder (safe wiring so it doesn't depend on later init)
+    window.__BN.openNectarFinder = async () => {
+      const p = document.getElementById('nectarFinderPanel');
+      if (!p) return;
+      const willOpen = p.classList.contains('hidden');
+      if (willOpen) p.classList.remove('hidden');
+      else p.classList.add('hidden');
+
+      // hide other panels
+      document.getElementById('mapPanel')?.classList.add('hidden');
+      document.getElementById('exportPanel')?.classList.add('hidden');
+      document.getElementById('remindersPanel')?.classList.add('hidden');
+      document.getElementById('lookupPanel')?.classList.add('hidden');
+      document.getElementById('cloudPanel')?.classList.add('hidden');
+
+      if (willOpen) {
+        try { p.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+        try { await (window.NectarFinder && window.NectarFinder.open ? window.NectarFinder.open() : Promise.resolve()); } catch (e) { console.error(e); }
+      }
+    };
+    const nfb = document.getElementById('nectarFinderBtn');
+    if (nfb) nfb.addEventListener('click', () => { window.__BN.openNectarFinder(); });
+    const nfc = document.getElementById('nectarFinderCloseBtn');
+    if (nfc) nfc.addEventListener('click', () => { document.getElementById('nectarFinderPanel')?.classList.add('hidden'); try { window.NectarFinder?.close?.(); } catch (_) {} });
+
+    window.__BN._mapHandlerWired = true;
+  } catch (_) {}
+
+
+// =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
 
@@ -1377,6 +1541,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
       return s;
     },
+    escapeHtml(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    },
     async compressImageFileToJpegBlob(file, maxDim = 1600, quality = 0.72) {
       const dataUrl = await new Promise((resolve, reject) => {
         const r = new FileReader();
@@ -1422,6 +1594,10 @@ document.addEventListener("DOMContentLoaded", () => {
         for (const k of Object.keys(v).sort()) out[k] = walk(v[k]);
         return out;
       };
+
+  
+
+
       return JSON.stringify(walk(value));
     },
     // Fast non-crypto hash (FNV-1a 32-bit) – good for corruption detection, not security
@@ -1439,6 +1615,159 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
   // =========================================================
+  // NECTAR FINDER (v1 — coarse offline guide)
+  // =========================================================
+  const NectarFinder = {
+    map: null,
+    yardMarkers: [],
+    regionLayer: null,
+
+    honeyLibrary: [
+      { id:"gallberry", name:"Gallberry", window:{start:4,end:6}, regions:[{label:"SE U.S. (incl. FL/GA/SC)", bbox:[24.0,-87.8,35.5,-75.0]}] },
+      { id:"orange_blossom", name:"Orange Blossom", window:{start:3,end:4}, regions:[{label:"Florida citrus belt", bbox:[25.0,-82.5,29.8,-80.0]}] },
+      { id:"brazilian_pepper", name:"Brazilian Pepper", window:{start:9,end:11}, regions:[{label:"South Florida", bbox:[24.4,-82.0,27.8,-80.0]}] },
+      { id:"tupelo", name:"Tupelo", window:{start:4,end:5}, regions:[{label:"FL Panhandle / South GA", bbox:[29.0,-86.8,31.7,-83.0]}] },
+      { id:"clover", name:"Clover (general)", window:{start:5,end:7}, regions:[] },
+      { id:"basswood", name:"Basswood / Linden", window:{start:6,end:7}, regions:[] },
+      { id:"sourwood", name:"Sourwood", window:{start:6,end:7}, regions:[] },
+      { id:"buckwheat", name:"Buckwheat", window:{start:7,end:9}, regions:[] },
+      { id:"mesquite", name:"Mesquite", window:{start:4,end:6}, regions:[] },
+      { id:"alfalfa", name:"Alfalfa", window:{start:6,end:8}, regions:[] },
+      { id:"wildflower", name:"Wildflower (seasonal)", window:{start:3,end:10}, regions:[] }
+    ],
+
+    monthLabel(m){ return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1] || ""; },
+
+    withinBbox(lat,lng,b){
+      const [minLat,minLng,maxLat,maxLng] = b;
+      return lat>=minLat && lat<=maxLat && lng>=minLng && lng<=maxLng;
+    },
+
+    currentYardGps(){
+      const yard = (el.currentYard?.value || "").trim();
+      const yards = Storage.loadYards() || {};
+      const meta = yards[yard] || {};
+      const g = meta.gps;
+      if (g && typeof g.lat==="number" && typeof g.lng==="number") return { yard, lat:g.lat, lng:g.lng };
+      return { yard, lat:null, lng:null };
+    },
+
+    matchHint(h){
+      const g = this.currentYardGps();
+      if (!g.yard) return "Set a Current Yard to see matches.";
+      if (typeof g.lat !== "number") return "No GPS saved for this yard. Capture Yard GPS to improve matching.";
+      const any = (h.regions||[]).some(r => r.bbox && this.withinBbox(g.lat,g.lng,r.bbox));
+      const win = `${this.monthLabel(h.window.start)}–${this.monthLabel(h.window.end)}`;
+      return any ? `Likely in range • Flow window: ${win}` : `Flow window: ${win}`;
+    },
+
+    ensureSelect(){
+      if (!el.nectarHoneySelect) return;
+      el.nectarHoneySelect.innerHTML = this.honeyLibrary.map(h => `<option value="${h.id}">${Utils.escapeHtml(h.name)}</option>`).join("");
+    },
+
+    getHoney(id){ return this.honeyLibrary.find(h => h.id===id) || this.honeyLibrary[0]; },
+
+    suggestForCurrentYard(){
+      const g = this.currentYardGps();
+      if (!g.yard) return [];
+      const out = [];
+      for (const h of this.honeyLibrary) {
+        if (!h.regions || !h.regions.length) continue;
+        if (typeof g.lat !== "number") continue;
+        if (h.regions.some(r => r.bbox && this.withinBbox(g.lat,g.lng,r.bbox))) out.push(h);
+      }
+      return out;
+    },
+
+    async open(){
+      if (!el.nectarFinderPanel) return;
+      el.nectarFinderPanel.classList.remove("hidden");
+      el.mapPanel?.classList.add("hidden");
+      el.exportPanel?.classList.add("hidden");
+      this.ensureSelect();
+      this.render();
+      await this.ensureMap();
+    },
+
+    close(){
+      el.nectarFinderPanel?.classList.add("hidden");
+    },
+
+    render(){
+      if (!el.nectarHoneySelect) return;
+      const h = this.getHoney(el.nectarHoneySelect.value);
+      if (el.nectarMatchHint) el.nectarMatchHint.textContent = this.matchHint(h);
+    },
+
+    addFlowToYard(h){
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      const y = Storage.loadYards() || {};
+      const meta = y[yard] || {};
+      meta.nectarSources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
+      const year = new Date().getFullYear();
+      const start = `${year}-${String(h.window.start).padStart(2,"0")}-01`;
+      const endDate = new Date(year, h.window.end, 0).getDate();
+      const end = `${year}-${String(h.window.end).padStart(2,"0")}-${String(endDate).padStart(2,"0")}`;
+      meta.nectarSources.push({ id: Utils.uuid(), name: h.name, start, end, source:"Nectar Finder (estimate)" });
+      y[yard] = meta;
+      Storage.saveYards(y);
+      UI.renderYardExtras(yard);
+      UI.setStatus(`Added ${h.name} flow to ${yard} (${start} → ${end}).`);
+    },
+
+    async ensureMap(){
+      if (!window.L || !el.nectarMap) return;
+      if (this.map) {
+        setTimeout(() => { try { this.map.invalidateSize(); } catch(_){} }, 30);
+        this.refreshMapLayers();
+        return;
+      }
+      this.map = L.map(el.nectarMap, { zoomControl: true });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(this.map);
+      this.map.setView([27.8, -81.7], 6);
+      this.refreshMapLayers();
+      setTimeout(() => { try { this.map.invalidateSize(); } catch(_){} }, 50);
+    },
+
+    refreshMapLayers(){
+      if (!this.map) return;
+
+      // Yard markers
+      this.yardMarkers.forEach(m => { try { this.map.removeLayer(m); } catch(_){} });
+      this.yardMarkers = [];
+
+      const yards = Storage.loadYards() || {};
+      Object.keys(yards).forEach(name => {
+        const g = yards[name] && yards[name].gps;
+        if (g && typeof g.lat==="number" && typeof g.lng==="number") {
+          const m = L.marker([g.lat, g.lng]).addTo(this.map).bindPopup(`<strong>${Utils.escapeHtml(name)}</strong>`);
+          this.yardMarkers.push(m);
+        }
+      });
+
+      // Region overlay for selected honey
+      if (this.regionLayer) { try { this.map.removeLayer(this.regionLayer); } catch(_){} }
+      const h = this.getHoney(el.nectarHoneySelect?.value);
+      const rects = (h.regions||[]).filter(r => r.bbox).map(r => {
+        const [minLat,minLng,maxLat,maxLng] = r.bbox;
+        const bounds = [[minLat,minLng],[maxLat,maxLng]];
+        return L.rectangle(bounds, { weight: 2, fillOpacity: 0.08 }).bindPopup(`${Utils.escapeHtml(h.name)} • ${Utils.escapeHtml(r.label)}`);
+      });
+      if (rects.length) {
+        this.regionLayer = L.featureGroup(rects).addTo(this.map);
+        try { this.map.fitBounds(this.regionLayer.getBounds().pad(0.15)); } catch(_) {}
+      } else {
+        this.regionLayer = null;
+      }
+    }
+  };
+  // expose NectarFinder globally for UI handlers
+  window.NectarFinder = window.NectarFinder || NectarFinder;
+
+
+// =========================================================
   // 2A) CLOUD BACKUP (Supabase) — manual backups + restore
   // =========================================================
   const CloudBackup = {
@@ -2423,7 +2752,9 @@ validateOrRecoverOnBoot() {
     applyUI() {
       if (!el || !el.lockBtn) return;
       const desktop = this.isDesktop();
-      el.lockBtn.style.display = desktop ? "" : "none";
+      // Always show the lock button so users can see state.
+      // We only *enforce* the lock on desktop (mobile stays fast in the field).
+      el.lockBtn.style.display = "";
       const unlocked = desktop ? this.isUnlocked() : true;
 
       el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
@@ -3518,11 +3849,16 @@ const RecoveryUI = {
 
   const el = {
     btnScan: document.getElementById("scanNfc"),
+    newHiveBtn: document.getElementById("newHiveBtn"),
     appTitle: document.getElementById("appTitle"),
     status: document.getElementById("status"),
     hiveForm: document.getElementById("hiveForm"),
 
     hiveIdDisplay: document.getElementById("hiveIdDisplay"),
+    hiveTagSerial: document.getElementById("hiveTagSerial"),
+    scanLinkNfcBtn: document.getElementById("scanLinkNfcBtn"),
+    linkNfcBtn: document.getElementById("linkNfcBtn"),
+    hiveTagHint: document.getElementById("hiveTagHint"),
     hiveName: document.getElementById("hiveName"),
     location: document.getElementById("location"),
     date: document.getElementById("lastInspection"),
@@ -3582,6 +3918,8 @@ const RecoveryUI = {
     history: document.getElementById("history"),
 
     currentYard: document.getElementById("currentYard"),
+    currentYardSelect: document.getElementById("currentYardSelect"),
+    yardSelectHint: document.getElementById("yardSelectHint"),
     yardList: document.getElementById("yardList"),
     yardHives: document.getElementById("yardHives"),
 
@@ -3648,10 +3986,35 @@ const RecoveryUI = {
     remindersBtn: document.getElementById("remindersBtn"),
     lookupBtn: document.getElementById("lookupBtn"),
     mapBtn: document.getElementById("mapBtn"),
+    nectarFinderBtn: document.getElementById("nectarFinderBtn"),
     cloudBtn: document.getElementById("cloudBtn"),
     lockBtn: document.getElementById("lockBtn"),
     lookupPanel: document.getElementById("lookupPanel"),
     mapPanel: document.getElementById("mapPanel"),
+    nectarFinderPanel: document.getElementById("nectarFinderPanel"),
+    nectarFinderCloseBtn: document.getElementById("nectarFinderCloseBtn"),
+    nectarHoneySelect: document.getElementById("nectarHoneySelect"),
+    nectarMatchHint: document.getElementById("nectarMatchHint"),
+    nectarApplyToYardBtn: document.getElementById("nectarApplyToYardBtn"),
+    nectarSuggestBtn: document.getElementById("nectarSuggestBtn"),
+    nectarSuggestList: document.getElementById("nectarSuggestList"),
+    nectarMap: document.getElementById("nectarMap"),
+    nectarFinderPanel: document.getElementById("nectarFinderPanel"),
+    nectarFinderCloseBtn: document.getElementById("nectarFinderCloseBtn"),
+    nectarHoneySelect: document.getElementById("nectarHoneySelect"),
+    nectarMatchHint: document.getElementById("nectarMatchHint"),
+    nectarApplyToYardBtn: document.getElementById("nectarApplyToYardBtn"),
+    nectarSuggestBtn: document.getElementById("nectarSuggestBtn"),
+    nectarSuggestList: document.getElementById("nectarSuggestList"),
+    nectarMap: document.getElementById("nectarMap"),
+    nectarFinderPanel: document.getElementById("nectarFinderPanel"),
+    nectarFinderCloseBtn: document.getElementById("nectarFinderCloseBtn"),
+    nectarHoneySelect: document.getElementById("nectarHoneySelect"),
+    nectarMatchHint: document.getElementById("nectarMatchHint"),
+    nectarApplyToYardBtn: document.getElementById("nectarApplyToYardBtn"),
+    nectarSuggestBtn: document.getElementById("nectarSuggestBtn"),
+    nectarSuggestList: document.getElementById("nectarSuggestList"),
+    nectarMap: document.getElementById("nectarMap"),
     cloudPanel: document.getElementById("cloudPanel"),
     yardMap: document.getElementById("yardMap"),
     mapStatus: document.getElementById("mapStatus"),
@@ -4005,6 +4368,159 @@ for (const [k, v] of Object.entries(el)) {
     },
   };
 
+  // =========================================================
+  // GLOBAL EVENTS (Swarms / Removals) — yard-optional
+  // =========================================================
+  const GlobalEvents = {
+    KEY: "broodnote_global_events_v1",
+
+    load() {
+      try {
+        const raw = localStorage.getItem(this.KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+      } catch (_) {
+        return [];
+      }
+    },
+
+    save(arr) {
+      try { localStorage.setItem(this.KEY, JSON.stringify(arr || [])); } catch (_) {}
+    },
+
+    _migrateOnce() {
+      // Back-compat: if older builds stored events per-yard, keep showing them
+      // but don't duplicate if we already have globals.
+      const cur = this.load();
+      if (cur.length) return;
+
+      try {
+        const yards = YardMeta.getAll ? (YardMeta.getAll() || {}) : (Storage.loadYards() || {});
+        const out = [];
+        for (const yard of Object.keys(yards)) {
+          const meta = yards[yard] || {};
+          const ev = Array.isArray(meta.events) ? meta.events : [];
+          for (const e of ev) {
+            if (!e || !e.id) continue;
+            out.push(Object.assign({}, e, { yard: yard }));
+          }
+        }
+        if (out.length) this.save(out);
+      } catch (_) {}
+    },
+
+    list() {
+      this._migrateOnce();
+      const arr = this.load();
+      arr.sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
+      return arr;
+    },
+
+    remove(id) {
+      const arr = this.load().filter(e => e && e.id !== id);
+      this.save(arr);
+    },
+
+    async add(kind) {
+      const k = (kind === "removal") ? "removal" : "swarm";
+      let pos = null;
+      try {
+        pos = await GPS.getCurrentPositionOnce();
+        State.lastPosition = pos;
+      } catch (_) {}
+
+      const gps = pos ? {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        acc: pos.coords.accuracy
+      } : null;
+
+      let nearest = null;
+      try { nearest = GPS.findNearestYard(8000); } catch (_) {}
+
+      const yardTag = nearest ? nearest.name : "";
+
+      const date = Utils.today();
+      const size = prompt(k === "swarm" ? "Swarm size? (small/medium/large/huge)" : "Removal size? (small/medium/large/huge)", "") || "";
+      const attitude = prompt("Attitude? (calm/normal/hot)", "") || "";
+      const notes = prompt("Notes (optional)", "") || "";
+
+      const e = {
+        id: Utils.uuid(),
+        kind: k,
+        date,
+        gps,
+        size: size.trim(),
+        attitude: attitude.trim(),
+        notes: notes.trim(),
+        yard: yardTag
+      };
+
+      const arr = this.load();
+      arr.unshift(e);
+      this.save(arr);
+      return e;
+    },
+
+    // Used by map layers
+    heatPoints(scopeYards, rangeVal) {
+      this._migrateOnce();
+      const yardSet = new Set(Array.isArray(scopeYards) ? scopeYards : []);
+      const now = new Date();
+      let cutoff = null;
+      if (rangeVal !== "all") {
+        const days = parseInt(rangeVal, 10);
+        if (days && days > 0) cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+      }
+
+      const pts = [];
+      for (const e of this.load()) {
+        if (!e || e.kind !== "swarm") continue;
+
+        if (yardSet.size) {
+          const y = (e.yard || "").trim();
+          if (!y || !yardSet.has(y)) continue;
+        }
+
+        if (cutoff && typeof e.date === "string") {
+          const d = Utils.parseISODate(e.date);
+          if (d && d < cutoff) continue;
+        }
+
+        const lat = e.gps && typeof e.gps.lat === "number" ? e.gps.lat : null;
+        const lng = e.gps && typeof e.gps.lng === "number" ? e.gps.lng : null;
+        if (typeof lat !== "number" || typeof lng !== "number") continue;
+
+        let weight = 1;
+        const size = e.size ? String(e.size).toLowerCase() : "";
+        if (size.includes("huge")) weight = 1.6;
+        else if (size.includes("large")) weight = 1.35;
+        else if (size.includes("small")) weight = 0.9;
+
+        pts.push({ yard: (e.yard||""), lat, lng, weight, kind: e.kind });
+      }
+      return pts;
+    },
+
+    allPointsForHotspots() {
+      this._migrateOnce();
+      const pts = [];
+      for (const e of this.load()) {
+        const lat = e && e.gps && typeof e.gps.lat === "number" ? e.gps.lat : null;
+        const lng = e && e.gps && typeof e.gps.lng === "number" ? e.gps.lng : null;
+        if (typeof lat !== "number" || typeof lng !== "number") continue;
+        pts.push({
+          yard: (e.yard || "Unassigned"),
+          kind: (e.kind || "swarm"),
+          lat, lng,
+          weight: 1
+        });
+      }
+      return pts;
+    }
+  };
+
+
   function daysBetweenISO(startIso, endDateObj) {
     try {
       const d0 = new Date(startIso);
@@ -4048,6 +4564,97 @@ for (const [k, v] of Object.entries(el)) {
   // 3.5) YARD MAP (Leaflet)
   // =========================================================
   
+  // =========================================================
+  // Field Card (printable yard/hive list)
+  // =========================================================
+  const FieldCard = {
+    open() {
+      if (!el.fieldCardPanel) { alert("Field Card panel missing."); return; }
+      el.fieldCardPanel.classList.remove("hidden");
+      // hide other panels
+      el.yardsPanel?.classList.add("hidden");
+      el.remindersPanel?.classList.add("hidden");
+      el.lookupPanel?.classList.add("hidden");
+      el.mapPanel?.classList.add("hidden");
+      el.cloudPanel?.classList.add("hidden");
+      el.exportPanel?.classList.add("hidden");
+      try { el.fieldCardPanel.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (_) {}
+      this.render();
+    },
+    close() {
+      el.fieldCardPanel?.classList.add("hidden");
+    },
+    _rows() {
+      const hives = Storage.loadHives() || {};
+      const term = (el.fieldCardSearch?.value || "").trim().toLowerCase();
+      const rows = Object.values(hives).map(h => ({
+        id: h.id,
+        name: h.name || "",
+        yard: h.location || "",
+        last: h.lastInspection || "",
+        notes: h.notes || "",
+        tag: h.tagSerial || h.nfcTag || ""
+      }));
+      const filtered = !term ? rows : rows.filter(r => (
+        (r.id||"").toLowerCase().includes(term) ||
+        (r.name||"").toLowerCase().includes(term) ||
+        (r.yard||"").toLowerCase().includes(term) ||
+        (r.tag||"").toLowerCase().includes(term) ||
+        (r.notes||"").toLowerCase().includes(term)
+      ));
+      filtered.sort((a,b) => (a.yard||"").localeCompare(b.yard||"") || (a.name||"").localeCompare(b.name||"") || (a.id||"").localeCompare(b.id||""));
+      return filtered;
+    },
+    render() {
+      if (!el.fieldCardPanel || !el.fieldCardList) return;
+      const rows = this._rows();
+      const total = rows.length;
+      const yards = new Set(rows.map(r => (r.yard||"").trim()).filter(Boolean));
+      if (el.fieldCardStats) {
+        el.fieldCardStats.innerHTML = `<strong>${total}</strong> hive${total===1?"":"s"} • <strong>${yards.size}</strong> yard${yards.size===1?"":"s"}`;
+      }
+      if (!rows.length) {
+        el.fieldCardList.innerHTML = `<div class="small">No matches.</div>`;
+        return;
+      }
+      el.fieldCardList.innerHTML = rows.map(r => {
+        const title = Utils.escapeHtml(r.name ? `${r.name} (${r.id})` : r.id);
+        const yard = Utils.escapeHtml(r.yard || "");
+        const last = Utils.escapeHtml(r.last || "");
+        const tag = Utils.escapeHtml(r.tag || "");
+        return `
+          <div class="card" style="margin:0.5rem 0;">
+            <div><strong>${title}</strong></div>
+            <div class="small">Yard: <strong>${yard||"—"}</strong></div>
+            <div class="small">Tag: ${tag||"—"}</div>
+            <div class="small">Last insp: ${last||"—"}</div>
+          </div>`;
+      }).join("");
+    },
+    print() {
+      const rows = this._rows();
+      const htmlRows = rows.map(r => {
+        const title = Utils.escapeHtml(r.name ? `${r.name} (${r.id})` : r.id);
+        const yard = Utils.escapeHtml(r.yard || "");
+        const last = Utils.escapeHtml(r.last || "");
+        const tag = Utils.escapeHtml(r.tag || "");
+        return `<tr><td>${yard||"—"}</td><td>${title}</td><td>${tag||"—"}</td><td>${last||"—"}</td></tr>`;
+      }).join("");
+      const w = window.open("", "bn_fieldcard_print");
+      if (!w) { alert("Popup blocked — allow popups to print."); return; }
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"/><title>BroodNote Field Card</title>
+        <style>body{font-family:Arial,sans-serif;padding:18px;} h1{margin:0 0 10px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px;} th{background:#f2f2f2;} .small{font-size:12px;opacity:.8}</style>
+      </head><body>
+        <h1>🐝 BroodNote — Field Card</h1>
+        <div class="small">Generated: ${new Date().toLocaleString()}</div>
+        <table style="margin-top:12px;"><thead><tr><th>Yard</th><th>Hive</th><th>Tag</th><th>Last insp</th></tr></thead><tbody>${htmlRows}</tbody></table>
+      </body></html>`);
+      w.document.close();
+      w.focus();
+      w.print();
+    }
+  };
+
   const MapView = {
     map: null,
     markers: null,
@@ -4175,6 +4782,7 @@ for (const [k, v] of Object.entries(el)) {
         onAdd(map) {
           this._map = map;
           this._canvas = L.DomUtil.create("canvas", "bn-heat-canvas");
+
           this._canvas.style.position = "absolute";
           this._canvas.style.top = "0";
           this._canvas.style.left = "0";
@@ -4245,50 +4853,11 @@ for (const [k, v] of Object.entries(el)) {
     },
 
     _computeHeatPoints(scopeYards) {
-      // Swarm density heatmap: swarm GPS points filtered by time window
-      const all = YardMeta._load ? (YardMeta._load() || {}) : {};
-      const pts = [];
-
+      // Swarm density heatmap: global swarm GPS points filtered by time window
       const rangeVal = el.mapHeatRange ? (el.mapHeatRange.value || "30") : "30";
-      const now = new Date();
-      let cutoff = null;
-      if (rangeVal !== "all") {
-        const days = parseInt(rangeVal, 10);
-        if (days && days > 0) cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
-      }
-
-      const yardSet = new Set(Array.isArray(scopeYards) ? scopeYards : []);
-      for (const yard of Object.keys(all)) {
-        if (yardSet.size && !yardSet.has(yard)) continue;
-        const meta = all[yard] || {};
-        const ev = Array.isArray(meta.events) ? meta.events : [];
-        for (const e of ev) {
-          const kind = (e && e.kind) ? String(e.kind).trim() : "";
-          if (kind !== "swarm") continue;
-
-          // Date filter (best-effort)
-          if (cutoff && e && typeof e.date === "string") {
-            const d = Utils.parseISODate(e.date);
-            if (d && d < cutoff) continue;
-          }
-
-          const lat = e && e.gps && typeof e.gps.lat === "number" ? e.gps.lat : null;
-          const lng = e && e.gps && typeof e.gps.lng === "number" ? e.gps.lng : null;
-          if (typeof lat !== "number" || typeof lng !== "number") continue;
-
-          // Optional weighting (if size exists, use it a bit)
-          let weight = 1;
-          const size = e && e.size ? String(e.size).toLowerCase() : "";
-          if (size.includes("huge")) weight = 1.6;
-          else if (size.includes("large")) weight = 1.35;
-          else if (size.includes("small")) weight = 0.9;
-
-          pts.push({ yard, lat, lng, weight });
-        }
-      }
-
-      return pts;
+      return GlobalEvents.heatPoints(scopeYards, rangeVal);
     },
+
 
     _renderHeatmapFromCache(force) {
       if (!this.map) return;
@@ -4329,15 +4898,14 @@ for (const [k, v] of Object.entries(el)) {
       }
     },
     render() {
+      try {
       if (!el.mapPanel || !el.yardMap || el.mapPanel.classList.contains("hidden")) return;
 
       const yards = Storage.loadYards() || {};
       const yardNames = Object.keys(yards).sort((a,b) => a.localeCompare(b));
       if (!yardNames.length) {
         if (el.mapStatus) el.mapStatus.innerHTML = "<em>No yards saved yet.</em>";
-        el.yardMap.innerHTML = "";
-        if (el.mapMissingGps) el.mapMissingGps.innerHTML = "";
-        return;
+        // Still allow the base map to render (helps with GPS capture + future yard setup)
       }
 
       this._wireControlsOnce();
@@ -4493,13 +5061,21 @@ for (const [k, v] of Object.entries(el)) {
         }).addTo(this.map);
 
         this.markers = L.layerGroup().addTo(this.map);
+
+        // When a map container was previously hidden, Leaflet may need a resize tick
+        setTimeout(() => { try { this.map.invalidateSize(); } catch (_) {} }, 60);
       } else {
         this.markers.clearLayers();
       }
 
-      // Fit bounds
-      const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
-      try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
+      // Fit bounds (or default view if no yard GPS yet)
+      if (pts.length) {
+        const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
+        try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
+      } else {
+        // Default: Florida-ish (good for your use case); adjust later if desired
+        try { this.map.setView([27.8, -81.6], 6); } catch (_) {}
+      }
 
       // Heatmap (swarm density)
       this._renderHeatmapFromCache(false);
@@ -4564,6 +5140,11 @@ for (const [k, v] of Object.entries(el)) {
 
         marker.addTo(this.markers);
       });
+    
+      } catch (err) {
+        console.error("[MapView.render] failed:", err);
+        if (el.mapStatus) el.mapStatus.innerHTML = `<span class="notice-bad">Map error:</span> ${Utils.escapeHtml(err?.message || String(err))}`;
+      }
     }
   };
 
@@ -4578,29 +5159,12 @@ const UI = {
       if (!el.eventsHotspots) return;
 
       // Real hotspot clustering across all yards (swarm/removal GPS points)
-      const all = YardMeta._load ? (YardMeta._load() || {}) : {};
-      const points = [];
-
-      for (const yard of Object.keys(all)) {
-        const meta = all[yard] || {};
-        const ev = Array.isArray(meta.events) ? meta.events : [];
-        for (const e of ev) {
-          const kind = (e && e.kind) ? String(e.kind).trim() : "";
-          if (kind !== "swarm" && kind !== "removal") continue;
-          const lat = e && e.gps && typeof e.gps.lat === "number" ? e.gps.lat : null;
-          const lng = e && e.gps && typeof e.gps.lng === "number" ? e.gps.lng : null;
-          if (typeof lat !== "number" || typeof lng !== "number") continue;
-          const weight = kind === "swarm" ? 3 : 2;
-          points.push({ yard, kind, lat, lng, weight, date: (e.date || "") });
-        }
-      }
-
-      if (points.length === 0) {
-        el.eventsHotspots.innerHTML = "<div class=\"small\"><em>No swarm/removal GPS events yet.</em></div>";
+      const points = GlobalEvents.allPointsForHotspots();
+      if (!points.length) {
+        el.eventsHotspots.innerHTML = '<div class="small">No swarm/removal GPS events yet.</div>';
         return;
       }
 
-      // Simple geo clustering (radius ~ 250m)
       const RADIUS_M = 250;
       const toRad = (d) => d * Math.PI / 180;
       const distM = (a, b) => {
@@ -4711,32 +5275,33 @@ const UI = {
         }
       }
 
-      // Swarm/Removal list (always visible, yard-scoped)
+      // Swarm/Removal list (global, yard-optional)
       if (el.swarmRemovalList) {
-        const ev = Array.isArray(meta.events) ? meta.events : [];
+        const ev = GlobalEvents.list();
         if (ev.length === 0) {
-          el.swarmRemovalList.innerHTML = "<em>No events yet.</em>";
+          el.swarmRemovalList.innerHTML = "<em>No swarm/removal events yet.</em>";
         } else {
-          el.swarmRemovalList.innerHTML = ev.map(e => {
+          el.swarmRemovalList.innerHTML = ev.slice(0, 30).map(e => {
             const gps = e.gps ? `${(e.gps.lat||0).toFixed(5)}, ${(e.gps.lng||0).toFixed(5)}` : "(no GPS)";
+            const yard = e.yard ? ` • yard: <strong>${Utils.escapeHtml(e.yard)}</strong>` : "";
             const tie = e.tiedHiveId ? ` • tied: <strong>${Utils.escapeHtml(e.tiedHiveId)}</strong>` : "";
             const kind = e.kind === "swarm" ? "🐝 Swarm" : "🏠 Removal";
-            const size = e.size ? ` • size ${Utils.escapeHtml(e.size)}` : "";
-            const att = e.attitude ? ` • attitude ${Utils.escapeHtml(e.attitude)}` : "";
-            const notes = e.notes ? `<div class="small">${Utils.escapeHtml(e.notes)}</div>` : "";
-            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
-              <div><strong>${kind}</strong> • ${Utils.escapeHtml(e.date||"")}${size}${att}${tie}</div>
-              <div class="small">GPS: ${Utils.escapeHtml(gps)}</div>
-              ${notes}
-              <div class="row" style="gap:0.4rem;margin-top:0.4rem;">
-                <button class="btn" data-ev-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${e.id}">Delete</button>
+            const maps = e.gps ? `<a href="${Utils.mapsLink(e.gps.lat, e.gps.lng)}" target="_blank" rel="noopener">map</a>` : "";
+            return `
+              <div class="history-item">
+                <div class="history-left">
+                  <div><strong>${kind}</strong> • ${Utils.escapeHtml(e.date || "")}${yard}${tie}</div>
+                  <div class="small">${Utils.escapeHtml(gps)} ${maps ? "• " + maps : ""}</div>
+                  ${e.notes ? `<div class="small">${Utils.escapeHtml(e.notes)}</div>` : ""}
+                </div>
+                <button class="btn btn-danger" style="width:auto;" data-gev-del="${Utils.escapeHtml(e.id)}">Delete</button>
               </div>
-            </div>`;
+            `;
           }).join("");
         }
       }
 
-      // Nectar lists + banner
+// Nectar lists + banner
       if (el.yardNectarList && el.yardDearthList && el.yardNectarBanner) {
         const sources = Array.isArray(meta.nectarSources) ? meta.nectarSources : [];
         const dearths = Array.isArray(meta.dearths) ? meta.dearths : [];
@@ -6016,12 +6581,32 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       const yardsSet = new Set();
       Object.values(hives).forEach(h => { if (h.location) yardsSet.add(h.location); });
 
+      try {
+        const yardsMeta = Storage.loadYards() || {};
+        Object.keys(yardsMeta).forEach(y => { if (y) yardsSet.add(y); });
+      } catch (_) {}
+
+
       el.yardList.innerHTML = "";
       [...yardsSet].sort().forEach(y => {
         const opt = document.createElement("option");
         opt.value = y;
         el.yardList.appendChild(opt);
       });
+
+      // Desktop dropdown yard picker
+      if (el.currentYardSelect) {
+        const yards = [...yardsSet].sort();
+        el.currentYardSelect.innerHTML = `<option value="">— Select yard —</option>` + yards.map(y => `<option value="${Utils.escapeHtml(y)}">${Utils.escapeHtml(y)}</option>`).join("");
+        const cur = (el.currentYard.value || "").trim();
+        el.currentYardSelect.value = cur || "";
+      }
+      if (el.yardSelectHint) {
+        // Show only on desktop via CSS media query
+        el.yardSelectHint.textContent = "Choose a yard from the dropdown, or type a new yard.";
+      }
+
+
 
       const selected = (el.currentYard.value || "").trim();
       // Yard purpose card (yard-level metadata)
@@ -6260,31 +6845,32 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       if (!yardName) { el.yardGps.textContent = ""; return; }
 
       const y = Storage.loadYards()[yardName];
-      const lat = (y && typeof y.lat === "number") ? y.lat : null;
-      const lon = (y && typeof y.lon === "number") ? y.lon : null;
-      const acc = (y && typeof y.accuracy === "number") ? y.accuracy : null;
-
-      if (lat === null || lon === null) {
+      if (!y) {
         el.yardGps.innerHTML = `<em>No GPS saved for "${yardName}".</em>`;
         return;
       }
 
       let distText = "";
-      if (State.lastPosition && State.lastPosition.coords) {
+      if (State.lastPosition) {
         const d = Utils.distanceMeters(
           State.lastPosition.coords.latitude,
           State.lastPosition.coords.longitude,
-          lat, lon
+          y.lat, y.lon
         );
-        if (Number.isFinite(d)) distText = ` • Distance: ${Math.round(d)} m`;
+        distText = ` • Distance: ${Math.round(d)} m`;
       }
 
-      const ts = (y && y.timestamp) ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+      const ts = y.timestamp ? ` • Captured: ${Utils.fmtDateTime(y.timestamp)}` : "";
+
+      if (typeof y.lat !== "number" || typeof y.lon !== "number") {
+        el.yardGps.innerHTML = `<em>No GPS coordinates saved for "${Utils.escapeHtml(yardName)}". Tap <strong>📍 Capture Yard GPS</strong>.</em>`;
+        return;
+      }
+      const acc = (typeof y.accuracy === "number" ? Math.round(y.accuracy) : null);
+
       el.yardGps.innerHTML =
-        `GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}` +
-        (acc !== null ? ` (±${Math.round(acc)}m)` : ``) +
-        `${distText}${ts} • <a href="${Utils.mapsLink(lat, lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
-    },
+        `GPS: ${y.lat.toFixed(5)}, ${y.lon.toFixed(5)}` + (acc!==null ? ` (±${acc}m)` : ``) +
+        `${distText}${ts} • <a href="${Utils.mapsLink(y.lat, y.lon)}" target="_blank" rel="noopener">Open in Maps</a>`;
     },
 
     renderHiveYardGps() {
@@ -6981,7 +7567,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
         ` : ""}
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div class="row toolbar subtoolbar" style="margin-top:0.75rem;">
           <button id="rearing_saveBtn" type="button" class="btn btn-primary grow">Save</button>
           <button id="rearing_closeBtn" type="button" class="btn grow">Close</button>
         </div>
@@ -7475,7 +8061,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     if (typeof Debug !== "undefined") Debug.refresh();
     },
 
-    async startScan() {
+    async startScan(opts = {}) {
       if (State.scanning) return;
       this.stopScan();
       State.scanning = true;
@@ -7524,7 +8110,15 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
             return;
           }
 
-          App.handleHiveLoad(tagId);
+          try {
+            if (opts && typeof opts.onTag === "function") {
+              opts.onTag(tagId);
+            } else {
+              App.handleHiveLoad(tagId);
+            }
+          } catch (_) {
+            App.handleHiveLoad(tagId);
+          }
           this.stopScan();
         };
 
@@ -8314,6 +8908,16 @@ function saveMiteTreatmentFromForm() {
     });
 
 
+    if (el.currentYardSelect) el.currentYardSelect.addEventListener("change", () => {
+      el.currentYard.value = el.currentYardSelect.value || "";
+      UI.refreshYardUI();
+      UI.renderYardGps((el.currentYard.value || "").trim());
+      UI.renderHiveYardGps();
+      UI.applyYardPurposeToHiveForm("");
+      UI.renderYardExtras((el.currentYard.value || "").trim());
+      UI.renderMapScopeControls();
+    });
+
     // Yard purpose selection
     if (el.yardPurposeSelect) {
       el.yardPurposeSelect.addEventListener("change", () => {
@@ -8656,7 +9260,7 @@ if (action === "confirmLaying") {
           accuracy: pos.coords.accuracy,
           timestamp: Date.now()
         });
-        const res = Storage.save("yards", yards);
+        const res = Storage.saveYards(yards);
         if (!res.ok) UI.status("Failed to save yard GPS (storage full?) — export ZIP backup!");
 
         UI.status(`Saved GPS for ${yardName}`);
@@ -9201,6 +9805,108 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
       await NFC.startScan();
     });
 
+
+    // Create a new hive without an NFC tag (temporary ID)
+    if (el.newHiveBtn) el.newHiveBtn.addEventListener("click", () => {
+      const yard = (el.currentYard?.value || "").trim();
+      if (!yard) { alert("Set Current Yard first."); return; }
+      const tmpId = "tmp-" + Utils.uuid();
+      // Create minimal hive record
+      const hives = Storage.loadHives();
+      if (!hives[tmpId]) {
+        hives[tmpId] = { name: "", location: yard, lastInspection: "", framesCount: 10, inspections: [], notes: "" };
+        Storage.saveHives(hives);
+      }
+      App.handleHiveLoad(tmpId);
+      UI.setStatus(`Created temporary hive: ${tmpId}`);
+    });
+
+    // Link NFC tag to the currently open hive (renames hive ID)
+    async function linkNfcToCurrent(tagId) {
+      const oldId = State.currentHiveId;
+      if (!oldId) { alert("Open a hive first."); return; }
+      const newId = (tagId || "").trim();
+      if (!newId) { alert("Enter a tag serial."); return; }
+      if (newId === oldId) { UI.setStatus("Tag already linked."); return; }
+
+      const hives = Storage.loadHives();
+      if (!hives[oldId]) { alert("Current hive not found."); return; }
+
+      if (hives[newId]) {
+        const ok = confirm("A hive with that tag already exists. Merge inspections into it?");
+        if (!ok) return;
+
+        // Merge inspections/notes (best-effort)
+        const src = hives[oldId];
+        const dst = hives[newId];
+        dst.inspections = (dst.inspections || []).concat(src.inspections || []);
+        if (!dst.notes && src.notes) dst.notes = src.notes;
+        if (!dst.name && src.name) dst.name = src.name;
+        if (!dst.location && src.location) dst.location = src.location;
+        hives[newId] = dst;
+        delete hives[oldId];
+      } else {
+        hives[newId] = hives[oldId];
+        delete hives[oldId];
+      }
+
+      // Update any known cross-links (swarm traps/events)
+      try {
+        const yards = Storage.loadYards() || {};
+        for (const y of Object.keys(yards)) {
+          const meta = yards[y] || {};
+          if (Array.isArray(meta.traps)) {
+            meta.traps.forEach(t => { if (t && t.tiedHiveId === oldId) t.tiedHiveId = newId; });
+          }
+          if (Array.isArray(meta.events)) {
+            meta.events.forEach(e => { if (e && e.tiedHiveId === oldId) e.tiedHiveId = newId; });
+          }
+          yards[y] = meta;
+        }
+        Storage.saveYards(yards);
+      } catch (_) {}
+
+      // Update global events
+      try {
+        const ev = GlobalEvents.load();
+        ev.forEach(e => { if (e && e.tiedHiveId === oldId) e.tiedHiveId = newId; });
+        GlobalEvents.save(ev);
+      } catch (_) {}
+
+      Storage.saveHives(hives);
+
+      // Refresh current context
+      State.currentHiveId = newId;
+      if (el.hiveIdDisplay) el.hiveIdDisplay.textContent = newId;
+      if (el.hiveTagSerial) el.hiveTagSerial.value = newId;
+      if (el.hiveTagHint) el.hiveTagHint.textContent = "Linked.";
+      UI.refreshYardUI();
+      UI.renderYardExtras((el.currentYard?.value || "").trim());
+      UI.renderHiveForm();
+      UI.setStatus("NFC tag linked.");
+    }
+
+    if (el.linkNfcBtn) el.linkNfcBtn.addEventListener("click", async () => {
+      await linkNfcToCurrent(el.hiveTagSerial?.value || "");
+    });
+    if (el.scanLinkNfcBtn) el.scanLinkNfcBtn.addEventListener("click", async () => {
+      await NFC.startScan({ onTag: async (tagId) => {
+        if (el.hiveTagSerial) el.hiveTagSerial.value = tagId;
+        await linkNfcToCurrent(tagId);
+      }});
+    });
+
+    // Delete global swarm/removal events
+    if (el.swarmRemovalList) el.swarmRemovalList.addEventListener("click", (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest("[data-gev-del]") : null;
+      const id = btn ? btn.getAttribute("data-gev-del") : null;
+      if (!id) return;
+      if (!confirm("Delete this event?")) return;
+      GlobalEvents.remove(id);
+      UI.renderYardExtras((el.currentYard?.value || "").trim());
+      try { if (typeof MapView !== "undefined" && MapView.render && el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render(); } catch (_) {}
+    });
+
     // Photo viewer close / click-outside
     el.viewerClose.addEventListener("click", () => {
       el.viewer.style.display = "none";
@@ -9260,15 +9966,15 @@ el.importZipInput.addEventListener("change", async () => {
     });
 
     if (el.addSwarmEventBtn) el.addSwarmEventBtn.addEventListener("click", async () => {
-      const yard = (el.currentYard?.value || "").trim();
-      if (!yard) { alert("Set Current Yard first."); return; }
-      await SwarmRemoval.add(yard, "swarm");
+      await GlobalEvents.add("swarm");
+      UI.renderYardExtras((el.currentYard?.value || "").trim());
+      try { if (typeof MapView !== "undefined" && MapView.render && el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render(); } catch (_) {}
     });
 
     if (el.addRemovalEventBtn) el.addRemovalEventBtn.addEventListener("click", async () => {
-      const yard = (el.currentYard?.value || "").trim();
-      if (!yard) { alert("Set Current Yard first."); return; }
-      await SwarmRemoval.add(yard, "removal");
+      await GlobalEvents.add("removal");
+      UI.renderYardExtras((el.currentYard?.value || "").trim());
+      try { if (typeof MapView !== "undefined" && MapView.render && el.mapPanel && !el.mapPanel.classList.contains("hidden")) MapView.render(); } catch (_) {}
     });
 
     if (el.addYardNectarBtn) el.addYardNectarBtn.addEventListener("click", () => {
@@ -9522,13 +10228,29 @@ Type a new team name to add, or leave blank to cancel:`);
     });
 
     // Toggle panels
-    el.exportMenuBtn.addEventListener("click", () => {
-      el.exportPanel.classList.toggle("hidden");
-      el.remindersPanel.classList.add("hidden");
-      el.lookupPanel.classList.add("hidden");
-      if (el.mapPanel) el.mapPanel.classList.add("hidden");
-      if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
-    });
+    if (el.exportMenuBtn) {
+      el.exportMenuBtn.addEventListener("click", () => {
+        try {
+          if (!el.exportPanel) {
+            console.warn("Export panel missing");
+            alert("Export panel is missing from the page.");
+            return;
+          }
+          el.exportPanel.classList.toggle("hidden");
+          el.remindersPanel?.classList.add("hidden");
+          el.lookupPanel?.classList.add("hidden");
+          el.yardsPanel?.classList.add("hidden");
+          el.mapPanel?.classList.add("hidden");
+          el.cloudPanel?.classList.add("hidden");
+          if (!el.exportPanel.classList.contains("hidden")) {
+            try { el.exportPanel.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (_) {}
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Export button error. See Console for details.");
+        }
+      });
+    }
     
     // Yards navigation panel
     if (el.yardsBtn && el.yardsPanel) {
@@ -9644,7 +10366,7 @@ el.remindersBtn.addEventListener("click", () => {
     }
 
     // Yard map (desktop-friendly)
-    if (el.mapBtn && el.mapPanel) {
+    if (el.mapBtn && el.mapPanel && !(window.__BN && window.__BN._mapHandlerWired)) {
       el.mapBtn.addEventListener("click", () => {
         el.mapPanel.classList.toggle("hidden");
         el.exportPanel.classList.add("hidden");
@@ -9653,6 +10375,58 @@ el.remindersBtn.addEventListener("click", () => {
         if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
         MapView.render();
       });
+      // Nectar Finder panel
+      if (el.nectarFinderBtn) el.nectarFinderBtn.addEventListener("click", async () => {
+        el.nectarFinderPanel.classList.toggle("hidden");
+        // hide other panels
+        el.mapPanel.classList.add("hidden");
+        el.exportPanel.classList.add("hidden");
+        el.remindersPanel.classList.add("hidden");
+        el.lookupPanel.classList.add("hidden");
+        if (el.cloudPanel) el.cloudPanel.classList.add("hidden");
+        if (!el.nectarFinderPanel.classList.contains("hidden")) {
+          await window.NectarFinder.open();
+        }
+      });
+      if (el.nectarFinderCloseBtn) el.nectarFinderCloseBtn.addEventListener("click", () => {
+        window.NectarFinder.close();
+      });
+      if (el.nectarHoneySelect) el.nectarHoneySelect.addEventListener("change", () => {
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
+      });
+      if (el.nectarApplyToYardBtn) el.nectarApplyToYardBtn.addEventListener("click", () => {
+        const h = window.NectarFinder.getHoney(el.nectarHoneySelect.value);
+        window.NectarFinder.addFlowToYard(h);
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
+      });
+      if (el.nectarSuggestBtn) el.nectarSuggestBtn.addEventListener("click", () => {
+        const matches = window.NectarFinder.suggestForCurrentYard();
+        if (!el.nectarSuggestList) return;
+        if (!matches.length) {
+          el.nectarSuggestList.innerHTML = "<div class=\"small\">No location-based matches for this yard. (You can still add any honey type manually.)</div>";
+          return;
+        }
+        el.nectarSuggestList.innerHTML = matches.map(h => {
+          const win = `${window.NectarFinder.monthLabel(h.window.start)}–${window.NectarFinder.monthLabel(h.window.end)}`;
+          return `<div class="history-item">
+            <div class="history-left"><strong>${Utils.escapeHtml(h.name)}</strong><div class="small">Estimated flow: ${win}</div></div>
+            <button class="btn btn-primary" style="width:auto;" data-nf-add="${h.id}">Add</button>
+          </div>`;
+        }).join("");
+      });
+      if (el.nectarSuggestList) el.nectarSuggestList.addEventListener("click", (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("[data-nf-add]") : null;
+        const id = btn ? btn.getAttribute("data-nf-add") : null;
+        if (!id) return;
+        const h = window.NectarFinder.getHoney(id);
+        window.NectarFinder.addFlowToYard(h);
+        window.NectarFinder.render();
+        window.NectarFinder.refreshMapLayers();
+      });
+
+
       if (el.mapCloseBtn) {
         el.mapCloseBtn.addEventListener("click", () => el.mapPanel.classList.add("hidden"));
       }
@@ -9661,8 +10435,20 @@ el.remindersBtn.addEventListener("click", () => {
     // Edit lock (PIN)
     if (el.lockBtn) {
       el.lockBtn.addEventListener("click", async () => {
-        if (Lock.isUnlocked()) Lock.lockNow();
-        else await Lock.unlockWithPrompt();
+        try {
+          // On mobile we don't enforce editing locks (field speed), but we still
+          // show the button so the UI is consistent.
+          if (!Lock.isDesktop()) {
+            alert("Editing lock is a desktop safety feature. On mobile, editing stays enabled.");
+            return;
+          }
+          if (Lock.isUnlocked()) Lock.lockNow();
+          else await Lock.unlockWithPrompt();
+          Lock.applyUI();
+        } catch (err) {
+          console.error(err);
+          alert("Lock button error. See Console for details.");
+        }
       });
     }
 
@@ -9732,20 +10518,36 @@ el.remindersBtn.addEventListener("click", () => {
 
       // Install prompt (where supported)
       let deferredPrompt = null;
+
+      // Hide install button if already installed / running standalone
+      const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+      if (isStandalone) {
+        installBtn?.classList.add("hidden");
+      }
+
+      // One click handler (avoid stacking listeners)
+      if (installBtn) {
+        installBtn.addEventListener("click", async () => {
+          if (!deferredPrompt) return;
+          try {
+            deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+          } catch (_) {}
+          deferredPrompt = null;
+          installBtn.classList.add("hidden");
+        });
+      }
+
       window.addEventListener("beforeinstallprompt", (e) => {
+        // We control the install UX, so prevent the mini-infobar and show our button instead.
         e.preventDefault();
         deferredPrompt = e;
-        if (installBtn){
-          installBtn.classList.remove("hidden");
-          installBtn.addEventListener("click", async () => {
-            try{
-              deferredPrompt.prompt();
-              await deferredPrompt.userChoice;
-            }catch{}
-            deferredPrompt = null;
-            installBtn.classList.add("hidden");
-          }, { once:true });
-        }
+        installBtn?.classList.remove("hidden");
+      });
+
+      window.addEventListener("appinstalled", () => {
+        deferredPrompt = null;
+        installBtn?.classList.add("hidden");
       });
 
       // Service worker registration + update UI
@@ -9765,7 +10567,10 @@ el.remindersBtn.addEventListener("click", () => {
               console.warn("Service worker bypassed via ?nosw=1");
               return;
             }
-            const reg = await navigator.serviceWorker.register("./service-worker.js");
+           const reg = await navigator.serviceWorker.register("/hive-tracker/service-worker.js", {
+  scope: "/hive-tracker/"
+});
+
             // If there's an updated worker waiting, show update pill
             function showUpdate(){
               if (!statusBar) return;
@@ -9785,7 +10590,7 @@ el.remindersBtn.addEventListener("click", () => {
             });
             reloadBtn?.addEventListener("click", () => window.location.reload());
           }catch{}
-        }).catch(() => {});
+        });
       }
     })();
   </script>
@@ -9862,4 +10667,3 @@ el.remindersBtn.addEventListener("click", () => {
 
 </body>
 </html>
-
