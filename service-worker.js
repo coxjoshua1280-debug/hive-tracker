@@ -2,7 +2,7 @@
 
 const BASE = "/hive-tracker/";
 
-const CACHE_NAME = "broodnote-v3-fix14";
+const CACHE_NAME = "broodnote-v3-fix15"; // Bumped for icon path fixes
 const RUNTIME_CACHE = "broodnote-runtime-v1";
 const TILE_CACHE = "broodnote-tiles-v1";
 
