@@ -1,8 +1,13 @@
 /* BroodNote Service Worker (GitHub Pages-safe + resilient install) */
 
+// DEPLOYMENT CONFIG: Update this BASE path to match your deployment location
+// Examples:
+//   GitHub Pages subdirectory: "/hive-tracker/"
+//   Root domain: "/"
+//   Custom subdirectory: "/your-path/"
 const BASE = "/hive-tracker/";
 
-const CACHE_NAME = "broodnote-v3-fix14";
+const CACHE_NAME = "broodnote-v3-fix15";  // Bumped version for the fixes
 const RUNTIME_CACHE = "broodnote-runtime-v1";
 const TILE_CACHE = "broodnote-tiles-v1";
 
@@ -10,9 +15,9 @@ const ASSETS = [
   BASE,
   BASE + "index.html",
   BASE + "manifest.json",
-  // MUST match real filenames in your repo:
-  BASE + "icons/icon-192x192.png",
-  BASE + "icons/icon-512x512.png",
+  // Fixed: Using actual icon filenames that exist in your /icons/ folder
+  BASE + "icons/icon-192.png",
+  BASE + "icons/icon-512.png",
 ];
 
 // Cache assets individually so one missing file doesn't nuke the whole install
@@ -90,7 +95,12 @@ self.addEventListener("fetch", (event) => {
       try {
         const fresh = await fetch(req);
         const cache = await caches.open(CACHE_NAME);
-        await cache.put(BASE + "index.html", fresh.clone());
+        // Added error handling for cache.put
+        try {
+          await cache.put(BASE + "index.html", fresh.clone());
+        } catch (e) {
+          console.warn("[SW] Cache put failed:", e);
+        }
         return fresh;
       } catch {
         const cached = await caches.match(BASE + "index.html");
@@ -109,7 +119,12 @@ self.addEventListener("fetch", (event) => {
       try {
         const res = await fetch(req);
         const cache = await caches.open(CACHE_NAME);
-        await cache.put(req, res.clone());
+        // Added error handling for cache.put
+        try {
+          await cache.put(req, res.clone());
+        } catch (e) {
+          console.warn("[SW] Cache put failed:", e);
+        }
         return res;
       } catch {
         return new Response("", { status: 504 });
