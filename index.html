@@ -1044,6 +1044,7 @@ button.primary, .btn.primary {
       <button id="addYardDearthBtn" type="button" class="btn">➕ Dearth</button>
     </div>
     <div id="yardNectarBanner" class="card" style="margin-top:0.6rem; padding:0.6rem; border:1px solid rgba(47,36,24,0.12);">
+      <div id="yardNectarForecast" class="small" style="margin-top:0.55rem;"></div>
       <div class="small"><strong>Season status</strong> will appear here once you add nectar sources or dearth windows.</div>
     </div>
     <div id="yardNectarList" class="small" style="margin-top:0.6rem;"></div>
@@ -4140,6 +4141,7 @@ hiveYardGps: document.getElementById("hiveYardGps"),
     swarmRemovalList: document.getElementById("swarmRemovalList"),
     yardNectarPanel: document.getElementById("yardNectarPanel"),
     yardNectarBanner: document.getElementById("yardNectarBanner"),
+    yardNectarForecast: document.getElementById("yardNectarForecast"),
     addYardNectarBtn: document.getElementById("addYardNectarBtn"),
     addYardDearthBtn: document.getElementById("addYardDearthBtn"),
     yardNectarList: document.getElementById("yardNectarList"),
@@ -5148,8 +5150,121 @@ for (const [k, v] of Object.entries(el)) {
     }
   };
 
+  // Nectar Forecast (offline, zone-style bands)
+  const NectarPredict = (() => {
+    const DAY = 86400000;
 
-const UI = {
+    const doy = (d) => {
+      const start = new Date(d.getFullYear(), 0, 1);
+      return Math.floor((d - start) / DAY) + 1; // 1..366
+    };
+
+    // "Zone-like" climate bands (offline proxy)
+    // We combine latitude (north/south) + rough east/west split to better match bloom timing.
+    const bandFor = (lat) => {
+      if (lat == null || !isFinite(lat)) return "unknown";
+      if (lat < 31) return "south";
+      if (lat < 35) return "midsouth";
+      if (lat < 39) return "mid";
+      if (lat < 44) return "north";
+      return "farnorth";
+    };
+
+    const regionFor = (lat, lon) => {
+      const band = bandFor(lat);
+      const side = (lon != null && isFinite(lon) && lon < -100) ? "west" : "east";
+      return `${band}_${side}`;
+    };
+
+    const approxZoneLabel = (lat) => {
+      const b = bandFor(lat);
+      // Rough mapping: this is intentionally approximate (offline) and presented as guidance, not a guarantee.
+      switch (b) {
+        case "south": return "Zone-like: 9–11";
+        case "midsouth": return "Zone-like: 8–9";
+        case "mid": return "Zone-like: 6–8";
+        case "north": return "Zone-like: 4–6";
+        case "farnorth": return "Zone-like: 3–5";
+        default: return "Zone-like: unknown";
+      }
+    };
+
+    // Baseline bloom windows by region proxy (start day-of-year, duration days).
+    // NOTE: These are deliberately conservative, and you can refine with local observations later.
+    const FLOWS = [
+      { key:"willow", name:"Willow / early pollen", start:{ south:55, midsouth:65, mid:80, north:95, farnorth:110 }, dur:18, weight:1 },
+      { key:"maple", name:"Maple (spring build-up)", start:{ south:60, midsouth:75, mid:90, north:105, farnorth:120 }, dur:16, weight:1 },
+      { key:"dandelion", name:"Dandelion", start:{ south:75, midsouth:90, mid:105, north:120, farnorth:135 }, dur:18, weight:1 },
+      { key:"fruit", name:"Fruit bloom (apple/peach/etc.)", start:{ south:80, midsouth:95, mid:110, north:125, farnorth:140 }, dur:14, weight:2 },
+      { key:"blacklocust", name:"Black locust", start:{ south:110, midsouth:125, mid:140, north:155, farnorth:170 }, dur:10, weight:3 },
+      { key:"tulippoplar", name:"Tulip poplar", start:{ south:115, midsouth:130, mid:145, north:160, farnorth:175 }, dur:16, weight:3, only:"east" },
+      { key:"clover", name:"Clover (main flow)", start:{ south:140, midsouth:155, mid:170, north:185, farnorth:200 }, dur:35, weight:3 },
+      { key:"basswood", name:"Basswood / linden", start:{ south:165, midsouth:180, mid:195, north:210, farnorth:225 }, dur:14, weight:3, only:"east" },
+      { key:"sourwood", name:"Sourwood", start:{ south:185, midsouth:200, mid:215, north:230, farnorth:999 }, dur:18, weight:3, only:"east" },
+      { key:"sumac", name:"Sumac (gap filler)", start:{ south:175, midsouth:190, mid:205, north:220, farnorth:235 }, dur:18, weight:2 },
+      { key:"mesquite", name:"Mesquite (regional)", start:{ south:115, midsouth:130, mid:999, north:999, farnorth:999 }, dur:20, weight:2, only:"west" },
+      { key:"goldenrod", name:"Goldenrod", start:{ south:235, midsouth:245, mid:255, north:265, farnorth:275 }, dur:20, weight:3 },
+      { key:"aster", name:"Aster (late fall)", start:{ south:250, midsouth:260, mid:270, north:280, farnorth:290 }, dur:18, weight:2 },
+      { key:"orangeblossom", name:"Orange blossom (regional)", start:{ south:95, midsouth:999, mid:999, north:999, farnorth:999 }, dur:18, weight:3, only:"east" },
+      { key:"tupelo", name:"Tupelo (regional)", start:{ south:115, midsouth:999, mid:999, north:999, farnorth:999 }, dur:14, weight:3, only:"east" },
+    ];
+
+    const windowFor = (flow, lat, lon, year) => {
+      const b = bandFor(lat);
+      const side = (lon != null && isFinite(lon) && lon < -100) ? "west" : "east";
+      if (flow.only && flow.only !== side) return null;
+      const startDoy = (flow.start && flow.start[b]) ? flow.start[b] : null;
+      if (!startDoy || startDoy >= 900) return null;
+      const start = new Date(year, 0, 1 + (startDoy - 1));
+      const end = new Date(start.getTime() + (flow.dur * DAY));
+      return { start, end, startDoy, endDoy: startDoy + flow.dur, weight: flow.weight, name: flow.name, key: flow.key };
+    };
+
+    const predict = (lat, lon, fromISO, horizonDays=60) => {
+      const from = new Date((fromISO || Utils.todayISO()) + "T00:00:00");
+      const year = from.getFullYear();
+      const startD = doy(from);
+      const endD = startD + horizonDays;
+
+      const side = (lon != null && isFinite(lon) && lon < -100) ? "west" : "east";
+
+      const items = [];
+      for (const f of FLOWS) {
+        if (f.only && f.only !== side) continue;
+        const w = windowFor(f, lat, lon, year);
+        if (!w) continue;
+
+        // If the window already passed, skip for this horizon (v1). (v2 can show next-year early flows.)
+        const inWindow = (startD >= w.startDoy && startD <= w.endDoy);
+        const upcoming = (w.startDoy >= startD && w.startDoy <= endD);
+        const overlapping = inWindow || (w.endDoy >= startD && w.startDoy <= endD);
+
+        if (!overlapping) continue;
+
+        const daysUntil = Math.max(0, w.startDoy - startD);
+        const status = inWindow ? "now" : "upcoming";
+        items.push({ ...w, daysUntil, status });
+      }
+
+      // Sort: active now first (heaviest weight), then soonest upcoming, then weight.
+      items.sort((a,b) => {
+        if (a.status !== b.status) return (a.status === "now" ? -1 : 1);
+        if (a.status === "upcoming" && a.daysUntil !== b.daysUntil) return a.daysUntil - b.daysUntil;
+        return (b.weight||0) - (a.weight||0);
+      });
+
+      return {
+        regionKey: regionFor(lat, lon),
+        zoneLabel: approxZoneLabel(lat),
+        items
+      };
+    };
+
+    return { predict };
+  })();
+
+
+  const UI = {
     status(text) {
       el.status.textContent = text || "";
       // Keep debug stats fresh without spamming the console panel.
@@ -5336,6 +5451,46 @@ const UI = {
         } else {
           el.yardNectarBanner.innerHTML = `<div class="small"><strong>🟡 No active flow/dearth today</strong> — add sources/dearths to get seasonal guidance here.</div>`;
         }
+
+
+        // Nectar forecast (offline guidance)
+        if (el.yardNectarForecast) {
+          try {
+            const yards = Storage.loadYards() || {};
+            const y = yards[yardName] || {};
+            const lat = (y.lat != null) ? Number(y.lat) : null;
+            const lon = (y.lon != null) ? Number(y.lon) : null;
+
+            if (!isFinite(lat) || !isFinite(lon)) {
+              el.yardNectarForecast.innerHTML = `<div class="small">Add Yard GPS to enable <strong>Nectar Forecast</strong>.</div>`;
+            } else {
+              const fc = NectarPredict.predict(lat, lon, Utils.todayISO(), 60);
+              const top = (fc.items || []).slice(0, 6);
+
+              if (top.length === 0) {
+                el.yardNectarForecast.innerHTML = `<div class="small"><strong>Nectar Forecast</strong> • ${Utils.escapeHtml(fc.zoneLabel)} • No major windows in the next 60 days.</div>`;
+              } else {
+                const lines = top.map(it => {
+                  const startISO = it.start.toISOString().slice(0,10);
+                  const endISO = it.end.toISOString().slice(0,10);
+                  const when = (it.status === "now") ? `now (through ${endISO})` : `in ~${it.daysUntil} day${it.daysUntil===1?"":"s"} (${startISO})`;
+                  const weight = (it.weight >= 3) ? "🟢" : (it.weight === 2) ? "🟡" : "⚪";
+                  return `<div>${weight} ${Utils.escapeHtml(it.name)} • <span class="small">${Utils.escapeHtml(when)}</span></div>`;
+                }).join("");
+
+                el.yardNectarForecast.innerHTML = `
+                  <div style="margin-top:0.25rem;">
+                    <div class="small"><strong>📈 Nectar Forecast</strong> • ${Utils.escapeHtml(fc.zoneLabel)} <span class="muted">(${Utils.escapeHtml(fc.regionKey)})</span></div>
+                    <div class="small" style="margin-top:0.25rem;">${lines}</div>
+                    <div class="small muted" style="margin-top:0.35rem;">Guidance is region-based (offline). Add local nectar observations to refine timing later.</div>
+                  </div>`;
+              }
+            }
+          } catch (e) {
+            el.yardNectarForecast.innerHTML = "";
+          }
+        }
+
 
         // Nectar sources list
         if (sources.length === 0) {
