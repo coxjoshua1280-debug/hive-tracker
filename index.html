@@ -10725,9 +10725,7 @@ el.remindersBtn.addEventListener("click", () => {
               console.warn("Service worker bypassed via ?nosw=1");
               return;
             }
-           const reg = await navigator.serviceWorker.register("/hive-tracker/sw.js", {
-  scope: "/hive-tracker/"
-});
+           const reg = await navigator.serviceWorker.register("./sw.js");
 
             // If there's an updated worker waiting, show update pill
             function showUpdate(){
