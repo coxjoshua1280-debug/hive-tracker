@@ -6,23 +6,23 @@ This version is **WORKING** and has all the critical fixes already applied!
 ## What's Already Fixed ✅
 
 ### 1. Service Worker Registration
-- ✅ Using `service-worker.js` (correct file)
+- ✅ Using `sw.js` (correct file)
 - ✅ Old `sw.js` is safely backed up as `sw.js.bak11`
 - ✅ Registration is working correctly
 
 ### 2. Icon Files
 - ✅ **Both sets of icons exist:**
   - `icon-192.png` (1 KB)
-  - `icon-192x192.png` (13 KB) ← Referenced in service-worker.js
+  - `icon-192x192.png` (13 KB) ← Referenced in sw.js
   - `icon-512.png` (3 KB)
-  - `icon-512x512.png` (56 KB) ← Referenced in service-worker.js
+  - `icon-512x512.png` (56 KB) ← Referenced in sw.js
 - ✅ No more 404 errors for icons!
 
 ### 3. File Structure
 ```
 hive-tracker-main/
 ├── index.html (397 KB) ✅
-├── service-worker.js ✅
+├── sw.js ✅
 ├── sw.js.bak11 (backup) ✅
 ├── manifest.json ✅
 ├── reset.html ✅
@@ -32,7 +32,7 @@ hive-tracker-main/
 
 ## Minor Optimization Applied
 
-I bumped the cache version from `v3-fix14` to `v3-fix15` in the service-worker.js file to ensure users get the latest version.
+I bumped the cache version from `v3-fix14` to `v3-fix15` in the sw.js file to ensure users get the latest version.
 
 ## Status: READY TO DEPLOY ✅
 

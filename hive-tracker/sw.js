@@ -1,5 +1,5 @@
 /* BroodNote Service Worker */
-const CACHE_NAME = "broodnote-v3-fix12c";
+const CACHE_NAME = "broodnote-v4-deterministic1";
 const RUNTIME_CACHE = "broodnote-runtime-v1";
 const TILE_CACHE = "broodnote-tiles-v1";
 
