@@ -529,8 +529,8 @@ button.primary, .btn.primary {
 
 
   <!-- Map (Leaflet + OpenStreetMap) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="./vendor/leaflet.css" />
+  <script src="./vendor/supabase.min.js"></script>
 </head>
 
 <body>
@@ -1299,7 +1299,7 @@ button.primary, .btn.primary {
     <img id="viewerImg" alt="Photo" />
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="./vendor/jszip.min.js"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -1327,7 +1327,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      const url = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+      const url = "./vendor/jszip.min.js";
       const res = await fetch(url, { cache: "force-cache" });
       if (!res.ok) throw new Error("JSZip fetch failed");
       const code = await res.text();
@@ -9706,7 +9706,7 @@ el.remindersBtn.addEventListener("click", () => {
 
 
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./vendor/leaflet.js"></script>
 
   
   <script>
