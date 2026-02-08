@@ -453,9 +453,7 @@ button.primary, .btn.primary {
     .dragging { opacity: 0.85; }
 
   
-    /* Edit lock */
-    body.editing-locked .edit-only { opacity: 0.55; pointer-events: none; }
-
+   
     /* --- Release-ready polish: status + mobile toolbar --- */
     .statusbar{
       position: sticky;
@@ -697,7 +695,7 @@ button.primary, .btn.primary {
   <button id="mapBtn" type="button" class="btn grow">🗺️ Map</button>
     <button id="fieldCardBtn" type="button" class="btn">🗂️ Field Card</button>
     <button id="cloudBtn" type="button" class="btn grow">☁️ Cloud</button>
-<button id="lockBtn" type="button" class="btn btn-muted grow">🔒 Locked</button>
+
   <button id="exportMenuBtn" type="button" class="btn btn-muted grow">📦 Export / Backup</button>
 </div>
 
@@ -1332,6 +1330,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // =========================================================
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
+
+
+  // --- Disable editing lock completely ---
+document.body.classList.remove("editing-locked");
+window.isEditingLocked = false;
 
   async function ensureJSZipReady() {
     // If you include the CDN <script> tag, this will be true immediately online.
