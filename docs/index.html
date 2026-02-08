@@ -8585,7 +8585,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     ],
     _bandForLat(lat) {
       const L = Number(lat);
-      for (const b of (this.bandsFL||[])) {
+      for (const b of (this.bandsFL||[]));{
         if (L >= b.latMin && L < b.latMax) return b.key;
       }
       return (L < 26.9) ? "south" : (L < 29.2 ? "central" : "north");
