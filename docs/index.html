@@ -937,6 +937,7 @@ button.primary, .btn.primary {
             <select id="mapPlacementColorMode">
               <option value="top" selected>Top nectar source</option>
               <option value="total">Total strength</option>
+            </select>
             
           <label class="checkbox-label" style="margin:0.35rem 0 0;">
             <input id="mapShowTypeOverlay" type="checkbox" />
@@ -4491,7 +4492,21 @@ if (el.mapHeatRange) {
               const key = b.getAttribute("data-pl-key");
               const src = (NectarPredict.listSources ? NectarPredict.listSources() : []).find(s => s.key === key);
               const bbox = (src && src.bbox) ? src.bbox : [[24.3,-87.8],[31.1,-80.0]];
-              try { this.map.fitBounds(bbox, { padding:[18,18] }); } catch(_) {}
+              try {
+                // Zoom to bbox with a closer cap
+                (this.map.flyToBounds ? this.map.flyToBounds(bbox, { padding:[18,18], maxZoom: 12 }) : this.map.fitBounds(bbox, { padding:[18,18] }));
+              } catch(_) {}
+              // Visual highlight of the described area
+              try {
+                if (this._plHighlightRect) { try { this.map.removeLayer(this._plHighlightRect); } catch(_) {} this._plHighlightRect = null; }
+                if (typeof L !== "undefined" && L.rectangle) {
+                  const color = (NectarPredict && NectarPredict.paletteFL && NectarPredict.paletteFL[key]) ? NectarPredict.paletteFL[key] : "#3b82f6";
+                  this._plHighlightRect = L.rectangle(bbox, { color: color, weight: 2, fillColor: color, fillOpacity: 0.12, interactive: false });
+                  this._plHighlightRect.addTo(this.map);
+                  clearTimeout(this._plHighlightT);
+                  this._plHighlightT = setTimeout(() => { try { if (this._plHighlightRect) this.map.removeLayer(this._plHighlightRect); } catch(_) {} this._plHighlightRect=null; }, 4500);
+                }
+              } catch(_) {}
             });
           });
         } catch (_) {}
