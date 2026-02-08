@@ -1318,8 +1318,7 @@ button.primary, .btn.primary {
   if (typeof window.JSZip === 'undefined') missing.push('JSZip');
   if (typeof window.L === 'undefined') missing.push('Leaflet');
   if (missing.length){
-    show('Missing vendor libs: ' + missing.join(', ') + '
-Check /docs/vendor/ paths.');
+    show('Missing vendor libs: ' + missing.join(', ') + 'Check /docs/vendor/ paths.');
   }
   window.addEventListener('error', e=>show('Error: '+(e.message||e)));
   window.addEventListener('unhandledrejection', e=>show('Promise rejection: '+(e.reason||e)));
