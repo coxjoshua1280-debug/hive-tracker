@@ -9392,11 +9392,11 @@ el.importZipInput.addEventListener("change", async () => {
     // -------------------------
     // Field Card wiring
     // -------------------------
-    if (el.fieldCardBtn) el.fieldCardBtn.addEventListener("click", () => FieldCard.open());
-    if (el.fieldCardCloseBtn) el.fieldCardCloseBtn.addEventListener("click", () => FieldCard.close());
-    if (el.fieldCardRefreshBtn) el.fieldCardRefreshBtn.addEventListener("click", () => FieldCard.render());
-    if (el.fieldCardPrintBtn) el.fieldCardPrintBtn.addEventListener("click", () => FieldCard.print());
-    if (el.fieldCardSearch) el.fieldCardSearch.addEventListener("input", () => FieldCard.render());
+    if (el.fieldCardBtn) el.fieldCardBtn.addEventListener("click", () => (window.FieldCard && typeof FieldCard.open==='function' ? FieldCard.open() : UI.status('Field Card disabled')));
+    if (el.fieldCardCloseBtn) el.fieldCardCloseBtn.addEventListener("click", () => (window.FieldCard && typeof FieldCard.close==='function' ? FieldCard.close() : UI.status('Field Card disabled')));
+    if (el.fieldCardRefreshBtn) el.fieldCardRefreshBtn.addEventListener("click", () => (window.FieldCard && typeof FieldCard.render==='function' ? FieldCard.render() : UI.status('Field Card disabled')));
+    if (el.fieldCardPrintBtn) el.fieldCardPrintBtn.addEventListener("click", () => (window.FieldCard && typeof FieldCard.print==='function' ? FieldCard.print() : UI.status('Field Card disabled')));
+    if (el.fieldCardSearch) el.fieldCardSearch.addEventListener("input", () => (window.FieldCard && typeof FieldCard.render==='function' ? FieldCard.render() : UI.status('Field Card disabled')));
 
 
 
