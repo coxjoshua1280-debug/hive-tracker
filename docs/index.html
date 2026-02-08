@@ -1479,7 +1479,16 @@ function showBootFallback(msg) {
       return ("00000000" + (h >>> 0).toString(16)).slice(-8);
     }
 
-  };
+  
+  ,escapeHtml(s){
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+};
 
 
   // =========================================================
