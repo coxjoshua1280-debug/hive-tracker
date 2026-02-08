@@ -949,6 +949,20 @@ button.primary, .btn.primary {
               <option value="top" selected>Auto (top source)</option>
             </select>
           </div>
+          <label class="checkbox-label" style="margin:0.5rem 0 0;">
+            <input id="mapShowYardSuccessHeat" type="checkbox" />
+            <span class="small"><strong>Yard success heat</strong> (uses yard score + confidence)</span>
+          </label>
+          <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+            <div class="small" style="min-width:7.5rem;"><strong>Success radius</strong></div>
+            <select id="mapYardSuccessRadius">
+              <option value="10">10 km (tight)</option>
+              <option value="20" selected>20 km (default)</option>
+              <option value="40">40 km (broad)</option>
+            </select>
+            <button type="button" id="mapClearYardSuccess" class="btn btn-muted" style="width:auto; padding:0.25rem 0.55rem; border-radius:999px;">Clear</button>
+          </div>
+
 </select>
           </div>
           <label class="checkbox-label" style="margin:0.35rem 0 0;">
@@ -3772,6 +3786,9 @@ const RecoveryUI = {
     mapPlacementMode: document.getElementById("mapPlacementMode"),
     mapPlacementColorMode: document.getElementById("mapPlacementColorMode"),
     mapShowTypeOverlay: document.getElementById("mapShowTypeOverlay"),
+    mapShowYardSuccessHeat: document.getElementById("mapShowYardSuccessHeat"),
+    mapYardSuccessRadius: document.getElementById("mapYardSuccessRadius"),
+    mapClearYardSuccess: document.getElementById("mapClearYardSuccess"),
     mapTypeOverlaySource: document.getElementById("mapTypeOverlaySource"),
     mapPlacementShowLegend: document.getElementById("mapPlacementShowLegend"),
     mapPlacementSources: document.getElementById("mapPlacementSources"),
@@ -4366,6 +4383,20 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapTypeOverlaySource) {
         el.mapTypeOverlaySource.onchange = () => { this.render(); };
       }
+
+      if (el.mapShowYardSuccessHeat) {
+        el.mapShowYardSuccessHeat.onchange = () => { this.render(); };
+      }
+      if (el.mapYardSuccessRadius) {
+        el.mapYardSuccessRadius.onchange = () => { this.render(); };
+      }
+      if (el.mapClearYardSuccess) {
+        el.mapClearYardSuccess.onclick = () => {
+          try { if (el.mapShowYardSuccessHeat) el.mapShowYardSuccessHeat.checked = false; } catch(_) {}
+          try { this._clearYardSuccessHeat(); } catch(_) {}
+        };
+      }
+
 if (el.mapHeatRange) {
         el.mapHeatRange.onchange = () => {
           this._renderHeatmapFromCache(true);
@@ -4463,7 +4494,101 @@ if (el.mapHeatRange) {
       return (prefs.enabled && prefs.enabled.length) ? prefs.enabled : [];
     },
 
-    _renderPlacementLegend(enabledKeys) {
+    
+    _clearYardSuccessHeat() {
+      try { if (this.yardSuccessLayer) this.yardSuccessLayer.clearLayers(); } catch(_) {}
+    },
+
+    _yardSuccessColor(score01) {
+      // score01 0..1 -> hue 0(red) .. 120(green)
+      const hue = Math.max(0, Math.min(120, Math.round(score01 * 120)));
+      return `hsl(${hue}, 85%, 48%)`;
+    },
+
+    _haversineKm(aLat, aLng, bLat, bLng) {
+      const R = 6371;
+      const dLat = (bLat - aLat) * Math.PI/180;
+      const dLng = (bLng - aLng) * Math.PI/180;
+      const s1 = Math.sin(dLat/2), s2 = Math.sin(dLng/2);
+      const aa = s1*s1 + Math.cos(aLat*Math.PI/180)*Math.cos(bLat*Math.PI/180)*s2*s2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(aa)));
+    },
+
+    _computeYardSuccessAt(lat, lng, yardPoints, radiusKm) {
+      // yardPoints: [{lat,lng, score01, conf01}]
+      let num = 0, den = 0;
+      const r = Math.max(2, radiusKm || 20);
+      for (let i=0;i<yardPoints.length;i++){
+        const p = yardPoints[i];
+        const d = this._haversineKm(lat,lng,p.lat,p.lng);
+        if (d > r*2.5) continue; // cheap cutoff
+        // gaussian-ish kernel
+        const w = Math.exp(-(d*d)/(2*(r*r))) * (0.15 + 0.85*p.conf01);
+        num += p.score01 * w;
+        den += w;
+      }
+      if (!den) return null;
+      const score01 = num/den;
+      // confidence proxy from density
+      const conf01 = Math.min(1, den / 1.6);
+      return { score01, conf01 };
+    },
+
+    _renderYardSuccessHeat(yardsObj) {
+      if (!this.map || typeof L === "undefined") return;
+      if (!el.mapShowYardSuccessHeat || !el.mapShowYardSuccessHeat.checked) { this._clearYardSuccessHeat(); return; }
+
+      if (!this.yardSuccessLayer) {
+        try { this.yardSuccessLayer = L.layerGroup().addTo(this.map); } catch(_) { return; }
+      } else {
+        this.yardSuccessLayer.clearLayers();
+      }
+
+      // Build yard points from yards object
+      const yardPoints = [];
+      try {
+        Object.keys(yardsObj||{}).forEach(name => {
+          const y = yardsObj[name];
+          if (!y || typeof y.lat !== "number" || typeof y.lon !== "number") return;
+          const score = (typeof y.score === "number") ? y.score : 50;
+          const conf = (typeof y.scoreConfidence === "number") ? y.scoreConfidence : 15;
+          yardPoints.push({ lat: y.lat, lng: y.lon, score01: Math.max(0,Math.min(1, score/100)), conf01: Math.max(0,Math.min(1, conf/100)) });
+        });
+      } catch(_) {}
+
+      if (!yardPoints.length) return;
+
+      const radiusKm = el.mapYardSuccessRadius ? parseFloat(el.mapYardSuccessRadius.value || "20") : 20;
+
+      const b = this.map.getBounds();
+      const steps = 20;
+      const latStep = (b.getNorth() - b.getSouth()) / steps;
+      const lngStep = (b.getEast() - b.getWest()) / steps;
+
+      for (let i=0;i<steps;i++){
+        for (let j=0;j<steps;j++){
+          const lat = b.getSouth() + (i+0.5)*latStep;
+          const lng = b.getWest() + (j+0.5)*lngStep;
+
+          const r = this._computeYardSuccessAt(lat, lng, yardPoints, radiusKm);
+          if (!r) continue;
+
+          const color = this._yardSuccessColor(r.score01);
+          const opacity = 0.10 + 0.35 * r.conf01;
+
+          const rect = L.rectangle([[lat - latStep/2, lng - lngStep/2],[lat + latStep/2, lng + lngStep/2]], {
+            stroke: false,
+            fill: true,
+            fillColor: color,
+            fillOpacity: opacity,
+            interactive: false
+          });
+          rect.addTo(this.yardSuccessLayer);
+        }
+      }
+    },
+
+_renderPlacementLegend(enabledKeys) {
       if (!el.mapPlacementLegend) return;
       const show = !!(el.mapPlacementShowLegend && el.mapPlacementShowLegend.checked);
       if (!show) { el.mapPlacementLegend.innerHTML = ""; return; }
@@ -5212,6 +5337,10 @@ const UI = {
     },
     renderEventsHotspots() {
       if (!el.eventsHotspots) return;
+      
+      // Yard success heat overlay (uses yard.score + yard.scoreConfidence)
+      try { this._renderYardSuccessHeat(yards); } catch(_) {}
+
 
       // Real hotspot clustering across all yards (swarm/removal GPS points)
       const all = YardMeta._load ? (YardMeta._load() || {}) : {};
