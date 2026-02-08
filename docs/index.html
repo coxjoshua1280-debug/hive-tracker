@@ -4482,7 +4482,7 @@ if (el.mapHeatRange) {
             </button>`;
           }).join("");
 
-        el.mapPlacementLegend.innerHTML = chips ? (`<div class="small"><strong>Placement legend:</strong> ${chips}</div>`) : "";
+        el.mapPlacementLegend.innerHTML = chips ? (`<div class="small"><strong>Placement legend:</strong> ${chips} <button type="button" id="plClearHighlights" class="btn btn-muted" style="padding:0.15rem 0.45rem; border-radius:999px; margin-left:0.25rem; width:auto;">Clear highlights</button></div>`) : "";
         // Clicking a legend chip zooms to the primary area for that source (or FL default)
         try {
           const btns = el.mapPlacementLegend.querySelectorAll("[data-pl-key]");
@@ -4496,18 +4496,28 @@ if (el.mapHeatRange) {
                 // Zoom to bbox with a closer cap
                 (this.map.flyToBounds ? this.map.flyToBounds(bbox, { padding:[18,18], maxZoom: 12 }) : this.map.fitBounds(bbox, { padding:[18,18] }));
               } catch(_) {}
-              // Visual highlight of the described area
+              // Visual highlight of the described area (persistent until cleared)
               try {
-                if (this._plHighlightRect) { try { this.map.removeLayer(this._plHighlightRect); } catch(_) {} this._plHighlightRect = null; }
+                if (!this._plHighlightRects) this._plHighlightRects = [];
                 if (typeof L !== "undefined" && L.rectangle) {
                   const color = (NectarPredict && NectarPredict.paletteFL && NectarPredict.paletteFL[key]) ? NectarPredict.paletteFL[key] : "#3b82f6";
-                  this._plHighlightRect = L.rectangle(bbox, { color: color, weight: 2, fillColor: color, fillOpacity: 0.12, interactive: false });
-                  this._plHighlightRect.addTo(this.map);
-                  clearTimeout(this._plHighlightT);
-                  this._plHighlightT = setTimeout(() => { try { if (this._plHighlightRect) this.map.removeLayer(this._plHighlightRect); } catch(_) {} this._plHighlightRect=null; }, 4500);
+                  const r = L.rectangle(bbox, { color: color, weight: 2, fillColor: color, fillOpacity: 0.14, interactive: false });
+                  r.addTo(this.map);
+                  this._plHighlightRects.push(r);
                 }
               } catch(_) {}
             });
+          // Clear persistent highlight rectangles (allow multiple overlaps)
+          try {
+            const clr = el.mapPlacementLegend.querySelector("#plClearHighlights");
+            if (clr) clr.addEventListener("click", () => {
+              if (!this.map) return;
+              try {
+                (this._plHighlightRects || []).forEach(r => { try { this.map.removeLayer(r); } catch(_) {} });
+              } catch(_) {}
+              this._plHighlightRects = [];
+            });
+          } catch(_) {}
           });
         } catch (_) {}
 
@@ -5417,6 +5427,17 @@ const UI = {
               if (!siteId) return;
               await UI.linkNfcToNewHiveFromSite(siteId);
             });
+          // Clear persistent highlight rectangles (allow multiple overlaps)
+          try {
+            const clr = el.mapPlacementLegend.querySelector("#plClearHighlights");
+            if (clr) clr.addEventListener("click", () => {
+              if (!this.map) return;
+              try {
+                (this._plHighlightRects || []).forEach(r => { try { this.map.removeLayer(r); } catch(_) {} });
+              } catch(_) {}
+              this._plHighlightRects = [];
+            });
+          } catch(_) {}
           });
         } catch (_) {}
       }
