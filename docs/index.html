@@ -9854,6 +9854,26 @@ el.remindersBtn.addEventListener("click", () => {
 
 
   init();
+// --- Nectar map toggle (global wrapper) ---
+window.showNectar = function(show){
+  try {
+    // store preference
+    try { localStorage.setItem("mapShowNectar", show ? "1" : "0"); } catch(_) {}
+
+    // if you have a map refresh function, call it
+    if (typeof window.renderMap === "function") window.renderMap();
+    if (typeof window.renderYardMap === "function") window.renderYardMap();
+    if (typeof window.refreshMap === "function") window.refreshMap();
+
+    // if your map uses a checkbox id, sync it
+    const cb = document.getElementById("mapShowNectar");
+    if (cb) cb.checked = !!show;
+  } catch (e) {
+    console.error("showNectar failed:", e);
+  }
+};
+
+  
 
 });
 </script>
