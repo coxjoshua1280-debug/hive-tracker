@@ -1001,6 +1001,33 @@ button.primary, .btn.primary {
 <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
         <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
         <div id="mapPlacementLegend" class="small" style="margin-top:0.35rem;"></div>
+          <div style="margin-top:0.6rem; padding-top:0.6rem; border-top:1px dashed rgba(0,0,0,0.15);">
+            <div class="small"><strong>Observed bloom calibration</strong> (makes this season smarter)</div>
+            <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+              <div class="small" style="min-width:7.5rem;"><strong>Source</strong></div>
+              <select id="mapBloomSource"></select>
+            </div>
+            <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+              <div class="small" style="min-width:7.5rem;"><strong>Band</strong></div>
+              <select id="mapBloomBand">
+                <option value="south">South FL</option>
+                <option value="central" selected>Central FL</option>
+                <option value="north">North FL</option>
+              </select>
+              <button type="button" id="mapBloomUseMyLat" class="btn btn-muted" style="width:auto; padding:0.25rem 0.55rem; border-radius:999px;">Use my yard</button>
+            </div>
+            <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+              <div class="small" style="min-width:7.5rem;"><strong>Shift</strong></div>
+              <input id="mapBloomOffsetDays" type="number" step="1" value="0" style="max-width:10rem;" />
+              <span class="small">days (negative = earlier)</span>
+            </div>
+            <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+              <button type="button" id="mapBloomSave" class="btn" style="width:auto; padding:0.25rem 0.65rem; border-radius:999px;">Save calibration</button>
+              <button type="button" id="mapBloomClear" class="btn btn-muted" style="width:auto; padding:0.25rem 0.65rem; border-radius:999px;">Clear</button>
+              <span id="mapBloomStatus" class="small" style="opacity:0.85;"></span>
+            </div>
+          </div>
+
       </div>
 
 <div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
@@ -3793,6 +3820,14 @@ const RecoveryUI = {
     mapPlacementShowLegend: document.getElementById("mapPlacementShowLegend"),
     mapPlacementSources: document.getElementById("mapPlacementSources"),
     mapPlacementLegend: document.getElementById("mapPlacementLegend"),
+    mapBloomSource: document.getElementById("mapBloomSource"),
+    mapBloomBand: document.getElementById("mapBloomBand"),
+    mapBloomUseMyLat: document.getElementById("mapBloomUseMyLat"),
+    mapBloomOffsetDays: document.getElementById("mapBloomOffsetDays"),
+    mapBloomSave: document.getElementById("mapBloomSave"),
+    mapBloomClear: document.getElementById("mapBloomClear"),
+    mapBloomStatus: document.getElementById("mapBloomStatus"),
+
 mapCloseBtn: document.getElementById("mapCloseBtn"),
     lookupSearch: document.getElementById("lookupSearch"),
     lookupYard: document.getElementById("lookupYard"),
@@ -4383,6 +4418,57 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapTypeOverlaySource) {
         el.mapTypeOverlaySource.onchange = () => { this.render(); };
       }
+      // Observed bloom calibration UI (offline seasonal adjustment)
+      try {
+        if (el.mapBloomSource && typeof NectarPredict !== "undefined" && NectarPredict.listSources) {
+          const srcs = NectarPredict.listSources();
+          el.mapBloomSource.innerHTML = srcs.map(s => `<option value="${s.key}">${Utils.escapeHtml ? Utils.escapeHtml(s.name) : s.name}</option>`).join("");
+        }
+      } catch(_) {}
+
+      if (el.mapBloomUseMyLat) {
+        el.mapBloomUseMyLat.onclick = () => {
+          try {
+            const yards = Storage.loadYards() || {};
+            const name = (this._getCurrentYardName && this._getCurrentYardName()) || "";
+            const y = yards[name];
+            if (y && typeof y.lat === "number" && typeof NectarPredict !== "undefined" && NectarPredict._bandForLat) {
+              const band = NectarPredict._bandForLat(y.lat);
+              if (el.mapBloomBand) el.mapBloomBand.value = band;
+              if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Using ${band} band (from yard lat)`;
+            } else {
+              if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Pick a yard with GPS to auto-detect band.`;
+            }
+          } catch(_) {}
+        };
+      }
+
+      if (el.mapBloomSave) {
+        el.mapBloomSave.onclick = () => {
+          try {
+            if (typeof NectarPredict === "undefined") return;
+            const srcKey = el.mapBloomSource ? el.mapBloomSource.value : "";
+            const bandKey = el.mapBloomBand ? el.mapBloomBand.value : "central";
+            const off = el.mapBloomOffsetDays ? Number(el.mapBloomOffsetDays.value||0) : 0;
+            NectarPredict.setOffsetDays(bandKey, srcKey, off, `set ${new Date().toISOString().slice(0,10)}`);
+            if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Saved: ${srcKey} ${bandKey} offset ${off}d`;
+            this.render();
+          } catch(_) {}
+        };
+      }
+      if (el.mapBloomClear) {
+        el.mapBloomClear.onclick = () => {
+          try {
+            if (typeof NectarPredict === "undefined") return;
+            const srcKey = el.mapBloomSource ? el.mapBloomSource.value : "";
+            const bandKey = el.mapBloomBand ? el.mapBloomBand.value : "central";
+            NectarPredict.setOffsetDays(bandKey, srcKey, 0, "");
+            if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Cleared: ${srcKey} ${bandKey}`;
+            this.render();
+          } catch(_) {}
+        };
+      }
+
 
       if (el.mapShowYardSuccessHeat) {
         el.mapShowYardSuccessHeat.onchange = () => { this.render(); };
@@ -8409,14 +8495,14 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     // - strength: 0..1 baseline
     // - latBand: [minLat, maxLat] (optional)
     sourcesFL: [
-      { key:"early_wild", name:"Early wildflowers", months:[1,3], strength:0.55, latBand:[24.3, 30.9] , bbox:[[27.0, -84.8], [30.9, -80.5]] },
-      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
-      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
-      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
+      { key:"early_wild", name:"Early wildflowers", months:[1,3], windowsFL:{"south": [1, 3], "central": [1, 3], "north": [2, 4]}, strength:0.55, latBand:[24.3, 30.9] , bbox:[[27.0, -84.8], [30.9, -80.5]] },
+      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], windowsFL:{"south": [2, 4], "central": [3, 4], "north": [3, 5]}, strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
+      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], windowsFL:{"south": [4, 5], "central": [4, 6], "north": [4, 6]}, strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
+      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], windowsFL:{"south": [4, 6], "central": [4, 6], "north": [5, 6]}, strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
       { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] , bbox:[[25.5, -85.5], [30.5, -80.3]] },
-      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.4, -82.8], [27.3, -80.0]] },
-      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], strength:0.55, latBand:[28.0, 30.9] , bbox:[[28.6, -84.1], [31.1, -80.5]] },
-      { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], strength:0.25, latBand:[24.3, 26.8] , bbox:[[24.3, -82.9], [26.8, -80.0]] },
+      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], windowsFL:{"south": [8, 10], "central": [8, 10], "north": [9, 10]}, strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.4, -82.8], [27.3, -80.0]] },
+      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], windowsFL:{"south": [9, 11], "central": [9, 11], "north": [9, 11]}, strength:0.55, latBand:[28.0, 30.9] , bbox:[[28.6, -84.1], [31.1, -80.5]] },
+      { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], windowsFL:{"south": [12, 2], "central": [12, 2], "north": [1, 2]}, strength:0.25, latBand:[24.3, 26.8] , bbox:[[24.3, -82.9], [26.8, -80.0]] },
     ],
 
     // Consistent colors for source-layer map mode
@@ -8430,6 +8516,62 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       goldenrod: "#eab308",
       winter_trickle: "#22c55e"
     },
+    ,
+
+    // Florida micro-regions (very rough latitude bands; refine later)
+    // Used to shift bloom windows offline without weather APIs.
+    bandsFL: [
+      { key:"south",   name:"South FL",   latMin:24.3, latMax:26.9 },
+      { key:"central", name:"Central FL", latMin:26.9, latMax:29.2 },
+      { key:"north",   name:"North FL",   latMin:29.2, latMax:31.2 },
+    ],
+
+    _bandForLat(lat) {
+      const L = Number(lat);
+      const bands = this.bandsFL || [];
+      for (const b of bands) {
+        if (L >= b.latMin && L < b.latMax) return b.key;
+      }
+      return (L < 26.9) ? "south" : (L < 29.2 ? "central" : "north");
+    },
+
+    // Persistent calibration offsets (days) by band + source key
+    // Example: cal.offsets["central"]["citrus"] = -10  (this year is 10 days early)
+    _calKey: "nectar_cal_v1",
+    getCalibration() {
+      try {
+        const raw = localStorage.getItem(User.key(this._calKey));
+        return raw ? JSON.parse(raw) : { offsets:{}, notes:{} };
+      } catch(_) {
+        return { offsets:{}, notes:{} };
+      }
+    },
+    setCalibration(next) {
+      try {
+        localStorage.setItem(User.key(this._calKey), JSON.stringify(next));
+        return next;
+      } catch(_) { return null; }
+    },
+    setOffsetDays(bandKey, sourceKey, offsetDays, note) {
+      const cal = this.getCalibration();
+      if (!cal.offsets) cal.offsets = {};
+      if (!cal.offsets[bandKey]) cal.offsets[bandKey] = {};
+      cal.offsets[bandKey][sourceKey] = Math.max(-45, Math.min(45, Math.round(Number(offsetDays)||0)));
+      if (note) {
+        if (!cal.notes) cal.notes = {};
+        cal.notes[bandKey+":"+sourceKey] = String(note).slice(0,200);
+      }
+      this.setCalibration(cal);
+      return cal;
+    },
+    getOffsetDays(bandKey, sourceKey) {
+      try {
+        const cal = this.getCalibration();
+        const v = cal && cal.offsets && cal.offsets[bandKey] ? cal.offsets[bandKey][sourceKey] : 0;
+        return Number(v)||0;
+      } catch(_) { return 0; }
+    },
+
 
     listSources() {
       return (this.sourcesFL || []).map(s => ({ key:s.key, name:s.name, months:s.months, strength:s.strength, latBand:s.latBand, bbox:s.bbox }));
@@ -8438,6 +8580,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     scoreDetailed(lat, lng, date, mode, enabledKeys) {
       const d = date ? new Date(date) : new Date();
       const m = d.getMonth()+1;
+      const bandKey = this._bandForLat ? this._bandForLat(lat) : "central";
       const sources = this.sourcesFL || [];
       const enabled = new Set(Array.isArray(enabledKeys) && enabledKeys.length ? enabledKeys : sources.map(s => s.key));
 
@@ -8449,13 +8592,18 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
 
       for (const s of sources) {
         if (!enabled.has(s.key)) continue;
-        const [a,b] = s.months;
+        const win = (s.windowsFL && bandKey && s.windowsFL[bandKey]) ? s.windowsFL[bandKey] : s.months;
+        const [a,b] = win;
         const okLat = this._latOk(lat, s.latBand);
         if (!okLat) continue;
 
-        const isActive = this._inMonthRange(m, a, b);
-        const mPlus1 = ((m % 12) + 1);
-        const isSoon = isActive || this._inMonthRange(mPlus1, a, b);
+        const offsetDays = (this.getOffsetDays ? this.getOffsetDays(bandKey, s.key) : 0);
+        const dAdj = offsetDays ? new Date(d.getTime() + offsetDays*86400000) : d;
+        const mAdj = dAdj.getMonth()+1;
+        const isActive = this._inMonthRange(mAdj, a, b);
+        const dAdjPlus = new Date(dAdj.getTime() + 32*86400000);
+        const mAdjPlus1 = dAdjPlus.getMonth()+1;
+        const isSoon = isActive || this._inMonthRange(mAdjPlus1, a, b);
 
         annual += s.strength;
 
