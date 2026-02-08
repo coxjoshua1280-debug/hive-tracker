@@ -932,6 +932,23 @@ button.primary, .btn.primary {
             </select>
           </div>
 
+          <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+            <div class="small" style="min-width:7.5rem;"><strong>Placement color</strong></div>
+            <select id="mapPlacementColorMode">
+              <option value="top" selected>Top nectar source</option>
+              <option value="total">Total strength</option>
+            </select>
+          </div>
+          <label class="checkbox-label" style="margin:0.35rem 0 0;">
+            <input id="mapPlacementShowLegend" type="checkbox" checked />
+            <span class="small">Show placement legend</span>
+          </label>
+          <div id="mapPlacementSourcesBox" class="card" style="margin-top:0.4rem; padding:0.6rem; border-radius:14px; background:rgba(255,255,255,0.6);">
+            <div class="small" style="margin-bottom:0.35rem;"><strong>Placement sources</strong> (tap to include/exclude)</div>
+            <div id="mapPlacementSources" class="row" style="flex-wrap:wrap; gap:0.5rem;"></div>
+          </div>
+
+
 
 
 
@@ -957,6 +974,7 @@ button.primary, .btn.primary {
 
 <div id="yardMap" style="width:100%; height:420px; border-radius:16px; overflow:hidden; border:1px solid rgba(0,0,0,0.12);"></div>
         <div id="mapMissingGps" class="small" style="margin-top:0.6rem;"></div>
+        <div id="mapPlacementLegend" class="small" style="margin-top:0.35rem;"></div>
       </div>
 
 <div id="exportPanel" class="card hidden" style="margin-top:0.5rem;">
@@ -3738,7 +3756,13 @@ const RecoveryUI = {
     mapShowNectar: document.getElementById("mapShowNectar"),
     mapClusterRadius: document.getElementById("mapClusterRadius"),
     mapHeatRange: document.getElementById("mapHeatRange"),
-    mapCloseBtn: document.getElementById("mapCloseBtn"),
+        mapShowPlacement: document.getElementById("mapShowPlacement"),
+    mapPlacementMode: document.getElementById("mapPlacementMode"),
+    mapPlacementColorMode: document.getElementById("mapPlacementColorMode"),
+    mapPlacementShowLegend: document.getElementById("mapPlacementShowLegend"),
+    mapPlacementSources: document.getElementById("mapPlacementSources"),
+    mapPlacementLegend: document.getElementById("mapPlacementLegend"),
+mapCloseBtn: document.getElementById("mapCloseBtn"),
     lookupSearch: document.getElementById("lookupSearch"),
     lookupYard: document.getElementById("lookupYard"),
     lookupPurpose: document.getElementById("lookupPurpose"),
@@ -4285,13 +4309,115 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapPlacementMode) {
         el.mapPlacementMode.onchange = () => { this.render(); };
       }
-      if (el.mapHeatRange) {
+      
+      if (el.mapPlacementColorMode) {
+        el.mapPlacementColorMode.onchange = () => { PlacementPrefs.set({ colorMode: el.mapPlacementColorMode.value || "top" }); this.render(); };
+      }
+      if (el.mapPlacementShowLegend) {
+        el.mapPlacementShowLegend.onchange = () => { PlacementPrefs.set({ showLegend: !!el.mapPlacementShowLegend.checked }); this.render(); };
+      }
+if (el.mapHeatRange) {
         el.mapHeatRange.onchange = () => {
           this._renderHeatmapFromCache(true);
         };
       }
     },
 
+
+    _ensurePlacementUi() {
+      try {
+        if (!el.mapPlacementSources || typeof NectarPredict === "undefined") return;
+        if (this._placementUiBuilt) return;
+        this._placementUiBuilt = true;
+
+        const sources = NectarPredict.listSources ? NectarPredict.listSources() : [];
+        const prefs = PlacementPrefs.get();
+        const enabled = new Set((prefs.enabled && prefs.enabled.length) ? prefs.enabled : sources.map(s => s.key));
+
+        if (el.mapPlacementColorMode) el.mapPlacementColorMode.value = prefs.colorMode || "top";
+        if (el.mapPlacementShowLegend) el.mapPlacementShowLegend.checked = (prefs.showLegend !== false);
+
+        el.mapPlacementSources.innerHTML = "";
+        sources.forEach(s => {
+          const wrap = document.createElement("label");
+          wrap.className = "checkbox-label";
+          wrap.style.margin = "0";
+          wrap.style.padding = "0.25rem 0.5rem";
+          wrap.style.borderRadius = "999px";
+          wrap.style.border = "1px solid rgba(0,0,0,0.12)";
+          wrap.style.background = "rgba(255,255,255,0.7)";
+          wrap.style.gap = "0.35rem";
+          wrap.style.display = "flex";
+          wrap.style.alignItems = "center";
+
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = enabled.has(s.key);
+          cb.dataset.key = s.key;
+
+          const dot = document.createElement("span");
+          dot.style.display = "inline-block";
+          dot.style.width = "10px";
+          dot.style.height = "10px";
+          dot.style.borderRadius = "999px";
+          dot.style.background = (NectarPredict.paletteFL && NectarPredict.paletteFL[s.key]) ? NectarPredict.paletteFL[s.key] : "#f59e0b";
+
+          const txt = document.createElement("span");
+          txt.className = "small";
+          txt.textContent = s.name;
+
+          wrap.appendChild(cb);
+          wrap.appendChild(dot);
+          wrap.appendChild(txt);
+
+          cb.onchange = () => {
+            const keys = Array.from(el.mapPlacementSources.querySelectorAll("input[type=checkbox]"))
+              .filter(x => x.checked).map(x => x.dataset.key);
+            PlacementPrefs.set({ enabled: keys });
+            this.render();
+          };
+
+          el.mapPlacementSources.appendChild(wrap);
+        });
+      } catch (_) {}
+    },
+
+    _getEnabledPlacementKeys() {
+      try {
+        if (el.mapPlacementSources) {
+          const keys = Array.from(el.mapPlacementSources.querySelectorAll("input[type=checkbox]"))
+            .filter(x => x.checked).map(x => x.dataset.key);
+          if (keys && keys.length) return keys;
+        }
+      } catch (_) {}
+      const prefs = PlacementPrefs.get();
+      return (prefs.enabled && prefs.enabled.length) ? prefs.enabled : [];
+    },
+
+    _renderPlacementLegend(enabledKeys) {
+      if (!el.mapPlacementLegend) return;
+      const show = !!(el.mapPlacementShowLegend && el.mapPlacementShowLegend.checked);
+      if (!show) { el.mapPlacementLegend.innerHTML = ""; return; }
+
+      try {
+        const sources = NectarPredict.listSources ? NectarPredict.listSources() : [];
+        const enabled = new Set(Array.isArray(enabledKeys) && enabledKeys.length ? enabledKeys : sources.map(s=>s.key));
+        const chips = sources
+          .filter(s => enabled.has(s.key))
+          .map(s => {
+            const c = (NectarPredict.paletteFL && NectarPredict.paletteFL[s.key]) ? NectarPredict.paletteFL[s.key] : "#f59e0b";
+            const name = Utils.escapeHtml ? Utils.escapeHtml(s.name) : s.name;
+            return `<span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.2rem 0.5rem; border-radius:999px; border:1px solid rgba(0,0,0,0.12); background:rgba(255,255,255,0.6); margin:0 0.35rem 0.35rem 0;">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:999px; background:${c};"></span>
+              <span>${name}</span>
+            </span>`;
+          }).join("");
+
+        el.mapPlacementLegend.innerHTML = chips ? (`<div class="small"><strong>Placement legend:</strong> ${chips}</div>`) : "";
+      } catch (_) {
+        el.mapPlacementLegend.innerHTML = "";
+      }
+    },
     _syncControls(yardNames) {
       // Scope default: current (unless no current yard)
       const cy = this._getCurrentYardName();
@@ -4704,45 +4830,98 @@ for (const [k, v] of Object.entries(el)) {
       const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
       try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
 
+      this._ensurePlacementUi();
+
       // Placement heat (nectar probability) — helps find new yard locations
       const showPlacement = !!(el.mapShowPlacement && el.mapShowPlacement.checked);
       if (this.placementLayer) this.placementLayer.clearLayers();
       if (showPlacement && this.map && this.placementLayer && typeof NectarPredict !== "undefined") {
         const mode = el.mapPlacementMode ? (el.mapPlacementMode.value || "next14") : "next14";
+        const colorMode = el.mapPlacementColorMode ? (el.mapPlacementColorMode.value || "top") : "top";
+        const enabledKeys = this._getEnabledPlacementKeys();
+        this._renderPlacementLegend(enabledKeys);
+
         const b = this.map.getBounds();
         const steps = 18; // grid resolution (keep fast on mobile)
         const latStep = (b.getNorth() - b.getSouth()) / steps;
         const lngStep = (b.getEast() - b.getWest()) / steps;
 
-        // Draw semi-transparent rectangles where score is higher.
         for (let i = 0; i < steps; i++) {
           for (let j = 0; j < steps; j++) {
             const lat = b.getSouth() + (i + 0.5) * latStep;
             const lng = b.getWest() + (j + 0.5) * lngStep;
-            const pred = NectarPredict.score(lat, lng, new Date(), mode);
-            const s = pred && typeof pred.score === "number" ? pred.score : 0;
 
-            // Skip very low cells to reduce clutter
+            const det = NectarPredict.scoreDetailed
+              ? NectarPredict.scoreDetailed(lat, lng, new Date(), mode, enabledKeys)
+              : NectarPredict.score(lat, lng, new Date(), mode);
+
+            const s = det && typeof det.score === "number" ? det.score : 0;
             if (s < 0.22) continue;
 
-            // Opacity scales with score
             const opacity = Math.min(0.55, 0.15 + s * 0.35);
 
-            // Color by strength band
-            let color = "#f59e0b"; // honey
-            if (s >= 0.75) color = "#16a34a"; // strong
-            else if (s < 0.35) color = "#b42318"; // weak-ish / dearth prone
+            let color = "#f59e0b";
+            if (colorMode === "top" && det && det.top && det.top.length) {
+              const topKey = det.top[0].key;
+              color = (NectarPredict.paletteFL && NectarPredict.paletteFL[topKey]) ? NectarPredict.paletteFL[topKey] : color;
+            } else {
+              if (s >= 0.75) color = "#16a34a";
+              else if (s < 0.35) color = "#b42318";
+            }
 
             const rect = L.rectangle([[lat - latStep/2, lng - lngStep/2], [lat + latStep/2, lng + lngStep/2]], {
               color,
               weight: 0,
               fillColor: color,
               fillOpacity: opacity,
-              interactive: false
+              interactive: true
             });
+
+            rect.on("click", (ev) => {
+              try {
+                const det2 = NectarPredict.scoreDetailed
+                  ? NectarPredict.scoreDetailed(lat, lng, new Date(), mode, enabledKeys)
+                  : NectarPredict.score(lat, lng, new Date(), mode);
+
+                const top = (det2 && det2.top) ? det2.top.slice(0,3) : [];
+                const pct = Math.round(((det2 && det2.score) ? det2.score : 0) * 100);
+                const title = (mode === "springfall") ? "Spring/Fall overlap" :
+                              (mode === "next60") ? "Next 60 days" :
+                              (mode === "annual") ? "Annual potential" :
+                              "Next 14 days";
+
+                const lines = top.length ? top.map(t => {
+                  const c = (NectarPredict.paletteFL && NectarPredict.paletteFL[t.key]) ? NectarPredict.paletteFL[t.key] : "#f59e0b";
+                  const v = Math.round((t.value || 0) * 100) / 100;
+                  const nm = Utils.escapeHtml ? Utils.escapeHtml(t.name) : t.name;
+                  return `<div class="small" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+                    <span style="display:inline-block; width:10px; height:10px; border-radius:999px; background:${c};"></span>
+                    <span style="flex:1;">${nm}</span>
+                    <span style="opacity:0.75;">${v}</span>
+                  </div>`;
+                }).join("") : `<div class="small" style="opacity:0.75; margin-top:0.25rem;">No active sources in this mode.</div>`;
+
+                const htmlPop = `
+                  <div style="min-width:220px;">
+                    <div style="font-weight:700;">Placement score: ${pct}%</div>
+                    <div class="small" style="opacity:0.8; margin-top:0.15rem;">${title}</div>
+                    <div class="small" style="margin-top:0.45rem;"><strong>Top sources here</strong></div>
+                    ${lines}
+                    <div class="small" style="opacity:0.75; margin-top:0.5rem;">Use this as a scouting hint, then verify forage + access in person.</div>
+                  </div>
+                `;
+                L.popup({ closeButton:true, autoClose:true, closeOnClick:true, maxWidth:320 })
+                  .setLatLng(ev.latlng || [lat, lng])
+                  .setContent(htmlPop)
+                  .openOn(this.map);
+              } catch (_) {}
+            });
+
             rect.addTo(this.placementLayer);
           }
         }
+      } else {
+        this._renderPlacementLegend([]);
       }
 
       // Heatmap (swarm density)
@@ -7897,6 +8076,85 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], strength:0.25, latBand:[24.3, 26.8] },
     ],
 
+    // Consistent colors for source-layer map mode
+    paletteFL: {
+      early_wild: "#84cc16",
+      citrus: "#f59e0b",
+      gallberry: "#0ea5e9",
+      palmetto_south: "#a855f7",
+      summer: "#ef4444",
+      pepper: "#ec4899",
+      goldenrod: "#eab308",
+      winter_trickle: "#22c55e"
+    },
+
+    listSources() {
+      return (this.sourcesFL || []).map(s => ({ key:s.key, name:s.name, months:s.months, strength:s.strength, latBand:s.latBand }));
+    },
+
+    scoreDetailed(lat, lng, date, mode, enabledKeys) {
+      const d = date ? new Date(date) : new Date();
+      const m = d.getMonth()+1;
+      const sources = this.sourcesFL || [];
+      const enabled = new Set(Array.isArray(enabledKeys) && enabledKeys.length ? enabledKeys : sources.map(s => s.key));
+
+      let now = 0, spring = 0, fall = 0, annual = 0;
+      const active = [];
+      const activeSoon = [];
+      const bySource = {};
+
+      for (const s of sources) {
+        if (!enabled.has(s.key)) continue;
+        const [a,b] = s.months;
+        const okLat = this._latOk(lat, s.latBand);
+        if (!okLat) continue;
+
+        const isActive = this._inMonthRange(m, a, b);
+        const mPlus1 = ((m % 12) + 1);
+        const isSoon = isActive || this._inMonthRange(mPlus1, a, b);
+
+        annual += s.strength;
+
+        const isSpring = this._inMonthRange(4, a, b) || this._inMonthRange(3, a, b) || this._inMonthRange(5, a, b);
+        const isFall = this._inMonthRange(9, a, b) || this._inMonthRange(10, a, b);
+
+        if (isSpring) spring += s.strength * 0.9;
+        if (isFall) fall += s.strength * 0.9;
+
+        if (isActive) { now += s.strength; active.push(s.key); }
+        if (isSoon) { activeSoon.push(s.key); }
+
+        bySource[s.key] = (bySource[s.key] || 0) + s.strength;
+      }
+
+      const norm = (x) => Math.max(0, Math.min(1.5, x / 2.0));
+
+      let raw = 0;
+      if (mode === "annual") raw = norm(annual);
+      else if (mode === "springfall") {
+        const overlap = Math.min(spring, fall);
+        raw = norm(overlap + 0.4*Math.max(spring, fall));
+      } else if (mode === "next60") {
+        raw = norm(now + 0.35);
+      } else {
+        raw = norm(now);
+      }
+
+      const status =
+        raw >= 0.75 ? "strong" :
+        raw >= 0.45 ? "moderate" :
+        raw >= 0.25 ? "light" :
+        "low";
+
+      // Rank contributors (bySource is "potential", not strictly mode-weighted; good enough for v1)
+      const srcByKey = new Map(sources.map(s => [s.key, s]));
+      const top = Object.keys(bySource)
+        .map(k => ({ key:k, name:(srcByKey.get(k)?.name || k), value:bySource[k] }))
+        .sort((a,b) => (b.value||0) - (a.value||0));
+
+      return { score: raw, status, active, activeSoon, bySource, top };
+    },
+
     _inMonthRange(m, start, end) {
       if (start <= end) return (m >= start && m <= end);
       // wrap (e.g., 12..2)
@@ -7909,39 +8167,13 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     },
 
     score(lat, lng, date, mode) {
-      const d = date ? new Date(date) : new Date();
-      const m = d.getMonth()+1;
-      const sources = this.sourcesFL;
-
-      // "Now" score: sources active this month
-      let now = 0, spring = 0, fall = 0, annual = 0;
-      const active = [];
-      const activeSoon = [];
-
-      for (const s of sources) {
-        const [a,b] = s.months;
-        const okLat = this._latOk(lat, s.latBand);
-        if (!okLat) continue;
-
-        const isActive = this._inMonthRange(m, a, b);
-        // soon: within 1 month window (rough)
-        const mPlus1 = ((m % 12) + 1);
-        const isSoon = isActive || this._inMonthRange(mPlus1, a, b);
-
-        annual += s.strength;
-
-        // spring/fall overlap buckets
-        const isSpring = this._inMonthRange(4, a, b) || this._inMonthRange(3, a, b) || this._inMonthRange(5, a, b);
-        const isFall = this._inMonthRange(9, a, b) || this._inMonthRange(10, a, b);
-
-        if (isSpring) spring += s.strength * 0.9;
-        if (isFall) fall += s.strength * 0.9;
-
-        if (isActive) { now += s.strength; active.push(s.name); }
-        if (isSoon) { activeSoon.push(s.name); }
-      }
-
-      // Normalize-ish to 0..1+
+      const det = this.scoreDetailed(lat, lng, date, mode);
+      const srcByKey = new Map((this.sourcesFL||[]).map(s => [s.key, s]));
+      const active = (det.active || []).map(k => (srcByKey.get(k)?.name || k));
+      const activeSoon = (det.activeSoon || []).map(k => (srcByKey.get(k)?.name || k));
+      return Object.assign({}, det, { active, activeSoon });
+    },
+// Normalize-ish to 0..1+
       const norm = (x) => Math.max(0, Math.min(1.5, x / 2.0));
 
       let raw = 0;
@@ -7971,7 +8203,36 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     }
   };
 
+  
   // =========================================================
+  // 8.6b) Placement preferences (selected nectar sources, legend, color mode)
+  // =========================================================
+  const PlacementPrefs = {
+    _meta() {
+      const meta = Storage.loadMeta() || {};
+      if (!meta.placement || typeof meta.placement !== "object") meta.placement = {};
+      return meta;
+    },
+    _save(meta) { Storage.saveMeta(meta); },
+
+    get() {
+      const meta = this._meta();
+      const p = meta.placement || {};
+      return {
+        enabled: Array.isArray(p.enabled) ? p.enabled : [],
+        colorMode: (p.colorMode || "top"),
+        showLegend: (typeof p.showLegend === "boolean") ? p.showLegend : true,
+      };
+    },
+
+    set(next) {
+      const meta = this._meta();
+      meta.placement = Object.assign({}, meta.placement || {}, next || {});
+      this._save(meta);
+    }
+  };
+
+// =========================================================
   // 8.7) Swarms & Removals (GPS-first sites)
   // =========================================================
   const SwarmRemoval = {
