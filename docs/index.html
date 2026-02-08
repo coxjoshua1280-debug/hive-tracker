@@ -1337,18 +1337,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
 
-  // --- Minimal Nectar engine (restored stub) ---
-window.nectar = window.nectar || {
-  getStatusForYard(yardName) {
-    // placeholder logic until full prediction engine is rebuilt
-    return {
-      state: "unknown",   // "flow" | "dearth" | "upcoming" | "unknown"
-      label: "No nectar data",
-      color: "#888"
-    };
-  }
-};
-
 
   // --- Disable editing lock completely ---
 document.body.classList.remove("editing-locked");
@@ -4713,7 +4701,7 @@ const marker = L.circleMarker([lat, lon], {
             <div class="small">${purposeLabel}</div>
             <div class="small" style="margin-top:6px;">Hives: <strong>${c}</strong></div>
             <div class="small" style="margin-top:6px;">Home point: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
-            ${nectarHtml}
+            ${(typeof nectarHtml!=='undefined'?nectarHtml:'')}
 
             <div style="margin-top:10px;">
               <button id="${popupId}" type="button" class="btn btn-primary" style="width:100%;">Go to yard</button>
@@ -10077,6 +10065,15 @@ window.addEventListener("DOMContentLoaded", () => {
   const cb = document.getElementById("mapShowNectar");
   if (cb) cb.addEventListener("change", () => window.showNectar(cb.checked));
 });
+
+
+
+// --- Minimal Nectar engine (stub to keep map stable) ---
+window.nectar = window.nectar || {
+  getStatusForYard(yardName){
+    return { state:"unknown", title:"No nectar data", detail:"Add nectar sources or dearth windows in the yard panel to see status.", color:"#888" };
+  }
+};
 
 </script>
 
