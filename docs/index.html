@@ -954,6 +954,10 @@ button.primary, .btn.primary {
               <option value="top" selected>Auto (top source)</option>
             </select>
           </div>
+
+          <div id="mapTypeOverlayInfo" style="margin-top:0.4rem; padding:0.5rem; border-radius:12px; background:rgba(0,0,0,0.04);">
+            <div class="small" style="opacity:0.85;">Pick a nectar type above to see an ID photo.</div>
+          </div>
           <label class="checkbox-label" style="margin:0.5rem 0 0;">
             <input id="mapShowYardSuccessHeat" type="checkbox" />
             <span class="small"><strong>Yard success heat</strong> (uses yard score + confidence)</span>
@@ -3823,6 +3827,7 @@ const RecoveryUI = {
     mapYardSuccessRadius: document.getElementById("mapYardSuccessRadius"),
     mapClearYardSuccess: document.getElementById("mapClearYardSuccess"),
     mapTypeOverlaySource: document.getElementById("mapTypeOverlaySource"),
+    mapTypeOverlayInfo: document.getElementById("mapTypeOverlayInfo"),
     mapPlacementShowLegend: document.getElementById("mapPlacementShowLegend"),
     mapPlacementSources: document.getElementById("mapPlacementSources"),
     mapPlacementLegend: document.getElementById("mapPlacementLegend"),
@@ -4425,7 +4430,7 @@ for (const [k, v] of Object.entries(el)) {
         el.mapShowTypeOverlay.onchange = () => { this.render(); };
       }
       if (el.mapTypeOverlaySource) {
-        el.mapTypeOverlaySource.onchange = () => { this.render(); };
+        el.mapTypeOverlaySource.onchange = () => { try{ _renderTypeInfo(); }catch(_){} this.render(); };
       }
       // Observed bloom calibration UI
       try {
@@ -4513,6 +4518,33 @@ if (el.mapHeatRange) {
           if (el.mapTypeOverlaySource) {
             const prev = el.mapTypeOverlaySource.value || "top";
             el.mapTypeOverlaySource.innerHTML = "";
+
+          const _renderTypeInfo = () => {
+            try {
+              if (!el.mapTypeOverlayInfo) return;
+              const v = el.mapTypeOverlaySource ? el.mapTypeOverlaySource.value : "top";
+              if (v === "top") {
+                el.mapTypeOverlayInfo.innerHTML = `<div class="small" style="opacity:0.85;">Auto mode: map colors show the strongest source at each spot.</div>`;
+                return;
+              }
+              const src = (typeof NectarPredict !== "undefined" && NectarPredict.getSourceByKey) ? NectarPredict.getSourceByKey(v) : null;
+              if (!src) {
+                el.mapTypeOverlayInfo.innerHTML = `<div class="small" style="opacity:0.85;">No details for: ${Utils.escapeHtml ? Utils.escapeHtml(v) : v}</div>`;
+                return;
+              }
+              const img = src.imageUrl ? `<img src="${src.imageUrl}" alt="${Utils.escapeHtml ? Utils.escapeHtml(src.name||src.key) : (src.name||src.key)}" style="width:100%; max-width:420px; border-radius:12px; display:block; margin:0.35rem 0;" />` : "";
+              const ident = src.identify ? `<div class="small" style="opacity:0.9;">${Utils.escapeHtml ? Utils.escapeHtml(src.identify) : src.identify}</div>` : "";
+              const nm = Utils.escapeHtml ? Utils.escapeHtml(src.name||src.key) : (src.name||src.key);
+              el.mapTypeOverlayInfo.innerHTML = `
+                <div class="small"><strong>${nm}</strong></div>
+                ${img}
+                ${ident}
+                <div class="small" style="opacity:0.7; margin-top:0.25rem;">Tip: set Type focus to <strong>${nm}</strong>, then look for big, clean color patches on the map.</div>
+              `;
+            } catch(_) {}
+          };
+          _renderTypeInfo();
+
             const optTop = document.createElement("option");
             optTop.value = "top";
             optTop.textContent = "Auto (top source)";
@@ -8557,12 +8589,14 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     // - latBand: [minLat, maxLat] (optional)
     sourcesFL: [
       { key:"early_wild", name:"Early wildflowers", months:[1,3], windowsFL:{"south": [1, 3], "central": [1, 3], "north": [2, 4]}, strength:0.55, latBand:[24.3, 30.9] , bbox:[[27.0, -84.8], [30.9, -80.5]] },
-      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], windowsFL:{"south": [2, 4], "central": [3, 4], "north": [3, 5]}, strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
-      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], windowsFL:{"south": [4, 5], "central": [4, 6], "north": [4, 6]}, strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
-      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], windowsFL:{"south": [4, 6], "central": [4, 6], "north": [5, 6]}, strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
+      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], windowsFL:{"south": [2, 4], "central": [3, 4], "north": [3, 5], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Citrus-sinensis-flowers2.jpg", identify:"White fragrant 5\u2011petal blossoms; glossy leaves; groves + backyard citrus."},
+      { key:"tupelo", name:"Tupelo (Ogeechee)", months:[4,5], windowsFL:{"south":[4,5],"central":[4,5],"north":[4,5]}, strength:0.85, latBand:[29.0, 31.2], bbox:[[29.0, -85.8],[31.2, -82.8]] , imageUrl:"https://hort.ifas.ufl.edu/treesandpowerlines/images/Nyssa_ogeche_flowers.jpg", identify:"Greenish-white pom‑pom clusters on long stalks; river swamps & floodplains (Panhandle/Apalachicola + Suwannee corridors)." },
+ strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
+      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], windowsFL:{"south": [4, 5], "central": [4, 6], "north": [4, 6], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Ilex%20glabra%20flowers%208601.JPG", identify:"Tiny white 4\u20136 petal flowers in leaf axils on evergreen shrub; flatwoods/bogs."}, strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
+      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], windowsFL:{"south": [4, 6], "central": [4, 6], "north": [5, 6], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Serenoa%20repens%20001.JPG", identify:"Creamy plume-like flower stalks rising above saw\u2011tooth fan leaves; scrub/flatwoods."}, strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
       { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] , bbox:[[25.5, -85.5], [30.5, -80.3]] },
-      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], windowsFL:{"south": [8, 10], "central": [8, 10], "north": [9, 10]}, strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.4, -82.8], [27.3, -80.0]] },
-      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], windowsFL:{"south": [9, 11], "central": [9, 11], "north": [9, 11]}, strength:0.55, latBand:[28.0, 30.9] , bbox:[[28.6, -84.1], [31.1, -80.5]] },
+      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], windowsFL:{"south": [8, 10], "central": [8, 10], "north": [9, 10], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Schinus%20terebinthifolius%20flowers.jpg", identify:"Many tiny white flowers in clusters; later bright red berries; invasive in FL."}, strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.4, -82.8], [27.3, -80.0]] },
+      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], windowsFL:{"south": [9, 11], "central": [9, 11], "north": [9, 11], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Solidago%20altissima2.jpg", identify:"Tall sprays of tiny yellow daisy-like blooms; fields/roadsides in late summer/fall."}, strength:0.55, latBand:[28.0, 30.9] , bbox:[[28.6, -84.1], [31.1, -80.5]] },
       { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], windowsFL:{"south": [12, 2], "central": [12, 2], "north": [1, 2]}, strength:0.25, latBand:[24.3, 26.8] , bbox:[[24.3, -82.9], [26.8, -80.0]] },
     ],
 
@@ -8624,6 +8658,14 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     listSources() {
       return (this.sourcesFL || []).map(s => ({ key:s.key, name:s.name, months:s.months, strength:s.strength, latBand:s.latBand, bbox:s.bbox }));
     },
+
+    getSourceByKey(key) {
+      const k = String(key||"").trim();
+      const all = (this.sourcesFL || []);
+      for (const s of all) if (s && s.key === k) return s;
+      return null;
+    },
+
 
     scoreDetailed(lat, lng, date, mode, enabledKeys) {
       const d = date ? new Date(date) : new Date();
