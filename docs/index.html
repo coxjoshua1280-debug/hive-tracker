@@ -9910,6 +9910,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // hide the loading overlay once DOM is ready
   const bf = document.getElementById("bootFallback");
   if (bf) bf.style.display = "none";
+  
+    // remove any stale startup diagnostic banner (it can trigger too early)
+  document.getElementById("__bn_preflight")?.remove();
+  document.getElementById("__bn_fatal")?.remove();   // if you have the other name too
+  document.getElementById("__boot_banner")?.remove(); // from earlier debug builds
+
 });
 
   </script>
