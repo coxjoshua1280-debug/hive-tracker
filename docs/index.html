@@ -9698,24 +9698,13 @@ el.remindersBtn.addEventListener("click", () => {
       }
     }
 
-    // Edit lock (PIN)
-    if (el.lockBtn) {
-      el.lockBtn.addEventListener("click", async () => {
-        if (Lock.isUnlocked()) Lock.lockNow();
-        else await Lock.unlockWithPrompt();
-      });
-    }
+  
 
     el.enableNotifBtn.addEventListener("click", async () => {
       await Notifier.enable();
     });
 
-    // Keep lock UI current + auto-lock on inactivity
-    Lock.applyUI();
-    setInterval(() => { try { Lock.applyUI(); } catch (_) {} }, 15000);
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) Lock.lockNow(true);
-    });
+   
 // Milestones (global) UI wiring
     try {
       Milestones.renderUI();
