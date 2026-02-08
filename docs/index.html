@@ -4161,6 +4161,35 @@ for (const [k, v] of Object.entries(el)) {
 
     return { start, capped, emerge, mateStart, mateEnd, layStart, layEnd };
   }
+
+  // =========================================================
+  // 3.45) Placement preferences (local, per-user)
+  // =========================================================
+  const PlacementPrefs = {
+    KEY: "placement_prefs_v1",
+    get() {
+      try {
+        const raw = localStorage.getItem(User.key(this.KEY));
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      const all = (typeof NectarPredict !== "undefined" && NectarPredict && Array.isArray(NectarPredict.sourcesFL))
+        ? NectarPredict.sourcesFL.map(s => s.key)
+        : [];
+      return { enabled: all, mode: "next14", typeMode: "auto", showLegend: true };
+    },
+    set(patch) {
+      try {
+        const cur = this.get() || {};
+        const next = Object.assign({}, cur, patch || {});
+        localStorage.setItem(User.key(this.KEY), JSON.stringify(next));
+        return next;
+      } catch (_) {
+        return null;
+      }
+    }
+  };
+
+
   // =========================================================
   // 3.5) YARD MAP (Leaflet)
   // =========================================================
