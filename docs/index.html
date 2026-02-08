@@ -8121,14 +8121,14 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     // - strength: 0..1 baseline
     // - latBand: [minLat, maxLat] (optional)
     sourcesFL: [
-      { key:"early_wild", name:"Early wildflowers", months:[1,3], strength:0.55, latBand:[24.3, 30.9] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], strength:0.9, latBand:[26.0, 29.6] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], strength:0.75, latBand:[28.0, 30.9] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], strength:0.55, latBand:[28.0, 30.9] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
-      { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], strength:0.25, latBand:[24.3, 26.8] , bbox:[[24.3,-87.8],[31.1,-80.0]] },
+      { key:"early_wild", name:"Early wildflowers", months:[1,3], strength:0.55, latBand:[24.3, 30.9] , bbox:[[27.0, -84.8], [30.9, -80.5]] },
+      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
+      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
+      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
+      { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] , bbox:[[25.5, -85.5], [30.5, -80.3]] },
+      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], strength:0.7, latBand:[24.3, 28.7] , bbox:[[24.4, -82.8], [27.3, -80.0]] },
+      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], strength:0.55, latBand:[28.0, 30.9] , bbox:[[28.6, -84.1], [31.1, -80.5]] },
+      { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], strength:0.25, latBand:[24.3, 26.8] , bbox:[[24.3, -82.9], [26.8, -80.0]] },
     ],
 
     // Consistent colors for source-layer map mode
@@ -8144,7 +8144,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     },
 
     listSources() {
-      return (this.sourcesFL || []).map(s => ({ key:s.key, name:s.name, months:s.months, strength:s.strength, latBand:s.latBand }));
+      return (this.sourcesFL || []).map(s => ({ key:s.key, name:s.name, months:s.months, strength:s.strength, latBand:s.latBand, bbox:s.bbox }));
     },
 
     scoreDetailed(lat, lng, date, mode, enabledKeys) {
