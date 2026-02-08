@@ -2389,13 +2389,13 @@ validateOrRecoverOnBoot() {
       catch (_) { return 0; }
     },
 
-    setUnlockedUntil(ts) {
-      try { localStorage.setItem(User.key(this.keyUnlockedUntil()), String(ts)); } catch (_) {}
-    },
+   setUnlockedUntil(ts) { /* edit lock disabled */ },
+
 
     isUnlocked() {
-      return Date.now() < this.getUnlockedUntil();
+  return true; // edit lock disabled
     },
+
 
     lockNow(silent=false) {
       this.setUnlockedUntil(0);
@@ -2452,11 +2452,9 @@ validateOrRecoverOnBoot() {
     },
 
     requireUnlocked() {
-      if (!this.isDesktop()) return true;
-      if (this.isUnlocked()) return true;
-      alert("Editing is locked. Click 🔒 Locked and enter your PIN to unlock editing.");
-      return false;
-    },
+  return true; // edit lock disabled
+},
+
 
     applyUI() {
       if (!el || !el.lockBtn) return;
@@ -2464,11 +2462,11 @@ validateOrRecoverOnBoot() {
       el.lockBtn.style.display = desktop ? "" : "none";
       const unlocked = desktop ? this.isUnlocked() : true;
 
-      el.lockBtn.textContent = unlocked ? "🔓 Editing" : "🔒 Locked";
-      el.lockBtn.classList.toggle("btn-danger", unlocked);
-      el.lockBtn.classList.toggle("btn-muted", !unlocked);
-      document.body.classList.toggle("editing-unlocked", unlocked);
-      document.body.classList.toggle("editing-locked", !unlocked);
+      // edit lock disabled: always unlocked, and no lock UI
+document.body.classList.add("editing-unlocked");
+document.body.classList.remove("editing-locked");
+if (el?.lockBtn) el.lockBtn.style.display = "none";
+
     }
   };
 
