@@ -922,6 +922,11 @@ button.primary, .btn.primary {
             <input id="mapShowPlacement" type="checkbox" />
             <span class="small"><strong>Placement heat</strong> (nectar probability)</span>
           </label>
+          <label class="checkbox-label" style="margin:0.35rem 0 0;">
+            <input id="mapPlacementUseSuccess" type="checkbox" />
+            <span class="small"><strong>Use yard success</strong> (placement probability)</span>
+          </label>
+
           <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
             <div class="small" style="min-width:7.5rem;"><strong>Placement mode</strong></div>
             <select id="mapPlacementMode">
@@ -3810,6 +3815,7 @@ const RecoveryUI = {
     mapClusterRadius: document.getElementById("mapClusterRadius"),
     mapHeatRange: document.getElementById("mapHeatRange"),
         mapShowPlacement: document.getElementById("mapShowPlacement"),
+    mapPlacementUseSuccess: document.getElementById("mapPlacementUseSuccess"),
     mapPlacementMode: document.getElementById("mapPlacementMode"),
     mapPlacementColorMode: document.getElementById("mapPlacementColorMode"),
     mapShowTypeOverlay: document.getElementById("mapShowTypeOverlay"),
@@ -4401,6 +4407,9 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapShowPlacement) {
         el.mapShowPlacement.onchange = () => { this.render(); };
       }
+      if (el.mapPlacementUseSuccess) {
+        el.mapPlacementUseSuccess.onchange = () => { this.render(); };
+      }
       if (el.mapPlacementMode) {
         el.mapPlacementMode.onchange = () => { this.render(); };
       }
@@ -4418,7 +4427,7 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapTypeOverlaySource) {
         el.mapTypeOverlaySource.onchange = () => { this.render(); };
       }
-      // Observed bloom calibration UI (offline seasonal adjustment)
+      // Observed bloom calibration UI
       try {
         if (el.mapBloomSource && typeof NectarPredict !== "undefined" && NectarPredict.listSources) {
           const srcs = NectarPredict.listSources();
@@ -4430,14 +4439,14 @@ for (const [k, v] of Object.entries(el)) {
         el.mapBloomUseMyLat.onclick = () => {
           try {
             const yards = Storage.loadYards() || {};
-            const name = (this._getCurrentYardName && this._getCurrentYardName()) || "";
-            const y = yards[name];
+            const current = (UI && UI.currentYard) ? UI.currentYard() : "";
+            const y = yards[current];
             if (y && typeof y.lat === "number" && typeof NectarPredict !== "undefined" && NectarPredict._bandForLat) {
               const band = NectarPredict._bandForLat(y.lat);
               if (el.mapBloomBand) el.mapBloomBand.value = band;
               if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Using ${band} band (from yard lat)`;
             } else {
-              if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Pick a yard with GPS to auto-detect band.`;
+              if (el.mapBloomStatus) el.mapBloomStatus.textContent = `Select a yard with GPS to auto-detect band.`;
             }
           } catch(_) {}
         };
@@ -4952,7 +4961,8 @@ _renderPlacementLegend(enabledKeys) {
 
       const yards = Storage.loadYards() || {};
       const yardNames = Object.keys(yards).sort((a,b) => a.localeCompare(b));
-      const scopeYards = this._getScopeYards(yards, yardNames);
+            this._ysYardPointsCache = null;
+const scopeYards = this._getScopeYards(yards, yardNames);
       const points = this._computeHeatPoints(scopeYards);
 
       this._heatPointsCache = { key, points };
@@ -5176,11 +5186,62 @@ _renderPlacementLegend(enabledKeys) {
               : NectarPredict.score(lat, lng, new Date(), mode);
 
             const s = det && typeof det.score === "number" ? det.score : 0;
-            if (s < 0.22) continue;
+            let sFinal = s;
+            try {
+              const useSuccess = !!(el.mapPlacementUseSuccess && el.mapPlacementUseSuccess.checked);
+              if (useSuccess && this._computeYardSuccessAt && this._haversineKm) {
+                // build yardPoints cache once per render
+                if (!this._ysYardPointsCache) {
+                  const yp = [];
+                  try {
+                    Object.keys(yards||{}).forEach(nm => {
+                      const yy = yards[nm];
+                      if (!yy || typeof yy.lat !== "number" || typeof yy.lon !== "number") return;
+                      const sc = (typeof yy.score === "number") ? yy.score : 50;
+                      const cf = (typeof yy.scoreConfidence === "number") ? yy.scoreConfidence : 15;
+                      yp.push({ lat: yy.lat, lng: yy.lon, score01: Math.max(0,Math.min(1, sc/100)), conf01: Math.max(0,Math.min(1, cf/100)) });
+                    });
+                  } catch(_) {}
+                  this._ysYardPointsCache = yp;
+                }
+                const yardPoints = this._ysYardPointsCache || [];
+                const radiusKm = (el.mapYardSuccessRadius ? parseFloat(el.mapYardSuccessRadius.value||"20") : 20);
+                if (yardPoints.length) {
+                  const successInfo = this._computeYardSuccessAt(lat, lng, yardPoints, radiusKm);
+                  if (successInfo) {
+                    let den=0;
+                    for (let k=0;k<yardPoints.length;k++){
+                      const p2 = yardPoints[k];
+                      const dkm = this._haversineKm(lat,lng,p2.lat,p2.lng);
+                      if (dkm > radiusKm*2.5) continue;
+                      den += Math.exp(-(dkm*dkm)/(2*(radiusKm*radiusKm)));
+                    }
+                    const densityPenalty = 1 / (1 + 0.35*den);
+                    const nectar01 = Math.max(0, Math.min(1, s / 1.0));
+                    const success01 = Math.max(0, Math.min(1, successInfo.score01));
+                    const conf01 = Math.max(0, Math.min(1, successInfo.conf01));
+                    const blended = nectar01 * (0.55 + 0.45*success01) * (0.65 + 0.35*conf01) * densityPenalty;
+                    sFinal = Math.max(0, Math.min(1, blended));
+                    det._placementProb = sFinal;
+                    det._success01 = success01;
+                    det._densityPenalty = densityPenalty;
+                  }
+                }
+              }
+            } catch(_) {}
 
-            const opacity = Math.min(0.55, 0.15 + s * 0.35);
+            if ((typeof sFinal==='number'?sFinal:s) < 0.22) continue;
+
+            const opacity = Math.min(0.55, 0.15 + (typeof sFinal==='number'?sFinal:s) * 0.35);
 
             let color = "#f59e0b";
+            // If using placement probability, color by probability (red->green)
+            try {
+              if (el.mapPlacementUseSuccess && el.mapPlacementUseSuccess.checked) {
+                const hue = Math.max(0, Math.min(120, Math.round(((typeof sFinal==='number')?sFinal:s) * 120)));
+                color = `hsl(${hue}, 85%, 48%)`;
+              }
+            } catch(_) {}
             if (colorMode === "top" && det && det.top && det.top.length) {
               const topKey = det.top[0].key;
               color = (NectarPredict.paletteFL && NectarPredict.paletteFL[topKey]) ? NectarPredict.paletteFL[topKey] : color;
@@ -8515,42 +8576,29 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       pepper: "#ec4899",
       goldenrod: "#eab308",
       winter_trickle: "#22c55e"
-    },
-    ,
-
-    // Florida micro-regions (very rough latitude bands; refine later)
-    // Used to shift bloom windows offline without weather APIs.
+    },},
+    // Florida micro-regions (latitude bands)
     bandsFL: [
       { key:"south",   name:"South FL",   latMin:24.3, latMax:26.9 },
       { key:"central", name:"Central FL", latMin:26.9, latMax:29.2 },
       { key:"north",   name:"North FL",   latMin:29.2, latMax:31.2 },
     ],
-
     _bandForLat(lat) {
       const L = Number(lat);
-      const bands = this.bandsFL || [];
-      for (const b of bands) {
+      for (const b of (this.bandsFL||[])) {
         if (L >= b.latMin && L < b.latMax) return b.key;
       }
       return (L < 26.9) ? "south" : (L < 29.2 ? "central" : "north");
     },
 
-    // Persistent calibration offsets (days) by band + source key
-    // Example: cal.offsets["central"]["citrus"] = -10  (this year is 10 days early)
     _calKey: "nectar_cal_v1",
     getCalibration() {
-      try {
-        const raw = localStorage.getItem(User.key(this._calKey));
-        return raw ? JSON.parse(raw) : { offsets:{}, notes:{} };
-      } catch(_) {
-        return { offsets:{}, notes:{} };
-      }
+      try { return JSON.parse(localStorage.getItem(User.key(this._calKey)) || '{"offsets":{},"notes":{}}'); }
+      catch { return { offsets:{}, notes:{} }; }
     },
     setCalibration(next) {
-      try {
-        localStorage.setItem(User.key(this._calKey), JSON.stringify(next));
-        return next;
-      } catch(_) { return null; }
+      try { localStorage.setItem(User.key(this._calKey), JSON.stringify(next)); } catch(_) {}
+      return next;
     },
     setOffsetDays(bandKey, sourceKey, offsetDays, note) {
       const cal = this.getCalibration();
