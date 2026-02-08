@@ -9854,26 +9854,6 @@ el.remindersBtn.addEventListener("click", () => {
 
 
   init();
-// --- Nectar map toggle (global wrapper) ---
-window.showNectar = function(show){
-  try {
-    // store preference
-    try { localStorage.setItem("mapShowNectar", show ? "1" : "0"); } catch(_) {}
-
-    // if you have a map refresh function, call it
-    if (typeof window.renderMap === "function") window.renderMap();
-    if (typeof window.renderYardMap === "function") window.renderYardMap();
-    if (typeof window.refreshMap === "function") window.refreshMap();
-
-    // if your map uses a checkbox id, sync it
-    const cb = document.getElementById("mapShowNectar");
-    if (cb) cb.checked = !!show;
-  } catch (e) {
-    console.error("showNectar failed:", e);
-  }
-};
-
-  
 
 });
 </script>
@@ -10055,7 +10035,38 @@ window.addEventListener("DOMContentLoaded", () => {
 
 });
 
-  </script>
+  
+
+// --- Nectar map toggle (global wrapper) ---
+window.showNectar = function(show){
+  try {
+    try { localStorage.setItem("mapShowNectar", show ? "1" : "0"); } catch(_) {}
+    const cb = document.getElementById("mapShowNectar");
+    if (cb) cb.checked = !!show;
+
+    // Try common map refresh hooks (one of these exists in BroodNote builds)
+    if (typeof window.renderMap === "function") window.renderMap();
+    if (typeof window.renderYardMap === "function") window.renderYardMap();
+    if (typeof window.refreshMap === "function") window.refreshMap();
+
+    // If no explicit refresh hooks exist, nudge by re-opening the map panel
+    if (typeof window.renderMap !== "function" && typeof window.renderYardMap !== "function" && typeof window.refreshMap !== "function") {
+      const mapBtn = document.getElementById("mapBtn");
+      if (mapBtn && typeof mapBtn.click === "function") mapBtn.click();
+    }
+  } catch (e) {
+    console.error("showNectar failed:", e);
+  }
+};
+
+
+
+window.addEventListener("DOMContentLoaded", () => {
+  const cb = document.getElementById("mapShowNectar");
+  if (cb) cb.addEventListener("change", () => window.showNectar(cb.checked));
+});
+
+</script>
 
 </body>
 </html>
