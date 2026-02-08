@@ -1366,7 +1366,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // =========================================================
   // 1) UTILS (Pure functions, no DOM)
   // =========================================================
+function hideBootFallback() {
+  const bf = document.getElementById("bootFallback");
+  if (bf) bf.style.display = "none";
+}
 
+function showBootFallback(msg) {
+  const bf = document.getElementById("bootFallback");
+  const m = document.getElementById("bootFallbackMsg");
+  if (m && msg) m.textContent = msg;
+  if (bf) bf.style.display = "flex";
+}
+
+  
   const Utils = {
     today() { return new Date().toISOString().split("T")[0]; },
     uuid() {
@@ -3967,6 +3979,8 @@ for (const [k, v] of Object.entries(el)) {
 // =========================================================
   // 6) UI (Rendering & DOM only)
   // =========================================================
+
+  
 
   
   // =========================================================
@@ -9882,6 +9896,22 @@ el.remindersBtn.addEventListener("click", () => {
         }
       }, 2000);
     })();
+   // --- Boot fallback auto-hide (safe default) ---
+window.addEventListener("DOMContentLoaded", () => {
+  // wire fallback buttons (still useful)
+  document.getElementById("bootReloadBtn")?.addEventListener("click", () => location.reload());
+
+  document.getElementById("bootBypassSWBtn")?.addEventListener("click", () => {
+    const u = new URL(location.href);
+    u.searchParams.set("nosw", "1");
+    location.href = u.toString();
+  });
+
+  // hide the loading overlay once DOM is ready
+  const bf = document.getElementById("bootFallback");
+  if (bf) bf.style.display = "none";
+});
+
   </script>
 
 </body>
