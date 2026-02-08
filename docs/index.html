@@ -575,6 +575,8 @@ button.primary, .btn.primary {
 
   <button id="scanNfc" class="btn btn-primary">Scan Hive (NFC)</button>
 
+  <button id="linkNfcToHiveBtn" class="btn">🔗 Link NFC to current hive</button>
+
   <label for="currentYard">Current Yard</label>
   <input id="currentYard" type="text" placeholder="e.g. Yard A" list="yardList" />
   <datalist id="yardList"></datalist>
@@ -914,6 +916,23 @@ button.primary, .btn.primary {
             <input id="mapShowNectar" type="checkbox" checked />
             <span class="small"><strong>Show nectar</strong> (flow / dearth / upcoming)</span>
           </label>
+
+
+          <label class="checkbox-label" style="margin:0;">
+            <input id="mapShowPlacement" type="checkbox" />
+            <span class="small"><strong>Placement heat</strong> (nectar probability)</span>
+          </label>
+          <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+            <div class="small" style="min-width:7.5rem;"><strong>Placement mode</strong></div>
+            <select id="mapPlacementMode">
+              <option value="next14" selected>Next 14 days</option>
+              <option value="next60">Next 60 days</option>
+              <option value="springfall">Spring + Fall overlap</option>
+              <option value="annual">Annual potential</option>
+            </select>
+          </div>
+
+
 
 
           <div class="grow" style="max-width:180px;">
@@ -1940,6 +1959,7 @@ Reminders.render();
         yards: this.loadYards(),
         teams: this.loadTeams(),
         meta: this.loadMeta(),
+        sites: this.loadSites(),
       };
     },
 
@@ -2181,6 +2201,10 @@ validateOrRecoverOnBoot() {
 
     loadYards() { return this.load("yards", {}); },
     saveYards(yards) { if (!Lock.requireUnlocked()) return false; return this.save("yards", yards); },
+
+    loadSites() { return this.load("sites", {}); },
+    saveSites(sites) { if (!Lock.requireUnlocked()) return false; return this.save("sites", sites); },
+
 
     loadTeams() { return this.load("teams", { teams: [] }); },
     saveTeams(teams) { if (!Lock.requireUnlocked()) return false; return this.save("teams", teams); },
@@ -3569,6 +3593,7 @@ const RecoveryUI = {
 
   const el = {
     btnScan: document.getElementById("scanNfc"),
+    btnLinkNfcToHive: document.getElementById("linkNfcToHiveBtn"),
     appTitle: document.getElementById("appTitle"),
     status: document.getElementById("status"),
     hiveForm: document.getElementById("hiveForm"),
@@ -4254,6 +4279,12 @@ for (const [k, v] of Object.entries(el)) {
           this.render(); // re-color markers + popup nectar info
         };
       }
+      if (el.mapShowPlacement) {
+        el.mapShowPlacement.onchange = () => { this.render(); };
+      }
+      if (el.mapPlacementMode) {
+        el.mapPlacementMode.onchange = () => { this.render(); };
+      }
       if (el.mapHeatRange) {
         el.mapHeatRange.onchange = () => {
           this._renderHeatmapFromCache(true);
@@ -4436,6 +4467,21 @@ for (const [k, v] of Object.entries(el)) {
           pts.push({ yard, lat, lng, weight });
         }
       }
+
+      // Include GPS-first swarm sites too
+      try {
+        const siteEv = Sites.listSwarmRemovalEvents(200);
+        for (const e of siteEv) {
+          if (String(e.kind||"") !== "swarm") continue;
+          const lat = e.gps.lat, lng = e.gps.lng;
+          let weight = 1;
+          const size = e.size ? String(e.size).toLowerCase() : "";
+          if (size.includes("huge")) weight = 1.6;
+          else if (size.includes("large")) weight = 1.35;
+          else if (size.includes("small")) weight = 0.9;
+          pts.push({ yard: e.siteName || "Swarm site", lat, lng, weight });
+        }
+      } catch (_) {}
 
       return pts;
     },
@@ -4648,13 +4694,56 @@ for (const [k, v] of Object.entries(el)) {
         }).addTo(this.map);
 
         this.markers = L.layerGroup().addTo(this.map);
+        this.placementLayer = L.layerGroup().addTo(this.map);
       } else {
         this.markers.clearLayers();
+        if (this.placementLayer) this.placementLayer.clearLayers();
       }
 
       // Fit bounds
       const bounds = L.latLngBounds(pts.map(p => [p[0], p[1]]));
       try { this.map.fitBounds(bounds.pad(0.22)); } catch (_) {}
+
+      // Placement heat (nectar probability) — helps find new yard locations
+      const showPlacement = !!(el.mapShowPlacement && el.mapShowPlacement.checked);
+      if (this.placementLayer) this.placementLayer.clearLayers();
+      if (showPlacement && this.map && this.placementLayer && typeof NectarPredict !== "undefined") {
+        const mode = el.mapPlacementMode ? (el.mapPlacementMode.value || "next14") : "next14";
+        const b = this.map.getBounds();
+        const steps = 18; // grid resolution (keep fast on mobile)
+        const latStep = (b.getNorth() - b.getSouth()) / steps;
+        const lngStep = (b.getEast() - b.getWest()) / steps;
+
+        // Draw semi-transparent rectangles where score is higher.
+        for (let i = 0; i < steps; i++) {
+          for (let j = 0; j < steps; j++) {
+            const lat = b.getSouth() + (i + 0.5) * latStep;
+            const lng = b.getWest() + (j + 0.5) * lngStep;
+            const pred = NectarPredict.score(lat, lng, new Date(), mode);
+            const s = pred && typeof pred.score === "number" ? pred.score : 0;
+
+            // Skip very low cells to reduce clutter
+            if (s < 0.22) continue;
+
+            // Opacity scales with score
+            const opacity = Math.min(0.55, 0.15 + s * 0.35);
+
+            // Color by strength band
+            let color = "#f59e0b"; // honey
+            if (s >= 0.75) color = "#16a34a"; // strong
+            else if (s < 0.35) color = "#b42318"; // weak-ish / dearth prone
+
+            const rect = L.rectangle([[lat - latStep/2, lng - lngStep/2], [lat + latStep/2, lng + lngStep/2]], {
+              color,
+              weight: 0,
+              fillColor: color,
+              fillOpacity: opacity,
+              interactive: false
+            });
+            rect.addTo(this.placementLayer);
+          }
+        }
+      }
 
       // Heatmap (swarm density)
       this._renderHeatmapFromCache(false);
@@ -4778,6 +4867,19 @@ const UI = {
         return 2 * R * Math.asin(Math.min(1, Math.sqrt(c)));
       };
 
+
+      // Include GPS-first swarm/removal sites
+      try {
+        const evs = Sites.listSwarmRemovalEvents(200);
+        for (const e of evs) {
+          const kind = (e && e.kind) ? String(e.kind).trim() : "";
+          if (kind !== "swarm" && kind !== "removal") continue;
+          const lat = e.gps.lat, lng = e.gps.lng;
+          const weight = kind === "swarm" ? 3 : 2;
+          points.push({ yard: e.siteName || "Site", kind, lat, lng, weight });
+        }
+      } catch (_) {}
+
       const clusters = [];
       for (const pnt of points) {
         let best = null;
@@ -4876,29 +4978,75 @@ const UI = {
         }
       }
 
-      // Swarm/Removal list (always visible, yard-scoped)
+      // Swarm/Removal list (yard + GPS-first sites)
       if (el.swarmRemovalList) {
+        const items = [];
+
+        // Yard-scoped events (legacy)
         const ev = Array.isArray(meta.events) ? meta.events : [];
-        if (ev.length === 0) {
+        for (const e of ev) {
+          const kind = (e && e.kind) ? String(e.kind).trim() : "";
+          if (kind !== "swarm" && kind !== "removal") continue;
+          if (!e || !e.gps) continue;
+          items.push({
+            scope: "yard",
+            yard: yardName,
+            kind,
+            date: e.date || "",
+            size: e.size || "",
+            temperament: e.temperament || "",
+            notes: e.notes || "",
+            gps: e.gps
+          });
+        }
+
+        // Site events (new)
+        try {
+          const siteEv = Sites.listSwarmRemovalEvents(50);
+          for (const s of siteEv) items.push(s);
+        } catch (_) {}
+
+        // Sort newest first (best effort)
+        items.sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
+
+        if (items.length === 0) {
           el.swarmRemovalList.innerHTML = "<em>No events yet.</em>";
         } else {
-          el.swarmRemovalList.innerHTML = ev.map(e => {
-            const gps = e.gps ? `${(e.gps.lat||0).toFixed(5)}, ${(e.gps.lng||0).toFixed(5)}` : "(no GPS)";
-            const tie = e.tiedHiveId ? ` • tied: <strong>${Utils.escapeHtml(e.tiedHiveId)}</strong>` : "";
-            const kind = e.kind === "swarm" ? "🐝 Swarm" : "🏠 Removal";
-            const size = e.size ? ` • size ${Utils.escapeHtml(e.size)}` : "";
-            const att = e.attitude ? ` • attitude ${Utils.escapeHtml(e.attitude)}` : "";
-            const notes = e.notes ? `<div class="small">${Utils.escapeHtml(e.notes)}</div>` : "";
-            return `<div class="card" style="margin-top:0.5rem;padding:0.6rem;">
-              <div><strong>${kind}</strong> • ${Utils.escapeHtml(e.date||"")}${size}${att}${tie}</div>
-              <div class="small">GPS: ${Utils.escapeHtml(gps)}</div>
-              ${notes}
-              <div class="row" style="gap:0.4rem;margin-top:0.4rem;">
-                <button class="btn" data-ev-action="delete" data-yard="${Utils.escapeHtml(name)}" data-id="${e.id}">Delete</button>
+          el.swarmRemovalList.innerHTML = items.slice(0, 20).map(e => {
+            const gps = e.gps ? `${(e.gps.lat||0).toFixed(5)}, ${(e.gps.lng||0).toFixed(5)}` : "";
+            const badge = e.kind === "swarm" ? "🐝 Swarm" : "🏠 Removal";
+            const where = e.scope === "site"
+              ? `<div class="small">Site: <strong>${Utils.escapeHtml(e.siteName||"")}</strong></div>`
+              : `<div class="small">Yard: <strong>${Utils.escapeHtml(e.yard||"")}</strong></div>`;
+
+            const linkNfc = (e.scope === "site")
+              ? `<button class="btn" type="button" data-site-link-nfc="${Utils.escapeHtml(e.siteId||"")}">Link NFC to Hive</button>`
+              : "";
+
+            return `<div class="card" style="margin:0.5rem 0; padding:0.6rem;">
+              <div class="row" style="gap:0.5rem; align-items:flex-start;">
+                <div class="grow">
+                  <strong>${badge}</strong> <span class="small">${Utils.escapeHtml(e.date||"")}</span>
+                  ${where}
+                  <div class="small">GPS: ${Utils.escapeHtml(gps)}</div>
+                  ${(e.size||e.temperament||e.notes) ? `<div class="small">${Utils.escapeHtml([e.size,e.temperament,e.notes].filter(Boolean).join(" • "))}</div>` : ""}
+                </div>
+                ${linkNfc}
               </div>
             </div>`;
           }).join("");
         }
+
+        // Delegate "Link NFC" buttons (site only)
+        try {
+          el.swarmRemovalList.querySelectorAll("[data-site-link-nfc]").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              const siteId = btn.getAttribute("data-site-link-nfc");
+              if (!siteId) return;
+              await UI.linkNfcToNewHiveFromSite(siteId);
+            });
+          });
+        } catch (_) {}
       }
 
       // Nectar lists + banner
@@ -7626,7 +7774,261 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
   // 8) NFC (Device API)
   // =========================================================
 
-  const NFC = {
+  
+  // =========================================================
+  // 8.5) SITES (GPS-first locations: yards + swarm/removal sites)
+  // =========================================================
+
+  const Sites = {
+    _all() { return Storage.loadSites() || {}; },
+    _save(all) { return Storage.saveSites(all); },
+
+    get(id) {
+      const all = this._all();
+      return all && all[id] ? all[id] : null;
+    },
+
+    list(opts) {
+      const all = this._all();
+      const arr = Object.values(all || {});
+      arr.sort((a,b) => (b.updatedAt||b.createdAt||"").localeCompare(a.updatedAt||a.createdAt||""));
+      if (!opts) return arr;
+      const { type } = opts;
+      return type ? arr.filter(s => s.type === type) : arr;
+    },
+
+    async createFromGps(type, name) {
+      const pos = await GPS.getCurrentPositionOnce();
+      const gps = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        ts: Date.now(),
+        accuracy: pos.coords.accuracy
+      };
+      const id = Utils.uuid();
+      const nowIso = new Date().toISOString();
+      const site = {
+        id,
+        type, // yard | swarm | removal
+        name: (name || "").trim() || (type === "yard" ? "New Yard" : `${type === "swarm" ? "Swarm" : "Removal"} — ${Utils.today()}`),
+        gps,
+        regionPreset: "FL",
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        events: [] // local to site
+      };
+      const all = this._all();
+      all[id] = site;
+      this._save(all);
+      return site;
+    },
+
+    patch(id, patch) {
+      const all = this._all();
+      if (!all[id]) return false;
+      all[id] = Object.assign({}, all[id], patch, { updatedAt: new Date().toISOString() });
+      this._save(all);
+      return true;
+    },
+
+    addEvent(siteId, event) {
+      const all = this._all();
+      const s = all[siteId];
+      if (!s) return false;
+      const ev = Object.assign({
+        id: Utils.uuid(),
+        date: Utils.today(),
+      }, event || {});
+      if (!Array.isArray(s.events)) s.events = [];
+      s.events.unshift(ev);
+      s.updatedAt = new Date().toISOString();
+      all[siteId] = s;
+      this._save(all);
+      return ev;
+    },
+
+    // Flatten swarm/removal events for map/list
+    listSwarmRemovalEvents(limit=50) {
+      const all = this._all();
+      const out = [];
+      for (const s of Object.values(all || {})) {
+        if (!s || (s.type !== "swarm" && s.type !== "removal")) continue;
+        const ev = Array.isArray(s.events) ? s.events : [];
+        for (const e of ev) {
+          const gps = (e && e.gps) ? e.gps : s.gps;
+          if (!gps || typeof gps.lat !== "number" || typeof gps.lng !== "number") continue;
+          out.push({
+            scope: "site",
+            siteId: s.id,
+            siteType: s.type,
+            siteName: s.name || "",
+            kind: e.kind || s.type,
+            date: e.date || "",
+            size: e.size || "",
+            temperament: e.temperament || "",
+            notes: e.notes || "",
+            gps
+          });
+        }
+      }
+      out.sort((a,b) => String(b.date||"").localeCompare(String(a.date||"")));
+      return out.slice(0, limit);
+    }
+  };
+
+  // =========================================================
+  // 8.6) Nectar prediction (offline v1) — Florida preset + probability scoring
+  // =========================================================
+
+  const NectarPredict = {
+    // Simple FL bands (very rough). We'll refine later.
+    // Each source provides:
+    // - months: [startMonth, endMonth] inclusive
+    // - strength: 0..1 baseline
+    // - latBand: [minLat, maxLat] (optional)
+    sourcesFL: [
+      { key:"early_wild", name:"Early wildflowers", months:[1,3], strength:0.55, latBand:[24.3, 30.9] },
+      { key:"citrus", name:"Citrus / orange blossom", months:[3,4], strength:0.9, latBand:[26.0, 29.6] },
+      { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], strength:0.75, latBand:[28.0, 30.9] },
+      { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], strength:0.65, latBand:[24.3, 28.6] },
+      { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] },
+      { key:"pepper", name:"Brazilian pepper / fall flow", months:[8,10], strength:0.7, latBand:[24.3, 28.7] },
+      { key:"goldenrod", name:"Goldenrod / aster", months:[9,11], strength:0.55, latBand:[28.0, 30.9] },
+      { key:"winter_trickle", name:"Winter trickle (south FL)", months:[12,2], strength:0.25, latBand:[24.3, 26.8] },
+    ],
+
+    _inMonthRange(m, start, end) {
+      if (start <= end) return (m >= start && m <= end);
+      // wrap (e.g., 12..2)
+      return (m >= start || m <= end);
+    },
+
+    _latOk(lat, band) {
+      if (!band) return true;
+      return lat >= band[0] && lat <= band[1];
+    },
+
+    score(lat, lng, date, mode) {
+      const d = date ? new Date(date) : new Date();
+      const m = d.getMonth()+1;
+      const sources = this.sourcesFL;
+
+      // "Now" score: sources active this month
+      let now = 0, spring = 0, fall = 0, annual = 0;
+      const active = [];
+      const activeSoon = [];
+
+      for (const s of sources) {
+        const [a,b] = s.months;
+        const okLat = this._latOk(lat, s.latBand);
+        if (!okLat) continue;
+
+        const isActive = this._inMonthRange(m, a, b);
+        // soon: within 1 month window (rough)
+        const mPlus1 = ((m % 12) + 1);
+        const isSoon = isActive || this._inMonthRange(mPlus1, a, b);
+
+        annual += s.strength;
+
+        // spring/fall overlap buckets
+        const isSpring = this._inMonthRange(4, a, b) || this._inMonthRange(3, a, b) || this._inMonthRange(5, a, b);
+        const isFall = this._inMonthRange(9, a, b) || this._inMonthRange(10, a, b);
+
+        if (isSpring) spring += s.strength * 0.9;
+        if (isFall) fall += s.strength * 0.9;
+
+        if (isActive) { now += s.strength; active.push(s.name); }
+        if (isSoon) { activeSoon.push(s.name); }
+      }
+
+      // Normalize-ish to 0..1+
+      const norm = (x) => Math.max(0, Math.min(1.5, x / 2.0));
+
+      let raw = 0;
+      if (mode === "annual") raw = norm(annual);
+      else if (mode === "springfall") {
+        // overlap bonus: want both
+        const overlap = Math.min(spring, fall);
+        raw = norm(overlap + 0.4*Math.max(spring, fall));
+      } else if (mode === "next60") {
+        raw = norm(now + 0.35); // crude "longer horizon" bias
+      } else { // next14 default
+        raw = norm(now);
+      }
+
+      const status =
+        raw >= 0.75 ? "strong" :
+        raw >= 0.45 ? "moderate" :
+        raw >= 0.25 ? "light" :
+        "low";
+
+      return {
+        score: raw,
+        status,
+        active,
+        activeSoon
+      };
+    }
+  };
+
+  // =========================================================
+  // 8.7) Swarms & Removals (GPS-first sites)
+  // =========================================================
+  const SwarmRemoval = {
+    async add(kind) {
+      // Create site immediately (no yard required)
+      const site = await Sites.createFromGps(kind, "");
+      // Prompt minimal details (fast field entry)
+      const size = prompt(`${kind === "swarm" ? "Swarm" : "Removal"} size (small/med/large/huge)?`, "") || "";
+      const temperament = prompt("Temperament / attitude (calm/defensive/etc)?", "") || "";
+      const notes = prompt("Notes (optional)", "") || "";
+
+      Sites.addEvent(site.id, {
+        kind,
+        size,
+        temperament,
+        notes,
+        gps: site.gps
+      });
+
+      UI.status(`${kind === "swarm" ? "Swarm" : "Removal"} logged`);
+      try { UI.refreshYardUI(); } catch (_) {}
+      try { YardMap && YardMap.render && YardMap.render(); } catch (_) {}
+      return site;
+    }
+  };
+
+  // =========================================================
+  // 8.8) NFC linking (map NFC tags to hive IDs)
+  // =========================================================
+  const NfcLink = {
+    _meta() {
+      const meta = Storage.loadMeta() || {};
+      if (!meta.nfcMap || typeof meta.nfcMap !== "object") meta.nfcMap = {};
+      return meta;
+    },
+    _save(meta) { Storage.saveMeta(meta); },
+
+    resolveHiveId(tagId) {
+      const meta = this._meta();
+      return meta.nfcMap[tagId] || tagId;
+    },
+
+    linkTagToHive(tagId, hiveId) {
+      const meta = this._meta();
+      meta.nfcMap[tagId] = hiveId;
+      this._save(meta);
+    },
+
+    unlinkTag(tagId) {
+      const meta = this._meta();
+      delete meta.nfcMap[tagId];
+      this._save(meta);
+    }
+  };
+
+
+const NFC = {
     stopScan() {
       State.scanning = false;
       State.scanSession++;
@@ -7700,6 +8102,42 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     }
   };
 
+  // Attach helper for linking NFC after the fact (swarm/removal sites → hive)
+  UI.linkNfcToNewHiveFromSite = async function(siteId) {
+    const hives = Storage.loadHives() || {};
+    const hiveId = Utils.uuid();
+    const s = Sites.get(siteId);
+    hives[hiveId] = {
+      id: hiveId,
+      name: (s && s.type === "swarm") ? "Swarm hive" : "Removal hive",
+      location: (s && s.name) ? s.name : "",
+      teamId: "",
+      inspections: [],
+      siteId: siteId
+    };
+    Storage.saveHives(hives);
+
+    alert("Now tap the NFC tag you want to link to this hive.");
+    const tagId = await App.scanOnceForTagId();
+    if (!tagId) { alert("No tag read."); return; }
+
+    NfcLink.linkTagToHive(tagId, hiveId);
+
+    const h2 = Storage.loadHives() || {};
+    if (h2[hiveId]) {
+      h2[hiveId].nfcTag = tagId;
+      Storage.saveHives(h2);
+    }
+
+    // Jump to the newly created hive
+    State.currentHiveId = hiveId;
+    try { App.loadHiveById && App.loadHiveById(hiveId); } catch (_) {}
+    try { App.renderHive && App.renderHive(); } catch (_) {}
+    UI.status("NFC linked");
+  };
+
+
+
   // =========================================================
   // 9) APP (Workflows)
   // =========================================================
@@ -7707,13 +8145,15 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
   const App = {
     handleHiveLoad(tagId) {
       const hives = Storage.loadHives();
-      State.currentHiveId = tagId;
+      const resolved = (typeof NfcLink !== "undefined" && NfcLink) ? NfcLink.resolveHiveId(tagId) : tagId;
+      State.currentHiveId = resolved;
+      State.currentTagId = tagId;
 
-      if (!hives[tagId]) {
-        hives[tagId] = { id: tagId, name: "", location: "", teamId: "", inspections: [] };
+      if (!hives[resolved]) {
+        hives[resolved] = { id: resolved, name: "", location: "", teamId: "", inspections: [] };
       }
 
-      const hive = hives[tagId];
+      const hive = hives[resolved];
       if (!Array.isArray(hive.inspections)) hive.inspections = [];
 
       const selectedYard = (el.currentYard.value || "").trim();
@@ -7752,6 +8192,31 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       UI.status("Hive loaded: " + (hive.name || tagId));
       if (!hive.name) setTimeout(() => el.hiveName.focus(), 150);
     },
+    async scanOnceForTagId() {
+      if (!("NDEFReader" in window)) { alert("Web NFC not supported."); return null; }
+      return new Promise(async (resolve) => {
+        try {
+          const reader = new NDEFReader();
+          let done = false;
+          await reader.scan();
+          reader.onreading = (event) => {
+            if (done) return;
+            done = true;
+            try { reader.abort(); } catch (_) {}
+            resolve(event.serialNumber || null);
+          };
+          reader.onreadingerror = () => {
+            if (done) return;
+            done = true;
+            try { reader.abort(); } catch (_) {}
+            resolve(null);
+          };
+          setTimeout(() => { if (!done){ done=true; try{reader.abort();}catch(_){ } resolve(null);} }, 6000);
+        } catch (e) { resolve(null); }
+      });
+    },
+
+
 
     saveCurrentHiveAndInspection() {
       if (!State.currentHiveId) return;
@@ -9366,6 +9831,20 @@ el.date.addEventListener("change", () => App.saveCurrentHiveAndInspection());
       await NFC.startScan();
     });
 
+
+    // Link NFC tag to current hive (create mapping)
+    if (el.btnLinkNfcToHive) el.btnLinkNfcToHive.addEventListener("click", async () => {
+      const hiveId = State.currentHiveId;
+      if (!hiveId) { alert("Open a hive first (scan or create)."); return; }
+      alert("Tap the NFC tag you want to link to this hive.");
+      const tagId = await App.scanOnceForTagId();
+      if (!tagId) { alert("No tag read."); return; }
+      NfcLink.linkTagToHive(tagId, hiveId);
+      const h = Storage.loadHives() || {};
+      if (h[hiveId]) { h[hiveId].nfcTag = tagId; Storage.saveHives(h); }
+      UI.status("NFC linked");
+    });
+
     // Photo viewer close / click-outside
     el.viewerClose.addEventListener("click", () => {
       el.viewer.style.display = "none";
@@ -9425,16 +9904,14 @@ el.importZipInput.addEventListener("change", async () => {
     });
 
     if (el.addSwarmEventBtn) el.addSwarmEventBtn.addEventListener("click", async () => {
-      const yard = (el.currentYard?.value || "").trim();
-      if (!yard) { alert("Set Current Yard first."); return; }
-      await SwarmRemoval.add(yard, "swarm");
+      await SwarmRemoval.add("swarm");
     });
 
+
     if (el.addRemovalEventBtn) el.addRemovalEventBtn.addEventListener("click", async () => {
-      const yard = (el.currentYard?.value || "").trim();
-      if (!yard) { alert("Set Current Yard first."); return; }
-      await SwarmRemoval.add(yard, "removal");
+      await SwarmRemoval.add("removal");
     });
+
 
     if (el.addYardNectarBtn) el.addYardNectarBtn.addEventListener("click", () => {
       const yard = (el.currentYard?.value || "").trim();
