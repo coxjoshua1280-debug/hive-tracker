@@ -937,7 +937,18 @@ button.primary, .btn.primary {
             <select id="mapPlacementColorMode">
               <option value="top" selected>Top nectar source</option>
               <option value="total">Total strength</option>
+            
+          <label class="checkbox-label" style="margin:0.35rem 0 0;">
+            <input id="mapShowTypeOverlay" type="checkbox" />
+            <span class="small"><strong>Nectar type overlay</strong> (where each source is strongest)</span>
+          </label>
+          <div class="row" style="gap:0.5rem; align-items:center; margin-top:0.35rem;">
+            <div class="small" style="min-width:7.5rem;"><strong>Type focus</strong></div>
+            <select id="mapTypeOverlaySource">
+              <option value="top" selected>Auto (top source)</option>
             </select>
+          </div>
+</select>
           </div>
           <label class="checkbox-label" style="margin:0.35rem 0 0;">
             <input id="mapPlacementShowLegend" type="checkbox" checked />
@@ -3759,6 +3770,8 @@ const RecoveryUI = {
         mapShowPlacement: document.getElementById("mapShowPlacement"),
     mapPlacementMode: document.getElementById("mapPlacementMode"),
     mapPlacementColorMode: document.getElementById("mapPlacementColorMode"),
+    mapShowTypeOverlay: document.getElementById("mapShowTypeOverlay"),
+    mapTypeOverlaySource: document.getElementById("mapTypeOverlaySource"),
     mapPlacementShowLegend: document.getElementById("mapPlacementShowLegend"),
     mapPlacementSources: document.getElementById("mapPlacementSources"),
     mapPlacementLegend: document.getElementById("mapPlacementLegend"),
@@ -4316,6 +4329,13 @@ for (const [k, v] of Object.entries(el)) {
       if (el.mapPlacementShowLegend) {
         el.mapPlacementShowLegend.onchange = () => { PlacementPrefs.set({ showLegend: !!el.mapPlacementShowLegend.checked }); this.render(); };
       }
+
+      if (el.mapShowTypeOverlay) {
+        el.mapShowTypeOverlay.onchange = () => { this.render(); };
+      }
+      if (el.mapTypeOverlaySource) {
+        el.mapTypeOverlaySource.onchange = () => { this.render(); };
+      }
 if (el.mapHeatRange) {
         el.mapHeatRange.onchange = () => {
           this._renderHeatmapFromCache(true);
@@ -4332,6 +4352,25 @@ if (el.mapHeatRange) {
 
         const sources = NectarPredict.listSources ? NectarPredict.listSources() : [];
         const prefs = PlacementPrefs.get();
+        // Build "type overlay" dropdown options
+        try {
+          if (el.mapTypeOverlaySource) {
+            const prev = el.mapTypeOverlaySource.value || "top";
+            el.mapTypeOverlaySource.innerHTML = "";
+            const optTop = document.createElement("option");
+            optTop.value = "top";
+            optTop.textContent = "Auto (top source)";
+            el.mapTypeOverlaySource.appendChild(optTop);
+            sources.forEach(s => {
+              const o = document.createElement("option");
+              o.value = s.key;
+              o.textContent = s.name || s.key;
+              el.mapTypeOverlaySource.appendChild(o);
+            });
+            el.mapTypeOverlaySource.value = prev;
+          }
+        } catch (_) {}
+
         const enabled = new Set((prefs.enabled && prefs.enabled.length) ? prefs.enabled : sources.map(s => s.key));
 
         if (el.mapPlacementColorMode) el.mapPlacementColorMode.value = prefs.colorMode || "top";
@@ -4835,9 +4874,11 @@ if (el.mapHeatRange) {
 
         this.markers = L.layerGroup().addTo(this.map);
         this.placementLayer = L.layerGroup().addTo(this.map);
+        this.typeOverlayLayer = L.layerGroup().addTo(this.map);
       } else {
         this.markers.clearLayers();
         if (this.placementLayer) this.placementLayer.clearLayers();
+        if (this.typeOverlayLayer) this.typeOverlayLayer.clearLayers();
       }
 
       // Fit bounds
@@ -4938,7 +4979,60 @@ if (el.mapHeatRange) {
         this._renderPlacementLegend([]);
       }
 
-      // Heatmap (swarm density)
+      
+      // Nectar type overlay (source-focused scouting layer)
+      const showTypeOverlay = !!(el.mapShowTypeOverlay && el.mapShowTypeOverlay.checked);
+      if (this.typeOverlayLayer) this.typeOverlayLayer.clearLayers();
+      if (showTypeOverlay && this.map && this.typeOverlayLayer && typeof NectarPredict !== "undefined") {
+        const mode = el.mapPlacementMode ? (el.mapPlacementMode.value || "next14") : "next14";
+        const enabledKeys = this._getEnabledPlacementKeys();
+        const focusKey = el.mapTypeOverlaySource ? (el.mapTypeOverlaySource.value || "top") : "top";
+
+        const b = this.map.getBounds();
+        const stepsT = 18; // keep fast
+        const latStepT = (b.getNorth() - b.getSouth()) / stepsT;
+        const lngStepT = (b.getEast() - b.getWest()) / stepsT;
+
+        for (let i = 0; i < stepsT; i++) {
+          for (let j = 0; j < stepsT; j++) {
+            const lat = b.getSouth() + (i + 0.5) * latStepT;
+            const lng = b.getWest() + (j + 0.5) * lngStepT;
+            const det = NectarPredict.scoreDetailed(lat, lng, new Date(), mode, enabledKeys) || {};
+            const by = det.bySourceMode || det.bySource || {};
+            let key = focusKey;
+            let val = 0;
+
+            if (focusKey === "top") {
+              // choose strongest contributing source in this cell
+              let bestK = null, bestV = 0;
+              for (const k in by) {
+                const v = by[k] || 0;
+                if (v > bestV) { bestV = v; bestK = k; }
+              }
+              key = bestK;
+              val = bestV;
+            } else {
+              val = by[focusKey] || 0;
+            }
+
+            if (!key || val <= 0.01) continue;
+
+            // Normalize contribution into opacity (0..~0.55)
+            const op = Math.min(0.55, 0.06 + Math.min(1, val / 0.9) * 0.42);
+            const col = (NectarPredict.paletteFL && NectarPredict.paletteFL[key]) ? NectarPredict.paletteFL[key] : "#f59e0b";
+
+            const rect = L.rectangle([[lat - latStepT/2, lng - lngStepT/2], [lat + latStepT/2, lng + lngStepT/2]], {
+              color: col,
+              weight: 0,
+              fillColor: col,
+              fillOpacity: op,
+              interactive: false
+            });
+            rect.addTo(this.typeOverlayLayer);
+          }
+        }
+      }
+// Heatmap (swarm density)
       this._renderHeatmapFromCache(false);
 
 
@@ -8157,6 +8251,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       const active = [];
       const activeSoon = [];
       const bySource = {};
+      const bySourceMode = {};
 
       for (const s of sources) {
         if (!enabled.has(s.key)) continue;
@@ -8180,6 +8275,21 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
         if (isSoon) { activeSoon.push(s.key); }
 
         bySource[s.key] = (bySource[s.key] || 0) + s.strength;
+        // Mode-specific contribution (helps draw nectar-type overlays)
+        let contrib = 0;
+        if (mode === "annual") contrib = s.strength;
+        else if (mode === "springfall") {
+          let c = 0;
+          if (isSpring) c += s.strength * 0.9;
+          if (isFall) c += s.strength * 0.9;
+          contrib = c;
+        } else if (mode === "next60") {
+          contrib = isSoon ? s.strength : 0;
+        } else { // next14
+          contrib = isActive ? s.strength : 0;
+        }
+        if (contrib > 0) bySourceMode[s.key] = (bySourceMode[s.key] || 0) + contrib;
+
       }
 
       const norm = (x) => Math.max(0, Math.min(1.5, x / 2.0));
@@ -8206,8 +8316,12 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
       const top = Object.keys(bySource)
         .map(k => ({ key:k, name:(srcByKey.get(k)?.name || k), value:bySource[k] }))
         .sort((a,b) => (b.value||0) - (a.value||0));
+      const topMode = Object.keys(bySourceMode)
+        .map(k => ({ key:k, name:(srcByKey.get(k)?.name || k), value:bySourceMode[k] }))
+        .sort((a,b) => (b.value||0) - (a.value||0));
 
-      return { score: raw, status, active, activeSoon, bySource, top };
+
+      return { score: raw, status, active, activeSoon, bySource, top, bySourceMode, topMode };
     },
 
     _inMonthRange(m, start, end) {
