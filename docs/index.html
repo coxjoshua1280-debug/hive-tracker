@@ -688,7 +688,7 @@ button.primary, .btn.primary {
   </div>
 
     
-<div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+<div id="exportToolbar" class="row toolbar" style="margin-top:0.75rem;">
   <button id="yardsBtn" type="button" class="btn grow">🏡 Yards</button>
   <button id="remindersBtn" type="button" class="btn grow">🔔 Reminders</button>
   <button id="lookupBtn" type="button" class="btn grow">🔎 Lookup</button>
@@ -949,7 +949,7 @@ button.primary, .btn.primary {
         <div class="small">Applies to CSV + ZIP export. (Uses the Current Yard field above.)</div>
       </div>
         <div class="small">Export CSV or a full ZIP backup (includes photos). Import merges into the current profile.</div>
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div id="exportToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="exportCsv" type="button" class="btn grow">⬇️ Export CSV</button>
           <button id="exportZip" type="button" class="btn btn-muted grow">⬇️ Export Backup ZIP</button>
           <button id="importZipBtn" type="button" class="btn grow">⬆️ Import Backup ZIP</button>
@@ -1147,7 +1147,7 @@ button.primary, .btn.primary {
         <label for="queenNotes" style="margin-top:0.75rem;">Queen Notes</label>
         <textarea id="queenNotes" rows="3" placeholder="Lineage notes, source hive, breeder, temperament…"></textarea>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div id="exportToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="queenSaveBtn" type="button" class="btn btn-primary grow">Save Queen</button>
           <button id="queenCancelBtn" type="button" class="btn btn-muted grow">Cancel</button>
         </div>
@@ -1176,7 +1176,7 @@ button.primary, .btn.primary {
         <div id="lineageHeatmap" class="card" style="margin-top:0.5rem;"></div>
         <div id="cellRaiserDash" class="card" style="margin-top:0.5rem;"></div>
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div id="exportToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="exportBreederReportBtn" type="button" class="btn grow">⬇️ Export breeder report</button>
         </div>
       </div>
@@ -7146,7 +7146,7 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
           <textarea id="rearing_notes" rows="3">${(item.notes || "")}</textarea>
         ` : ""}
 
-        <div id="mainToolbar" class="row toolbar" style="margin-top:0.75rem;">
+        <div id="exportToolbar" class="row toolbar" style="margin-top:0.75rem;">
           <button id="rearing_saveBtn" type="button" class="btn btn-primary grow">Save</button>
           <button id="rearing_closeBtn" type="button" class="btn grow">Close</button>
         </div>
@@ -10074,6 +10074,27 @@ window.nectar = window.nectar || {
     return { state:"unknown", title:"No nectar data", detail:"Add nectar sources or dearth windows in the yard panel to see status.", color:"#888" };
   }
 };
+
+
+
+// --- Export panel hard-bind (ensures it always opens) ---
+window.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("exportMenuBtn");
+  const panel = document.getElementById("exportPanel");
+  if (btn && panel) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      panel.classList.toggle("hidden");
+      document.getElementById("yardsPanel")?.classList.add("hidden");
+      document.getElementById("remindersPanel")?.classList.add("hidden");
+      document.getElementById("lookupPanel")?.classList.add("hidden");
+      document.getElementById("cloudPanel")?.classList.add("hidden");
+      document.getElementById("mapPanel")?.classList.add("hidden");
+      if (!panel.classList.contains("hidden")) panel.scrollIntoView({behavior:"smooth", block:"start"});
+    }, { passive:false });
+  }
+});
 
 </script>
 
