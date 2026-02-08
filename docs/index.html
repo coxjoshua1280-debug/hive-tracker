@@ -1337,6 +1337,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // 0) BOOTSTRAP / THIRD-PARTY HELPERS
   // =========================================================
 
+  // --- Minimal Nectar engine (restored stub) ---
+window.nectar = window.nectar || {
+  getStatusForYard(yardName) {
+    // placeholder logic until full prediction engine is rebuilt
+    return {
+      state: "unknown",   // "flow" | "dearth" | "upcoming" | "unknown"
+      label: "No nectar data",
+      color: "#888"
+    };
+  }
+};
+
 
   // --- Disable editing lock completely ---
 document.body.classList.remove("editing-locked");
