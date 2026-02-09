@@ -4708,7 +4708,7 @@ if (el.mapHeatRange) {
             fill: true,
             fillColor: color,
             fillOpacity: opacity,
-            interactive: false
+            interactive: true
           });
           rect.addTo(this.yardSuccessLayer);
         }
@@ -5303,8 +5303,26 @@ const scopeYards = this._getScopeYards(yards, yardNames);
                               (mode === "annual") ? "Annual potential" :
                               "Next 14 days";
 
-                const lines = top.length ? top.map(t => {
-                  const c = (NectarPredict.paletteFL && NectarPredict.paletteFL[t.key]) ? NectarPredict.paletteFL[t.key] : "#f59e0b";
+                const srcByKey = new Map((NectarPredict.listSources ? NectarPredict.listSources() : []).map(s => [s.key, s]));
+              const lines = top.length ? top.map(t => {
+                const meta = srcByKey.get(t.key) || {};
+                const c = meta.color || ((NectarPredict.paletteFL && NectarPredict.paletteFL[t.key]) ? NectarPredict.paletteFL[t.key] : "#f59e0b");
+                const v = Math.round((t.value || 0) * 100) / 100;
+                const nm = Utils.escapeHtml ? Utils.escapeHtml(t.name) : t.name;
+                const img = meta.imageUrl
+                  ? `<img src="${meta.imageUrl}" alt="${nm}" style="width:44px; height:44px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,0,0,0.12);" />`
+                  : `<span style="display:inline-block; width:44px; height:44px; border-radius:10px; border:1px solid rgba(0,0,0,0.12); background:${c}; opacity:0.25;"></span>`;
+                return `<div class="small" style="display:flex; align-items:center; gap:0.55rem; margin-top:0.35rem;">
+                  ${img}
+                  <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <span style="display:inline-block; width:10px; height:10px; border-radius:999px; background:${c};"></span>
+                      <span style="font-weight:600;">${nm}</span>
+                    </div>
+                    <div style="opacity:0.75; margin-top:0.1rem;">Contribution: ${v}</div>
+                  </div>
+                </div>`;
+              }).join("") : `<div class="small" style="opacity:0.75; margin-top:0.25rem;">No active sources in this mode.</div>`;
                   const v = Math.round((t.value || 0) * 100) / 100;
                   const nm = Utils.escapeHtml ? Utils.escapeHtml(t.name) : t.name;
                   return `<div class="small" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
@@ -5386,6 +5404,59 @@ const scopeYards = this._getScopeYards(yards, yardNames);
               fillOpacity: op,
               interactive: false
             });
+            
+            rect.on("click", (ev) => {
+              try {
+                const mode = (el.mapPlacementMode ? el.mapPlacementMode.value : "next14");
+                const enabled = (this._getEnabledPlacementKeys ? this._getEnabledPlacementKeys() : null);
+                const det2 = (NectarPredict.scoreDetailed ? NectarPredict.scoreDetailed(lat, lng, new Date(), mode, enabled) : NectarPredict.score(lat, lng, new Date(), mode));
+                const top = (det2 && det2.top) ? det2.top.slice(0,3) : [];
+                const srcByKey = new Map((NectarPredict.listSources ? NectarPredict.listSources() : []).map(s => [s.key, s]));
+                const lines = top.length ? top.map(t => {
+                  const meta = srcByKey.get(t.key) || {};
+                  const c = meta.color || ((NectarPredict.paletteFL && NectarPredict.paletteFL[t.key]) ? NectarPredict.paletteFL[t.key] : "#f59e0b");
+                  const v = Math.round((t.value || 0) * 100) / 100;
+                  const nm = Utils.escapeHtml ? Utils.escapeHtml(t.name) : t.name;
+                  const img = meta.imageUrl
+                    ? `<img src="${meta.imageUrl}" alt="${nm}" style="width:44px; height:44px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,0,0,0.12);" />`
+                    : `<span style="display:inline-block; width:44px; height:44px; border-radius:10px; border:1px solid rgba(0,0,0,0.12); background:${c}; opacity:0.25;"></span>`;
+                  return `<div class="small" style="display:flex; align-items:center; gap:0.55rem; margin-top:0.35rem;">
+                    ${img}
+                    <div style="flex:1;">
+                      <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span style="display:inline-block; width:10px; height:10px; border-radius:999px; background:${c};"></span>
+                        <span style="font-weight:600;">${nm}</span>
+                      </div>
+                      <div style="opacity:0.75; margin-top:0.1rem;">Contribution: ${v}</div>
+                    </div>
+                  </div>`;
+                }).join("") : `<div class="small" style="opacity:0.75; margin-top:0.25rem;">No active sources right now.</div>`;
+
+                const prob = (det2 && typeof det2._placementProb === "number") ? det2._placementProb : null;
+                const succ = (det2 && typeof det2._success01 === "number") ? det2._success01 : null;
+                const badge = (el.mapPlacementUseSuccess && el.mapPlacementUseSuccess.checked && prob != null)
+                  ? (prob >= 0.70 && (succ == null || succ >= 0.55) ? "✅ Good yard zone" : (prob >= 0.45 ? "⚠️ Mixed" : "❌ Low odds"))
+                  : "";
+
+                const htmlPop = `
+                  <div style="min-width:220px;">
+                    <div style="font-weight:700;">Nectar sources here</div>
+                    <div class="small" style="opacity:0.9; margin-top:0.2rem;">
+                      ${prob != null ? `Placement probability: <strong>${Math.round(prob*100)}%</strong>` : ""}
+                      <span style="margin-left:0.4rem;">${badge}</span>
+                    </div>
+                    <div class="small" style="margin-top:0.45rem;"><strong>Top sources here</strong></div>
+                    ${lines}
+                    <div class="small" style="opacity:0.75; margin-top:0.5rem;">Use photos to confirm plants on site.</div>
+                  </div>
+                `;
+                L.popup({ closeButton:true, autoClose:true, closeOnClick:true, maxWidth:340 })
+                  .setLatLng(ev.latlng || [lat, lng])
+                  .setContent(htmlPop)
+                  .openOn(this.map);
+              } catch(_) {}
+            });
+
             rect.addTo(this.typeOverlayLayer);
           }
         }
@@ -8590,7 +8661,8 @@ if (!Array.isArray(insp.frameMap)) insp.frameMap = [];
     sourcesFL: [
       { key:"early_wild", name:"Early wildflowers", months:[1,3], windowsFL:{"south": [1, 3], "central": [1, 3], "north": [2, 4]}, strength:0.55, latBand:[24.3, 30.9] , bbox:[[27.0, -84.8], [30.9, -80.5]] },
       { key:"citrus", name:"Citrus / orange blossom", months:[3,4], windowsFL:{"south": [2, 4], "central": [3, 4], "north": [3, 5], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Citrus-sinensis-flowers2.jpg", identify:"White fragrant 5\u2011petal blossoms; glossy leaves; groves + backyard citrus."},
-      { key:"tupelo", name:"Tupelo (Ogeechee)", months:[4,5], windowsFL:{"south":[4,5],"central":[4,5],"north":[4,5]}, strength:0.85, latBand:[29.0, 31.2], bbox:[[29.0, -85.8],[31.2, -82.8]] , imageUrl:"https://hort.ifas.ufl.edu/treesandpowerlines/images/Nyssa_ogeche_flowers.jpg", identify:"Greenish-white pom‑pom clusters on long stalks; river swamps & floodplains (Panhandle/Apalachicola + Suwannee corridors)." ,strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
+      { key:"tupelo", name:"Tupelo (Ogeechee)", months:[4,5], windowsFL:{"south":[4,5],"central":[4,5],"north":[4,5]}, strength:0.85, latBand:[29.0, 31.2], bbox:[[29.0, -85.8],[31.2, -82.8]] , imageUrl:"https://hort.ifas.ufl.edu/treesandpowerlines/images/Nyssa_ogeche_flowers.jpg", identify:"Greenish-white pom‑pom clusters on long stalks; river swamps & floodplains (Panhandle/Apalachicola + Suwannee corridors)." },
+ strength:0.9, latBand:[26.0, 29.6] , bbox:[[26.3, -82.9], [29.3, -80.7]] },
       { key:"gallberry", name:"Gallberry / titi / palmetto", months:[4,6], windowsFL:{"south": [4, 5], "central": [4, 6], "north": [4, 6], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Ilex%20glabra%20flowers%208601.JPG", identify:"Tiny white 4\u20136 petal flowers in leaf axils on evergreen shrub; flatwoods/bogs."}, strength:0.75, latBand:[28.0, 30.9] , bbox:[[29.0, -83.6], [31.1, -81.0]] },
       { key:"palmetto_south", name:"Palmetto (south/central)", months:[4,6], windowsFL:{"south": [4, 6], "central": [4, 6], "north": [5, 6], imageUrl:"https://commons.wikimedia.org/wiki/Special:FilePath/Serenoa%20repens%20001.JPG", identify:"Creamy plume-like flower stalks rising above saw\u2011tooth fan leaves; scrub/flatwoods."}, strength:0.65, latBand:[24.3, 28.6] , bbox:[[24.6, -83.3], [28.7, -80.0]] },
       { key:"summer", name:"Summer wildflow", months:[6,8], strength:0.35, latBand:[24.3, 30.9] , bbox:[[25.5, -85.5], [30.5, -80.3]] },
